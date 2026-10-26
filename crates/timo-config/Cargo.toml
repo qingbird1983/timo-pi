@@ -3,7 +3,14 @@ name = "timo-config"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-config"
+description = "Data dirs, settings files, custom providers and credential references"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true
