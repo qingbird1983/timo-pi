@@ -132,6 +132,7 @@ impl Manifest {
         if self.bundler.trim().is_empty() {
             return Err(invalid("bundler must not be empty".to_string()));
         }
+        crate::permissions::validate_capabilities(&self.id, &self.capabilities)?;
         Ok(())
     }
 

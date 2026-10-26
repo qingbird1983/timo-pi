@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::{Value as JsonValue, json};
 
-use crate::host::{ExecOutput, Grants, HostServices};
+use crate::host::{ExecOutput, FetchOutput, Grants, HostServices};
 
 /// CLI/测试用的基础服务实现。
 pub struct BasicServices {
@@ -82,6 +82,62 @@ impl HostServices for BasicServices {
 
     fn notify(&self, message: &str, kind: &str) {
         eprintln!("[ext:{kind}] {message}");
+    }
+
+    fn fetch(&self, url: &str) -> std::result::Result<FetchOutput, String> {
+        let parsed =
+            reqwest::Url::parse(url).map_err(|error| format!("E401 invalid URL: {error}"))?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return Err(format!("E401 scheme not allowed: {}", parsed.scheme()));
+        }
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| "E401 URL has no host".to_string())?
+            .to_string();
+        let port = parsed.port_or_known_default().unwrap_or(0);
+        if !crate::permissions::domain_allowed(&self.grants.net_domains, &host, port) {
+            return Err(format!("E402 net denied: {host}"));
+        }
+        let patterns = self.grants.net_domains.clone();
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+                let url = attempt.url();
+                let host = url.host_str().unwrap_or_default().to_string();
+                let port = url.port_or_known_default().unwrap_or(0);
+                if attempt.previous().len() >= 5 {
+                    attempt.error("too many redirects")
+                } else if crate::permissions::domain_allowed(&patterns, &host, port) {
+                    attempt.follow()
+                } else {
+                    attempt.error(format!("E402 redirect denied: {host}"))
+                }
+            }))
+            .build()
+            .map_err(|error| format!("E401 http client: {error}"))?;
+        let response = client
+            .get(parsed)
+            .send()
+            .map_err(|error| format!("E402 fetch failed: {error}"))?;
+        let status = response.status().as_u16();
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect();
+        let body = response
+            .text()
+            .map_err(|error| format!("E402 read body: {error}"))?;
+        Ok(FetchOutput {
+            status,
+            headers,
+            body,
+        })
     }
 
     fn select(&self, title: &str, options: &[String]) -> Option<String> {

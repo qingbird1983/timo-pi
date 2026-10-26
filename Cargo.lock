@@ -4208,6 +4208,7 @@ name = "timo-ext"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "reqwest",
  "rolldown",
  "rquickjs",
  "serde",

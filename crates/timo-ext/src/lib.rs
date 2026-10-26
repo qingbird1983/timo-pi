@@ -14,6 +14,7 @@ mod host;
 mod manifest;
 #[cfg(feature = "pack")]
 mod pack;
+mod permissions;
 
 pub use bridge::{ExtHooks, MAX_EVENT_BYTES};
 pub use diag::{
@@ -34,6 +35,10 @@ pub use manifest::{
 };
 #[cfg(feature = "pack")]
 pub use pack::{MAX_BUNDLE_BYTES, PackOptions, PackOutput, pack};
+pub use permissions::{
+    Grant, GrantState, PERMISSIONS_SCHEMA, PermissionStore, domain_allowed, is_valid_domain,
+    validate_capabilities,
+};
 
 /// 结果别名：本 crate 一律以 [`ExtError`] 报错。
 pub type Result<T> = std::result::Result<T, ExtError>;

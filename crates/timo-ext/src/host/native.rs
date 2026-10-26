@@ -18,7 +18,7 @@ pub(super) fn install<'js>(
     install_registration(ctx, &native, ext_id, Arc::clone(&state))?;
     install_diagnostics(ctx, &native, Arc::clone(&state))?;
     install_user(ctx, &native, Arc::clone(&services))?;
-    install_actions(ctx, &native, Arc::clone(&services))?;
+    install_actions(ctx, &native, Arc::clone(&services), Arc::clone(&state))?;
     ctx.globals().set("__timo_native", native)?;
     Ok(())
 }
@@ -137,18 +137,23 @@ fn install_actions<'js>(
     ctx: &Ctx<'js>,
     native: &Object<'js>,
     services: Arc<dyn HostServices>,
+    state: Arc<Mutex<HostState>>,
 ) -> rquickjs::Result<()> {
     {
         let services = Arc::clone(&services);
+        let state = Arc::clone(&state);
         native.set(
             "exec",
             Function::new(ctx.clone(), move |request: String| {
-                bridge_json(execute_json(services.as_ref(), &request))
+                let value = execute_json(services.as_ref(), &request);
+                record_denial(&state, &value);
+                bridge_json(value)
             })?,
         )?;
     }
     {
         let services = Arc::clone(&services);
+        let state = Arc::clone(&state);
         native.set(
             "fetch",
             Function::new(ctx.clone(), move |request: String| {
@@ -161,16 +166,17 @@ fn install_actions<'js>(
                             .map(str::to_string)
                     })
                     .unwrap_or_default();
-                match services.fetch(&url) {
+                let value = match services.fetch(&url) {
                     Ok(out) => json!({
                         "ok": true,
                         "status": out.status,
                         "headers": out.headers,
                         "body": out.body,
-                    })
-                    .to_string(),
-                    Err(error) => json!({"ok": false, "error": error}).to_string(),
-                }
+                    }),
+                    Err(error) => json!({"ok": false, "error": error}),
+                };
+                record_denial(&state, &value);
+                value.to_string()
             })?,
         )?;
     }
@@ -243,4 +249,23 @@ fn execute_json(services: &dyn HostServices, request: &str) -> JsonValue {
 
 fn bridge_json(value: JsonValue) -> String {
     value.to_string()
+}
+
+/// 宿主桥的权限拒绝留痕（消息前缀 `E4xx`）。
+fn record_denial(state: &Arc<Mutex<HostState>>, value: &JsonValue) {
+    if value.get("ok").and_then(JsonValue::as_bool) != Some(false) {
+        return;
+    }
+    let Some(message) = value.get("error").and_then(JsonValue::as_str) else {
+        return;
+    };
+    let Some(code) = message.split_whitespace().next() else {
+        return;
+    };
+    let Some(code) = ErrorCode::parse(code) else {
+        return;
+    };
+    if let Ok(mut state) = state.lock() {
+        state.diagnostics.push(DiagnosticEntry::new(code, message));
+    }
 }

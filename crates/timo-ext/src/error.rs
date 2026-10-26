@@ -50,6 +50,14 @@ pub enum ExtError {
         /// 人读原因。
         message: String,
     },
+    /// 权限声明/授予被拒（E4xx）。
+    #[error("permission denied ({code:?}): {message}")]
+    Permission {
+        /// 具体错误码。
+        code: ErrorCode,
+        /// 人读原因。
+        message: String,
+    },
 }
 
 impl ExtError {
@@ -57,7 +65,9 @@ impl ExtError {
     #[must_use]
     pub fn code(&self) -> Option<ErrorCode> {
         match self {
-            Self::Pack { code, .. } | Self::Runtime { code, .. } => Some(*code),
+            Self::Pack { code, .. }
+            | Self::Runtime { code, .. }
+            | Self::Permission { code, .. } => Some(*code),
             Self::Read { .. }
             | Self::EntryNotFound(_)
             | Self::InvalidManifest { .. }
