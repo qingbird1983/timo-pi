@@ -24,7 +24,7 @@
 3. **收尾四件事**：重写 CONTEXT 交接卡、归档 handoff、沉淀 pitfalls/skills、体量核对；教训当轮提取 —— [.agent/README.md](.agent/README.md)、[standards/07 §7](docs/standards/07-ai-collaboration.md)。
 4. **安全红线**：密钥、个人路径不入仓库；插件默认无能力、显式授权 —— [standards/06](docs/standards/06-security.md)。
 5. **范围纪律**：只做当前阶段"做"清单内的事，超范围先 backlog 或 ADR —— [standards/07](docs/standards/07-ai-collaboration.md)。
-6. **外部代码**：PI-Desktop（LGPL）源码严禁引用；pi 上游仅可阅读理解行为，不得复制 —— [standards/07 §5](docs/standards/07-ai-collaboration.md)、[research/04](docs/research/04-reference-pi-desktop.md)。
+6. **外部代码**：GPL/LGPL 项目（**PI-Desktop**、**pi-flash**）源码严禁引用，只读思路；pi 上游（MIT）仅可阅读理解行为，不得复制 —— [standards/07 §5](docs/standards/07-ai-collaboration.md)、[research/04](docs/research/04-reference-pi-desktop.md)、[research/05](docs/research/05-reference-pi-flash.md)。
 7. **体量红线**：docs/.agent/代码/依赖的预算见 [standards/08](docs/standards/08-size-control.md)，超标当期处置或登记豁免。
 
 > 语言约定：文档与对用户的沟通用中文；代码、标识符、commit message 用英文。

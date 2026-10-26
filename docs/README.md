@@ -36,6 +36,7 @@ docs/
 | research/02-pi-extensions.md | 定稿 | pi 插件机制全貌与兼容可行性依据 |
 | research/03-stack-nsh-gpui-kit.md | 定稿 | 桌面技术栈（gpui-kit + NSH）评估结论 |
 | research/04-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的做法与教训 |
+| research/05-reference-pi-flash.md | 定稿 | 参考项目 pi-flash（GPUI 桌面壳/插件系统）的做法与教训 |
 | adr/ADR-0001 ~ 0009 | 定稿 | 9 项重大决策（见各文件） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
 | architecture/02-kernel.md | 定稿 | 内核模块划分与关键设计 |

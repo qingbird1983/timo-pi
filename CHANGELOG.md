@@ -6,6 +6,19 @@
 
 ---
 
+## [0.1.3] - 2026-10-26
+
+### 新增
+
+- **调研 05：pi-flash 分析**（`docs/research/05`）——Windows 专用 pi 桌面 GUI 壳（Rust + GPUI + gpui-component，GPL-3.0）。结论：内核线无参考价值（它复用 pi 无内核）；**gpui 桌面线价值最高**（8.7 万行生产级 GPUI 应用 + 陷阱全集 + vendor/性能/架构守卫方法论）；插件系统线次之但对口（QuickJS + qjsc 字节码 + ed25519 签名闭环）。
+
+### 联动更新
+
+- AGENTS.md 铁律 6 与 standards/07 §5：外部代码合规范围扩大——pi-flash（GPL-3.0）与 PI-Desktop（LGPL）同级，只读思路、严禁抄码。
+- roadmap/phase-3 风险注记：开工前需核对 **gpui-kit 与 gpui-component（0.2.x）的版本谱系与 API 延续性**。
+
+---
+
 ## [0.1.2] - 2026-10-26
 
 ### 变更（仓库根入口重组）
