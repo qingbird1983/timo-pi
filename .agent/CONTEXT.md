@@ -10,9 +10,8 @@
 
 ## 上一轮完成了什么
 
-- 新增 `docs/research/05-reference-pi-flash.md`（GPL-3.0 桌面壳分析；gpui 桌面线价值最高、插件线对口、内核线无价值）；合规范围扩至 pi-flash（AGENTS 铁律 6、standards/07 §5）。
-- Vendored **gpui-kit 官方两件套技能**至 `.agents/skills/`（29 文件，与源比对一致）：框架技能 + 设计规范总纲，Phase 3 核心参考；来源/同步策略见其 README。
-- phase-3 新增开工前置：核对 gpui-kit ↔ gpui-component 0.2.x 谱系（research/05 §2.2）。
+- standards/08 §7 构建产物治理：单 workspace 单 target 红线、瘦身 profile（line-tables-only）、按龄清扫 + sccache、target/ 15G 软上限；phase-1 补充构建卫生交付物（.cargo/config.toml + clean-stale + check-size）。
+- 此前同日：pi-flash 调研入库（research/05）、gpui-kit 官方技能 vendored（.agents/skills）、决策落定（ADR-0010）、根入口重组（README 双语/AGENTS 薄索引/看板收拢 roadmap/00）。
 
 ## 下一步（按优先级）
 

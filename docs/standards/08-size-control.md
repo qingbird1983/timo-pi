@@ -68,5 +68,35 @@
 - .agent/：文件数 X（上限 40）；CONTEXT 行数：
 - 代码：新增 >500 行文件：无 / 有（附豁免）；crate 最大行数：
 - 依赖：新增 X 个（准入表已更新：是/否）
+- 构建产物：target/ 大小 X GB（软上限 15，超限处置：）：
 - 豁免登记：
 ```
+
+## 7. 构建产物治理（target/，Rust 专项）
+
+**背景**：Rust 的体量风险不在 git（target/ 永不入库），而在工作目录的编译产物——cargo 从不自动清理 target/，debuginfo 是体积大头；多构建形态、编辑器与命令行重复构建、嵌套 workspace 会成倍放大（参照：pi-flash 曾膨胀至 26G，research/05）。
+
+**红线与预算**
+
+- 全仓库**只允许一个 cargo workspace、一个 target/**；禁止嵌套 workspace（pi-flash `crates/gpui` 独立 workspace 为反例）。
+- target/ 软上限 **15 GB**：纳入阶段收尾"体量核对"；超限必须清扫或书面说明。
+- 清扫**按龄不全清**：优先 `cargo sweep -t 30`（清 30 天未用产物）；仅在配置了 sccache 时才允许 `cargo clean` 全清（重编代价可控）。
+- 禁止把 `CARGO_TARGET_DIR` 设为多项目共享单目录（锁竞争 + 单点巨大）；如需给项目文件夹减负，可在 `.cargo/config.toml` 用 `[build] target-dir` 指向本机专用目录，并纳入同一清扫策略（默认不启用）。
+- git 内禁止任何构建产物；超过 1MB 的二进制资产须先写 ADR（fixture 纪律见 standards/05）。
+
+**Phase 1 落地清单（实现代码前先固化 `.cargo/config.toml`）**
+
+```toml
+[profile.dev]
+debug = "line-tables-only"        # 保留回溯行号，砍掉大部分调试信息体积（经验值 60~80%）
+[profile.dev.package."*"]
+opt-level = 2                     # 依赖以 O2 编译：运行更快，体积反小于全量 debuginfo
+[profile.release]
+strip = "debuginfo"
+lto = "thin"
+```
+
+- 本机启用 `RUSTC_WRAPPER=sccache`（缓存目录设上限 ~20 GB，LRU 自动淘汰）——清扫后重编近乎免费。
+- cargo ≥ 1.78 自带 `~/.cargo` registry 自动 GC（默认 10G 上限），无需额外工具。
+- `scripts/` 提供：`clean-stale`（封装按龄清扫）与 `check-size` 扩展项（报告 target/ 大小对照软上限）。
+

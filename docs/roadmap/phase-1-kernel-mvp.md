@@ -19,6 +19,7 @@
 - timo-mcp：rmcp 封装（stdio + HTTP；MCP 工具并入统一管线）
 - timo-config：设置文件、供应商/模型解析、凭证引用
 - timo-cli：非交互冒烟壳（仅验收载体，不打磨交互）
+- **构建卫生（standards/08 §7）**：`.cargo/config.toml` 瘦身 profile（line-tables-only 等）；`scripts/clean-stale` 按龄清扫脚本；`check-size` 盘点 target/ 对照 15G 软上限
 - CI：fmt + clippy + test + 会话格式兼容测试
 
 ### 不做（显式排除）

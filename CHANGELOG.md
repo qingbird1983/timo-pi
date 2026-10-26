@@ -6,6 +6,15 @@
 
 ---
 
+## [0.1.5] - 2026-10-26
+
+### 新增（standards/08 §7：构建产物治理）
+
+- 针对"Rust 仓库膨胀到几十上百 G"的老大难，定下治理方案：**单 workspace 单 target/ 红线**、瘦身 profile（`debug = "line-tables-only"` 等，预期砍 60~80% 体积）、按龄清扫不全清（cargo sweep + sccache 兜底）、target/ 15G 软上限纳入阶段核对、git 禁止构建产物与 >1MB 二进制。
+- Phase 1 交付物补充：`.cargo/config.toml` 瘦身 profile + `scripts/clean-stale` + `check-size` 盘点 target/。
+
+---
+
 ## [0.1.4] - 2026-10-26
 
 ### 新增
