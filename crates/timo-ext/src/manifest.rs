@@ -278,7 +278,7 @@ mod tests {
             schema: MANIFEST_SCHEMA,
             id: "demo".into(),
             entry: "source/index.ts".into(),
-            bundle: "bundle.mjs".into(),
+            bundle: "bundle.cjs".into(),
             source_hash: format!("sha256:{}", "a".repeat(64)),
             bundler: "rolldown-test".into(),
             created_at: None,
@@ -292,7 +292,7 @@ mod tests {
             "schema": 1,
             "id": "demo",
             "entry": "source/index.ts",
-            "bundle": "bundle.mjs",
+            "bundle": "bundle.cjs",
             "source_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "bundler": "rolldown-test"
         }"#;

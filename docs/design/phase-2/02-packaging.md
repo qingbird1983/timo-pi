@@ -22,7 +22,7 @@
 <agent_dir>/extensions/
 └── <id>/
     ├── source/            # 源码副本（只读；含 package.json 时一并复制）
-    ├── bundle.mjs         # 单文件 ESM 产物
+    ├── bundle.cjs         # 单文件 CJS 产物（QuickJS 单次求值，D27）
     ├── manifest.json      # 声明与来源指纹（见 §2.1）
     └── diagnostics.json   # 最近一次加载的逐项诊断（覆盖式）
 ```
@@ -38,7 +38,7 @@
   "schema": 1,
   "id": "todo",
   "entry": "source/index.ts",
-  "bundle": "bundle.mjs",
+  "bundle": "bundle.cjs",
   "sourceHash": "sha256:…",
   "bundler": "rolldown-1.2.15+oxc-0.155.0",
   "createdAt": "2026-10-26T12:00:00Z",
@@ -61,7 +61,7 @@ flowchart TD
     A[解析入口] --> B{package.json<br/>有 dependencies?}
     B -- 是 --> C[npm install<br/>registry-only / no-scripts]
     B -- 否 --> D
-    C --> D[rolldown 打包<br/>ESM / es2020 / external shim]
+    C --> D[rolldown 打包<br/>CJS / es2020 / external shim]
     D --> E[禁用面扫描<br/>node:* / 动态 require]
     E --> F[能力静态扫描<br/>exec / fetch / WebSocket]
     F --> G[写 bundle + manifest]
@@ -74,7 +74,7 @@ flowchart TD
    - 否则目录同名 `.ts` / `.js`；
    - 都不满足 → E101。
 2. **依赖安装**：仅当 `dependencies` 非空。规则：只允许 registry 版本（拒绝 `git:`/`file:`/`link:`/workspace:` 与 lifecycle scripts）；`npm install --ignore-scripts --no-audit --no-fund --no-package-lock`；临时目录在系统 temp，完成后只保留 `node_modules` 供打包，打包后删除。
-3. **打包**：rolldown `input=entry`、`format=esm`、`platform=neutral`、`target=es2020`、`treeshake=true`、**不 minify**（诊断可读）、不生成 sourcemap；`external` = 01 §1 的 shim specifier 列表。
+3. **打包**：rolldown `input=entry`、`format=cjs`、`platform=neutral`、`target=es2020`、`treeshake=true`、**不 minify**（诊断可读）、不生成 sourcemap；`external` = 01 §1 的 shim specifier 列表。产物以 `module.exports` 暴露工厂（D27）。
 4. **禁用面扫描**：对**打包产物**再扫一遍（防止依赖内联带入）：`node:*`、Node 裸内建、`require(`、`import(` 非字面量、`process.` 顶层引用 → E104/E105；`eval(` / `new Function(` → E105（standards/04 §6）。
 5. **能力静态扫描**：命中 `pi.exec(`、`fetch(`、`new WebSocket(`、`XMLHttpRequest`、`pi.registerProvider(` 等，生成建议能力清单（**建议值，不是事实**；运行期仍以 manifest 声明 + 用户授予为准）。
 6. **写盘**：先写临时目录，全部成功后原子 rename；失败不留半成品。
@@ -84,8 +84,8 @@ flowchart TD
 | 规则 | 说明 |
 |---|---|
 | TS 语法 | oxc 转换，`target=es2020`；QuickJS 不支持的语法（装饰器、`using` 等）→ E106 |
-| 模块 | 只支持 ESM 产物；CJS 入口由 rolldown 转换；`require()` 在产物中不允许 |
-| 顶层 await | 允许（ESM），但工厂执行前会先完成模块求值；超过工厂预算 → E202 |
+| 模块 | 产物为单文件 CJS；ESM 源码由 rolldown 转换；产物内 `require()` 不允许 |
+| 顶层 await | 不支持（CJS 产物）；命中 → E106（见 D27） |
 | `export default` | 必须是函数（同步/异步均可）；缺失或非函数 → E202 |
 | 动态导入 | 仅接受字符串字面量且指向已打包模块；否则 E105 |
 | `eval` / `new Function` | **禁止**（standards/04 §6：只允许打包产物执行）；静态扫描命中 → E105 |

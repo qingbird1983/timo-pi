@@ -5,14 +5,21 @@ edition.workspace = true
 license.workspace = true
 description = "Extension host: discovery, manifests, diagnostics and QuickJS runtime (Phase 2)"
 
+[features]
+default = ["pack"]
+pack = ["dep:rolldown"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 sha2 = { workspace = true }
+tempfile = { workspace = true }
+rquickjs = { workspace = true }
+rolldown = { workspace = true, optional = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

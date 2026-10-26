@@ -117,6 +117,43 @@ impl ErrorCode {
         }
     }
 
+    /// 从线格式解析（如 `"E104"`）；未知码返回 `None`。
+    #[must_use]
+    pub fn parse(code: &str) -> Option<Self> {
+        let code = match code {
+            "E101" => Self::E101,
+            "E102" => Self::E102,
+            "E103" => Self::E103,
+            "E104" => Self::E104,
+            "E105" => Self::E105,
+            "E106" => Self::E106,
+            "E107" => Self::E107,
+            "E108" => Self::E108,
+            "E109" => Self::E109,
+            "E110" => Self::E110,
+            "E201" => Self::E201,
+            "E202" => Self::E202,
+            "E203" => Self::E203,
+            "E204" => Self::E204,
+            "E205" => Self::E205,
+            "E206" => Self::E206,
+            "E301" => Self::E301,
+            "E302" => Self::E302,
+            "E303" => Self::E303,
+            "E304" => Self::E304,
+            "E305" => Self::E305,
+            "E306" => Self::E306,
+            "E401" => Self::E401,
+            "E402" => Self::E402,
+            "E403" => Self::E403,
+            "E404" => Self::E404,
+            "E405" => Self::E405,
+            "E406" => Self::E406,
+            _ => return None,
+        };
+        Some(code)
+    }
+
     /// 所属阶段。
     #[must_use]
     pub fn phase(self) -> Phase {

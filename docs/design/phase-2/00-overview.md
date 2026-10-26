@@ -15,7 +15,7 @@
 
 ## 2. 一句话方案
 
-扩展以 `.ts` 源码形态被发现，**安装期**用 rolldown/oxc 打成单文件 ESM bundle；**运行期**由 timo-ext 在 QuickJS（rquickjs）里执行，注入 pi 兼容 shim；扩展注册的工具/命令并入现有统一注册表，事件钩子经「事件总线（通知）+ LoopHooks（请求-响应）」两条既定通道生效；一切降级、失败、拒绝逐项写入诊断报告。
+扩展以 `.ts` 源码形态被发现，**安装期**用 rolldown/oxc 打成单文件 CJS bundle（`bundle.cjs`，见 D27）；**运行期**由 timo-ext 在 QuickJS（rquickjs）里执行，注入 pi 兼容 shim；扩展注册的工具/命令并入现有统一注册表，事件钩子经「事件总线（通知）+ LoopHooks（请求-响应）」两条既定通道生效；一切降级、失败、拒绝逐项写入诊断报告。
 
 ## 3. 模块布局与依赖方向
 
@@ -104,7 +104,7 @@ flowchart LR
 | # | 偏离 | 类别 | 说明 |
 |---|---|---|---|
 | D11 | JS 单线程串行执行；并行工具批在 JS 侧串行、宿主 I/O 仍并发 | a | pi 靠 Node 异步事件循环并发；可观察结果一致，吞吐不同 |
-| D12 | 无 jiti；安装期打包为单文件 ESM | b（ADR-0006） | 无 `node_modules` 运行时解析 |
+| D12 | 无 jiti；安装期打包为单文件 bundle（本版 CJS，见 D27） | b（ADR-0006） | 无 `node_modules` 运行时解析 |
 | D13 | 扩展工具/命令名加 `plugin_<id>_` 前缀 | c（安全/architecture 04 §3） | 与 pi 裸名不同；钩子载荷同样使用前缀名 |
 | D14 | TUI 面成员为惰性 no-op，永不 throw，每扩展每成员一条诊断 | b（ADR-0003） | 与 pi 的 TUI 实现不同 |
 | D15 | `VERSION` 为兼容标记 `1.4.0` | a | 不承诺 pi 的 semver（pi 本身无 semver 承诺） |
@@ -119,6 +119,7 @@ flowchart LR
 | D24 | `ctx.executeTool` 与嵌套调用不支持（返回错误 + 诊断） | 范围 | 矩阵未列；codemode 属 backlog |
 | D25 | 事件清单按 pi 1.4.0 实际名称校准（architecture/04 的 `error` 不存在；`compact` 实为 `session_*_compact`） | a（文档校准） | 详见 05 §3 |
 | D26 | 禁止 `eval` / `new Function`（打包期拒绝） | c（standards/04 §6） | pi 允许动态求值；本项目只允许打包产物执行 |
+| D27 | bundle 为单文件 CJS（`bundle.cjs`），QuickJS 内以 `module`/`exports` 垫片单次求值 | a（运行时载体） | rquickjs 无 ESM loader；顶层 await 不支持 → E106；产物内 `require()` 仍禁止 |
 
 ## 7. 接缝核对（architecture/03）
 

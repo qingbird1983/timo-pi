@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use crate::diag::ErrorCode;
+
 /// timo-ext 的错误形态；`Display` 输出面向用户的一句话。
 #[derive(Debug, thiserror::Error)]
 pub enum ExtError {
@@ -32,4 +34,34 @@ pub enum ExtError {
         /// 失败原因。
         reason: String,
     },
+    /// 安装期打包失败（E1xx；`code` 指明具体错误码）。
+    #[error("pack failed ({code:?}): {message}")]
+    Pack {
+        /// 具体错误码。
+        code: ErrorCode,
+        /// 人读原因。
+        message: String,
+    },
+    /// 运行期失败（E2xx/E3xx；`code` 指明具体错误码）。
+    #[error("extension runtime error ({code:?}): {message}")]
+    Runtime {
+        /// 具体错误码。
+        code: ErrorCode,
+        /// 人读原因。
+        message: String,
+    },
+}
+
+impl ExtError {
+    /// 错误携带的诊断码（无明确码时返回 `None`）。
+    #[must_use]
+    pub fn code(&self) -> Option<ErrorCode> {
+        match self {
+            Self::Pack { code, .. } | Self::Runtime { code, .. } => Some(*code),
+            Self::Read { .. }
+            | Self::EntryNotFound(_)
+            | Self::InvalidManifest { .. }
+            | Self::Hash { .. } => None,
+        }
+    }
 }

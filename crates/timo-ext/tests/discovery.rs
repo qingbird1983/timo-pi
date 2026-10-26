@@ -29,7 +29,7 @@ fn valid_manifest(id: &str) -> String {
             "schema": 1,
             "id": "{id}",
             "entry": "source/index.ts",
-            "bundle": "bundle.mjs",
+            "bundle": "bundle.cjs",
             "source_hash": "sha256:{}",
             "bundler": "rolldown-test"
         }}"#,

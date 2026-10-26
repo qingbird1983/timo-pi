@@ -72,6 +72,8 @@
 | tempfile | 0.3 | 临时文件 | bash 全量输出/MCP 截断全文落盘（pi 同构行为） | Steven Allen（Rust 库团队） | 手写临时名：竞态风险，弃 |
 | base64 | 0.22 | base64 编解码 | 图像内容/HTTP 基础件 | marshalx 等社区 | 手写：无谓，弃 |
 | sha2 | 0.10 | sha256 | MCP 工具名防撞哈希（设计 03 §1，pi 同构） | RustCrypto | 无 |
+| rolldown | 1.2.x | 安装期 JS/TS 打包 | ADR-0006 既定；内置 oxc 0.155 完成 TS 转换与依赖内联 | rolldown 团队 | 自写打包器：模块图/重导出/依赖内联正确性成本高，弃 |
+| rquickjs | 0.14.x | QuickJS 宿主绑定 | ADR-0006 既定；支持 ES2020、异步与中断处理 | DelSkayn（活跃） | deno_core：ADR-0006 备选，体积/复杂度高，暂不采用 |
 
 - 每 crate 直接依赖数 ≤ 15（standards/08 §4 软上限达标；workspace 共享依赖去重后不重复计入）。
 - 新增行格式照抄本表；升级在同一行更新版本线并在 CHANGELOG 记一笔。

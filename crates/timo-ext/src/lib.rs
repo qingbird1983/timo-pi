@@ -9,7 +9,10 @@
 mod diag;
 mod discovery;
 mod error;
+mod host;
 mod manifest;
+#[cfg(feature = "pack")]
+mod pack;
 
 pub use diag::{
     DegradeClass, DegradedItem, DiagnosticEntry, DiagnosticReport, ErrorCode, ExtensionDiagnostic,
@@ -19,10 +22,16 @@ pub use discovery::{
     Discovered, DiscoveryIssue, DiscoveryOptions, DiscoveryOutcome, Scope, discover,
 };
 pub use error::ExtError;
+pub use host::{
+    BasicServices, ExecOutput, ExtensionHost, FetchOutput, Grants, HostServices, LoadedExtension,
+    ToolCallResult, ToolMeta,
+};
 pub use manifest::{
     Capabilities, FsCapability, MANIFEST_SCHEMA, Manifest, NetCapability, compute_source_hash,
     is_valid_id,
 };
+#[cfg(feature = "pack")]
+pub use pack::{MAX_BUNDLE_BYTES, PackOptions, PackOutput, pack};
 
 /// 结果别名：本 crate 一律以 [`ExtError`] 报错。
 pub type Result<T> = std::result::Result<T, ExtError>;
