@@ -3,7 +3,18 @@ name = "timo-kernel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-kernel"
+description = "Kernel facade: config -> catalog -> tools/MCP registry -> agent + session (the only public API)"
+
+[dependencies]
+timo-agent = { workspace = true }
+timo-ai = { workspace = true }
+timo-config = { workspace = true }
+timo-mcp = { workspace = true }
+timo-session = { workspace = true }
+timo-tools = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

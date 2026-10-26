@@ -142,6 +142,8 @@ struct CatalogFile {
     api: ApiKind,
     base_url: String,
     #[serde(default)]
+    env: Vec<String>,
+    #[serde(default)]
     headers: Vec<(String, String)>,
     models: BTreeMap<String, ModelEntry>,
 }
@@ -173,6 +175,8 @@ fn d_max() -> u64 {
 #[derive(Debug, Clone, Default)]
 pub struct Catalog {
     models: BTreeMap<String, Model>,
+    /// 供应商 → 内置环境变量名表（凭证解析用；models.json 自定义供应商为空）。
+    provider_env: BTreeMap<String, Vec<String>>,
 }
 
 impl Catalog {
@@ -185,12 +189,20 @@ impl Catalog {
         cat
     }
 
+    /// 供应商的内置环境变量名表（设计 05 §4 优先级第 3 层）。
+    #[must_use]
+    pub fn provider_env(&self, provider: &str) -> Vec<String> {
+        self.provider_env.get(provider).cloned().unwrap_or_default()
+    }
+
     /// 合并一段目录资产 JSON（同名模型覆盖：后到者胜，供自定义目录使用）。
     pub fn merge_file(&mut self, raw: &str) {
         let file: CatalogFile = match serde_json::from_str(raw) {
             Ok(f) => f,
             Err(_) => return, // 目录资产损坏不 panic：跳过并在运行时以“未知模型”报错
         };
+        self.provider_env
+            .insert(file.provider.clone(), file.env.clone());
         for (id, e) in file.models {
             self.models.insert(
                 format!("{}/{}", file.provider, id),

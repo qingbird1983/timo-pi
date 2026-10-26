@@ -32,7 +32,9 @@ impl FixedClock {
     /// 从指定 unix 毫秒创建。
     #[must_use]
     pub fn new(ms: i64) -> Self {
-        Self { ms: AtomicU64::new(ms.max(0) as u64) }
+        Self {
+            ms: AtomicU64::new(ms.max(0) as u64),
+        }
     }
 
     /// 手动推进（仅测试）。
