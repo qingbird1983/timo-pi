@@ -3,7 +3,16 @@ name = "timo-session"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-session"
+description = "Session persistence: JSONL entry stream, tree structure, crash-safe append-only writes"
+
+[dependencies]
+timo-ai = { workspace = true }
+timo-config = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+ulid = { workspace = true }
+time = { version = "0.3", features = ["formatting", "parsing"] }
 
 [lints]
 workspace = true

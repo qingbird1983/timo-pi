@@ -1,0 +1,283 @@
+//! 会话读取：entry 流恢复、上下文投影、列表扫描（设计 04 §4~5）。
+
+use std::collections::HashSet;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+
+use timo_ai::Message;
+
+use crate::Result;
+use crate::entry::{Entry, SessionHeader, kinds};
+use crate::error::SessionError;
+
+/// 列表扫描时单文件头部读取上限（architecture/05 §2）。
+const HEADER_SCAN_CAP: u64 = 1024 * 1024;
+
+/// 读取全部完整 entry；**末行截断容忍丢弃**，中间行损坏报错（设计 04 §5）。
+///
+/// # Errors
+/// 中间行非法 JSON → [`SessionError::CorruptEntry`]；IO 错误 → [`SessionError::Io`]。
+pub fn read_entries(path: &Path) -> Result<Vec<Entry>> {
+    let raw = std::fs::read_to_string(path).map_err(|e| SessionError::Io {
+        path: path.to_path_buf(),
+        source: e,
+    })?;
+    let mut out = vec![];
+    let lines = raw.lines().enumerate();
+    let total = raw.lines().count();
+    for (i, line) in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let is_last_data_line = i + 1 == total;
+        match serde_json::from_str::<Entry>(line) {
+            Ok(e) => out.push(e),
+            Err(reason) if is_last_data_line && !raw.ends_with('\n') => {
+                // 半条写入（kill -9）：丢弃且不报错
+                let _ = reason;
+                break;
+            }
+            Err(e) => {
+                return Err(SessionError::CorruptEntry {
+                    path: path.to_path_buf(),
+                    line: i + 1,
+                    reason: e.to_string(),
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// 沿 leaf 链投影 LLM 上下文（设计 04：树形结构 MVP 只写线性链，投影按通用树实现）。
+///
+/// 只取 `message` entry 的 payload；未知类型与其他 entry 不入上下文。
+#[must_use]
+pub fn project_context(entries: &[Entry]) -> Vec<Message> {
+    let chain = leaf_chain(entries);
+    chain
+        .iter()
+        .filter(|e| e.kind == kinds::MESSAGE)
+        .filter_map(|e| serde_json::from_value::<Message>(e.payload.clone()).ok())
+        .collect()
+}
+
+/// 从 leaf（未被任何 entry 引用为 parent 的 entry）回溯父链，返回根→leaf 顺序。
+fn leaf_chain(entries: &[Entry]) -> Vec<&Entry> {
+    let by_id: std::collections::HashMap<&str, &Entry> =
+        entries.iter().map(|e| (e.id.as_str(), e)).collect();
+    let referenced: HashSet<&str> = entries
+        .iter()
+        .filter_map(|e| e.parent_id.as_deref())
+        .collect();
+    let leaf = entries
+        .iter()
+        .rev()
+        .find(|e| !referenced.contains(e.id.as_str()));
+    let mut chain: Vec<&Entry> = vec![];
+    let mut cur = leaf;
+    let mut guard = 0usize;
+    while let Some(e) = cur {
+        chain.push(e);
+        guard += 1;
+        if guard > entries.len() {
+            break; // 防环（理论不可达：追加时 parent 取当前 leaf）
+        }
+        cur = e.parent_id.as_deref().and_then(|p| by_id.get(p).copied());
+    }
+    chain.reverse();
+    chain
+}
+
+/// 会话摘要（列表展示用）。
+#[derive(Debug, Clone)]
+pub struct SessionInfo {
+    /// 会话 id。
+    pub id: String,
+    /// 文件路径。
+    pub path: PathBuf,
+    /// 工作目录。
+    pub cwd: String,
+    /// 创建时间（unix 毫秒）。
+    pub created_ms: i64,
+    /// 文件修改时间（unix 毫秒；取不到为 0）。
+    pub modified_ms: i64,
+    /// message entry 数。
+    pub message_count: usize,
+    /// 首条 user 消息文本（截 120 字符）。
+    pub first_message: String,
+}
+
+/// 扫描目录内全部 `*.jsonl`（读首条 header，≤1MB cap），按修改时间倒序。
+#[must_use]
+pub fn list_sessions(dir: &Path) -> Vec<SessionInfo> {
+    let mut out = vec![];
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for item in rd.flatten() {
+        let path = item.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        if let Some(info) = scan_session(&path) {
+            out.push(info);
+        }
+    }
+    out.sort_by_key(|s| std::cmp::Reverse(s.modified_ms));
+    out
+}
+
+fn scan_session(path: &Path) -> Option<SessionInfo> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut buf = String::new();
+    (&mut file)
+        .take(HEADER_SCAN_CAP)
+        .read_to_string(&mut buf)
+        .ok()?;
+    let first_line = buf.lines().next()?;
+    let header: Entry = serde_json::from_str(first_line).ok()?;
+    if header.kind != kinds::HEADER {
+        return None;
+    }
+    let h: SessionHeader = serde_json::from_value(header.payload.clone()).ok()?;
+    let message_count = buf
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Entry>(l).ok())
+        .filter(|e| e.kind == kinds::MESSAGE)
+        .count();
+    let first_message = buf
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Entry>(l).ok())
+        .find(|e| e.kind == kinds::MESSAGE)
+        .and_then(|e| {
+            serde_json::from_value::<Message>(e.payload.clone())
+                .ok()
+                .and_then(first_user_text)
+        })
+        .unwrap_or_default();
+    let modified_ms = file
+        .metadata()
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    Some(SessionInfo {
+        id: h.session_id,
+        path: path.to_path_buf(),
+        cwd: h.cwd,
+        created_ms: h.created_ms,
+        modified_ms,
+        message_count,
+        first_message,
+    })
+}
+
+fn first_user_text(m: Message) -> Option<String> {
+    if let Message::User(u) = &m {
+        for c in &u.content {
+            if let timo_ai::Content::Text { text } = c {
+                let t: String = text.chars().take(120).collect();
+                return Some(t);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::writer::{IdGen, SessionWriter};
+    use std::sync::Arc;
+    use timo_ai::user_text;
+    use timo_config::FixedClock;
+
+    fn setup(name: &str) -> (PathBuf, Arc<IdGen>) {
+        let d = std::env::temp_dir().join(format!("timo-sess-read-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        (d, Arc::new(IdGen::new()))
+    }
+
+    #[test]
+    fn roundtrip_and_projection() {
+        let (dir, idgen) = setup("rt");
+        let mut w =
+            SessionWriter::create(&dir, "D:/demo", None, Arc::new(FixedClock::new(1)), idgen)
+                .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("hello", 5)).unwrap(),
+        )
+        .unwrap();
+        w.append_raw("custom.demo", serde_json::json!({"x": 1}))
+            .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("again", 6)).unwrap(),
+        )
+        .unwrap();
+        let entries = read_entries(w.path()).unwrap();
+        assert_eq!(entries.len(), 4);
+        let msgs = project_context(&entries);
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].timestamp(), 5);
+    }
+
+    #[test]
+    fn truncated_last_line_dropped() {
+        let (dir, idgen) = setup("trunc");
+        let mut w =
+            SessionWriter::create(&dir, "D:/x", None, Arc::new(FixedClock::new(1)), idgen).unwrap();
+        w.append_raw(kinds::MESSAGE, serde_json::json!({"role": "user"}))
+            .unwrap();
+        let path = w.path().to_path_buf();
+        drop(w);
+        let mut raw = std::fs::read_to_string(&path).unwrap();
+        raw.push_str(
+            r#"{"v":1,"id":"ZZ","ts":"t","parent_id":null,"type":"message","payload":{"rol"#,
+        );
+        std::fs::write(&path, raw).unwrap();
+        let entries = read_entries(&path).unwrap();
+        assert_eq!(entries.len(), 2); // header + 完整 message，半行被丢弃
+    }
+
+    #[test]
+    fn mid_file_corruption_is_error() {
+        let (dir, idgen) = setup("mid");
+        let mut w =
+            SessionWriter::create(&dir, "D:/x", None, Arc::new(FixedClock::new(1)), idgen).unwrap();
+        w.append_raw(kinds::MESSAGE, serde_json::json!({"role": "user"}))
+            .unwrap();
+        w.append_raw(kinds::MESSAGE, serde_json::json!({"role": "user"}))
+            .unwrap();
+        let path = w.path().to_path_buf();
+        drop(w);
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut lines: Vec<String> = raw.lines().map(String::from).collect();
+        lines.insert(1, "{corrupt".into());
+        std::fs::write(&path, lines.join("\n") + "\n").unwrap();
+        let err = read_entries(&path).unwrap_err();
+        assert!(matches!(err, SessionError::CorruptEntry { line: 2, .. }));
+    }
+
+    #[test]
+    fn list_scans_headers() {
+        let (dir, idgen) = setup("list");
+        let mut w =
+            SessionWriter::create(&dir, "D:/demo", None, Arc::new(FixedClock::new(1)), idgen)
+                .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("first prompt here", 5)).unwrap(),
+        )
+        .unwrap();
+        let infos = list_sessions(&dir);
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].cwd, "D:/demo");
+        assert_eq!(infos[0].first_message, "first prompt here");
+        assert_eq!(infos[0].message_count, 1);
+    }
+}
