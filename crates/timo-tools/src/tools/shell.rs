@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::Result;
 use crate::definition::{ToolCallCtx, ToolDefinition, ToolOutput};
 use crate::error::ToolError;
+use crate::review::{ReviewKind, ToolReviewRequest, ask};
 use crate::truncate::truncate_tail;
 
 /// timeout 上限（毫秒，2^31−1）。
@@ -152,11 +153,27 @@ async fn run_shell(ctx: ToolCallCtx, cwd: Arc<Path>, kind: ShellKind) -> Result<
         .unwrap_or(MAX_TIMEOUT_MS)
         .min(MAX_TIMEOUT_MS);
     // Windows 上无原生 bash（缺失或只有 WSL 启动器）时按 D1 白名单以 PowerShell 执行
+    let tool_name = kind.program();
     let kind = if kind == ShellKind::Bash && cfg!(windows) && !windows_bash_usable() {
         ShellKind::PowerShell
     } else {
         kind
     };
+    // 审阅在 spawn 之前：拒绝/取消时不会创建子进程。
+    ask(
+        ctx.review.as_ref(),
+        &ctx.cancel,
+        ToolReviewRequest {
+            tool_call_id: ctx.tool_call_id.clone(),
+            tool_name: tool_name.into(),
+            kind: ReviewKind::Command {
+                command: command.clone(),
+                cwd: cwd.to_path_buf(),
+                shell: kind.program().into(),
+            },
+        },
+    )
+    .await?;
     execute_process(&command, &cwd, kind, timeout_ms, &ctx.cancel).await
 }
 
@@ -322,6 +339,10 @@ fn write_full_output(raw: &str) -> PathBuf {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::definition::ToolCallCtx;
+    use crate::review::test_support::RecordingReview;
+    use crate::review::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
+    use std::sync::Arc;
 
     #[test]
     fn native_bash_detection() {
@@ -329,6 +350,84 @@ mod tests {
         assert!(is_native_bash_uname("MSYS_NT-10.0"));
         assert!(is_native_bash_uname("CYGWIN_NT-10.0"));
         assert!(!is_native_bash_uname("Linux\n"));
+    }
+
+    fn review_ctx(
+        cwd: Arc<Path>,
+        review: Option<Arc<dyn ToolReview>>,
+        cancel: CancellationToken,
+    ) -> ToolCallCtx {
+        let (tx, _rx) = tokio::sync::mpsc::channel(4);
+        ToolCallCtx {
+            tool_call_id: "call-1".into(),
+            params: json!({"command": "echo x > timo-review-marker.txt"}),
+            cancel,
+            updates: tx,
+            cwd,
+            review,
+        }
+    }
+
+    #[tokio::test]
+    async fn rejected_command_is_not_spawned() {
+        let dir = std::env::temp_dir().join(format!("timo-shell-review-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cwd: Arc<Path> = Arc::from(dir.as_path());
+        let review = RecordingReview::new(ReviewDecision::Reject {
+            reason: "no shell".into(),
+        });
+        let def = bash_definition(cwd.clone());
+        let err = def
+            .run(review_ctx(
+                cwd.clone(),
+                Some(review.clone()),
+                CancellationToken::new(),
+            ))
+            .await
+            .expect_err("rejected");
+        assert!(err.to_string().contains("Rejected by user: no shell"));
+        assert!(!dir.join("timo-review-marker.txt").exists());
+        let request = review.last();
+        assert_eq!(request.tool_name, "bash");
+        match request.kind {
+            ReviewKind::Command { command, shell, .. } => {
+                assert!(command.contains("timo-review-marker.txt"));
+                assert!(shell == "bash" || shell == "powershell");
+            }
+            other => panic!("command expected: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelling_while_waiting_does_not_spawn() {
+        struct HangingReview;
+        #[async_trait::async_trait]
+        impl ToolReview for HangingReview {
+            async fn review(&self, _: ToolReviewRequest) -> ReviewDecision {
+                std::future::pending().await
+            }
+        }
+
+        let dir = std::env::temp_dir().join(format!("timo-shell-cancel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cwd: Arc<Path> = Arc::from(dir.as_path());
+        let cancel = CancellationToken::new();
+        let def = bash_definition(cwd.clone());
+        let task = tokio::spawn({
+            let cwd = cwd.clone();
+            let cancel = cancel.clone();
+            async move {
+                def.run(review_ctx(cwd, Some(Arc::new(HangingReview)), cancel))
+                    .await
+            }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        cancel.cancel();
+        let err = task.await.unwrap().expect_err("cancelled");
+        assert!(err.to_string().contains("run cancelled"));
+        assert!(!dir.join("timo-review-marker.txt").exists());
     }
 
     #[tokio::test]

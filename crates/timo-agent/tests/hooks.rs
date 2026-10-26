@@ -202,6 +202,7 @@ fn handle(
         max_turns: None,
         hooks: Some(hooks),
         provider_hooks: None,
+        review: None,
     })
 }
 

@@ -53,6 +53,8 @@ pub struct LoopConfig {
     pub hooks: Option<std::sync::Arc<dyn crate::hooks::LoopHooks>>,
     /// 供应商钩子（透传到每次请求；None = 无钩子）。
     pub provider_hooks: Option<std::sync::Arc<dyn timo_ai::ProviderHooks>>,
+    /// 工具执行前审阅器（None = 自动执行，Phase 1/2 行为）。
+    pub review: Option<std::sync::Arc<dyn timo_tools::ToolReview>>,
 }
 
 /// 会话写入口（MessageAdded 落盘挂点；None = 无会话）。

@@ -123,6 +123,7 @@ mod tests {
                 cancel: tokio_util::sync::CancellationToken::new(),
                 updates: tokio::sync::mpsc::channel(4).0,
                 cwd: Arc::from(std::path::Path::new(".")),
+                review: None,
             };
             let out = reg.execute(name, ctx).await.expect("ok");
             assert_eq!(
@@ -138,6 +139,7 @@ mod tests {
             cancel: tokio_util::sync::CancellationToken::new(),
             updates: tokio::sync::mpsc::channel(4).0,
             cwd: Arc::from(std::path::Path::new(".")),
+            review: None,
         };
         let err = reg.execute("read", ctx).await.expect_err("schema fail");
         assert!(matches!(err, ToolError::InvalidParams { .. }));

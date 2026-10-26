@@ -5,7 +5,7 @@
 ## 当前阶段与状态
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）。
-- **Phase 3 进行中**：设计定稿（tag `phase-3.start`）；实现第 1~2 批完成——桌面壳最小窗口可运行，内核 K0/K1 已修。
+- **Phase 3 进行中**：设计定稿（tag `phase-3.start`）；实现第 1~3 批完成——桌面壳最小窗口可运行，内核 K0/K1 已修，K2 审阅接缝已接入。
 - 设计：`docs/design/phase-3/00-overview.md` ~ `04-tool-review.md` + `prototype.html`；决策 ADR-0012。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
@@ -17,15 +17,16 @@
 - **文案**：`locales/zh-CN.yml`、`en.yml`，默认中文；代码不写死中文。
 - **UI 冒烟**：`tests/ui.rs` 无头渲染、侧栏宽度 248、明暗往返回位、中英文案切换；全套 186 tests 绿。
 - **K0/K1**：`run_agent_loop` 返回 `RunOutcome`（新增 + 完整上下文），`AgentHandle::run` 返回值不变；Kernel 用 clone 保留历史并在成功后回填。新增 `new_session()` 草稿、`history()`、`delete_session(id)`（防路径穿越，删当前会话回到草稿）；K0/K1 各有回归测试。
+- **K2**：`timo-tools::ToolReview` + `ReviewKind`；`KernelOptions.tool_review` → `LoopConfig.review` → `ToolCallCtx.review`。write/edit 在路径锁内算出 after 后审阅，命令在 spawn 前审阅；拒绝/取消/panic 无副作用；CLI `None` 走原路径。`KernelOptions` 不再派生 `Debug`。
+- **拆分**：kernel 会话 API 移到 `src/kernel/sessions.rs`，装配选项移到 `src/kernel/options.rs`；edit 的匹配/替换移到 `src/tools/edit/apply.rs`（保持单文件 ≤500 行）。
 - **真机核对**：1280×800 明/暗两态截图；修正窗口标题显示 exe 路径、状态栏中置的问题。
 - **坑**：P-007（测试文件 glob 导入导致 `#[gpui_kit::test]` 自递归）。
 
 ## 下一步（按优先级）
 
-1. **K2**：审阅接缝 + CLI `None` 等价性测试（ADR-0012）。
-2. 内核桥接 + 会话侧栏/聊天流/工具 trace/输入取消（设计 00 §8 第 4 步）。
-3. diff 审阅面板 + 命令面板 + 设置/钥匙串。
-4. NSH PoC（`nsh-poc` feature）+ C1~C6 验收 → `report.md` → tag `phase-3.end`。
+1. 内核桥接 + 会话侧栏/聊天流/工具 trace/输入取消（设计 00 §8 第 4 步）。
+2. diff 审阅面板 + 命令面板 + 设置/钥匙串。
+3. NSH PoC（`nsh-poc` feature）+ C1~C6 验收 → `report.md` → tag `phase-3.end`。
 
 > 施工顺序唯一来源：`docs/design/phase-3/00-overview.md` §8。设计错误先改文档再写码。
 

@@ -90,6 +90,27 @@ fn echo_tool_registry() -> Arc<ToolRegistry> {
             })
         }),
     });
+    reg.register(timo_tools::ToolDefinition {
+        name: "review_probe".into(),
+        label: "Review probe".into(),
+        description: "reports whether the tool context carries a reviewer".into(),
+        prompt_snippet: None,
+        prompt_guidelines: vec![],
+        parameters: serde_json::json!({"type": "object", "properties": {}}),
+        output_schema: None,
+        exposure: timo_tools::Exposure::Direct,
+        namespace: None,
+        annotations: timo_tools::Annotations::default(),
+        execution_mode: timo_tools::ExecutionMode::Parallel,
+        execute: Arc::new(|ctx| {
+            Box::pin(async move {
+                Ok(timo_tools::ToolOutput::text(format!(
+                    "review={}",
+                    if ctx.review.is_some() { "yes" } else { "no" }
+                )))
+            })
+        }),
+    });
     Arc::new(reg)
 }
 
@@ -119,6 +140,13 @@ fn tool_call_done(call_id: &str, tool: &str, args: serde_json::Value) -> Vec<Ass
 }
 
 fn handle(api: Arc<dyn ProviderApi>) -> AgentHandle {
+    handle_with_review(api, None)
+}
+
+fn handle_with_review(
+    api: Arc<dyn ProviderApi>,
+    review: Option<Arc<dyn timo_tools::ToolReview>>,
+) -> AgentHandle {
     AgentHandle::new(LoopConfig {
         model: base_model(),
         api,
@@ -137,6 +165,7 @@ fn handle(api: Arc<dyn ProviderApi>) -> AgentHandle {
         max_turns: None,
         hooks: None,
         provider_hooks: None,
+        review,
     })
 }
 
@@ -175,6 +204,32 @@ async fn full_loop_text_then_tool_then_stop() {
     }
     // 接缝 #6：流事件富枚举通路存在（本轮无增量，Done 已在 StreamEvent 通路转发）
     let _ = count;
+}
+
+struct AllowingReview;
+
+#[async_trait::async_trait]
+impl timo_tools::ToolReview for AllowingReview {
+    async fn review(&self, _: timo_tools::ToolReviewRequest) -> timo_tools::ReviewDecision {
+        timo_tools::ReviewDecision::Allow
+    }
+}
+
+#[tokio::test]
+async fn loop_config_review_reaches_the_tool_context() {
+    let api = Arc::new(ScriptedApi::new(vec![
+        tool_call_done("call_r", "review_probe", serde_json::json!({})),
+        text_done("done"),
+    ]));
+    let agent = handle_with_review(api, Some(Arc::new(AllowingReview)));
+    let out = agent.run("x".into(), vec![], None).await.unwrap();
+    match &out[2] {
+        Message::ToolResult(result) => match &result.content[0] {
+            Content::Text { text } => assert_eq!(text, "review=yes"),
+            other => panic!("text expected: {other:?}"),
+        },
+        other => panic!("tool result expected: {other:?}"),
+    }
 }
 
 #[tokio::test]

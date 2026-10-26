@@ -332,6 +332,7 @@ fn build_options(common: &Common, max_turns: Option<usize>) -> Result<KernelOpti
         no_extensions: common.no_extensions,
         extensions_interactive: None,
         ext_flags,
+        tool_review: None,
     })
 }
 

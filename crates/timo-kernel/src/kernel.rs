@@ -11,9 +11,7 @@ use timo_agent::{
     AgentHandle, EventBus, KernelEvent, PendingMessageQueue, SessionSink, ToolExecutionMode,
 };
 use timo_config::Clock;
-use timo_session::{
-    SessionError, SessionInfo, SessionWriter, list_sessions, project_context, read_entries,
-};
+use timo_session::{SessionInfo, SessionWriter, list_sessions};
 use timo_tools::{ToolDefinition, ToolRegistry};
 
 use crate::Result;
@@ -22,32 +20,10 @@ use crate::extensions::{self, ExtensionOptions, ExtensionRuntime};
 use crate::prompt::build_system_prompt;
 use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
 
-/// 门面装配选项（CLI/未来 desktop 的全部入口参数）。
-#[derive(Debug, Clone, Default)]
-pub struct KernelOptions {
-    /// 数据目录覆盖（缺省 TIMO_AGENT_DIR > 平台目录）。
-    pub data_dir: Option<PathBuf>,
-    /// 工作目录（工具与项目设置解析基底）。
-    pub work_dir: Option<PathBuf>,
-    /// 模型覆盖（`--provider P --model M`）。
-    pub model_override: Option<(String, String)>,
-    /// 思考档位覆盖（CLI > 设置）。
-    pub thinking: Option<timo_config::ThinkingLevel>,
-    /// 显式凭证（`--api-key`）。
-    pub api_key: Option<String>,
-    /// 会话目录覆盖。
-    pub session_dir: Option<PathBuf>,
-    /// 单次 run 的模型请求轮数上限（`--max-turns`）。
-    pub max_turns: Option<usize>,
-    /// 显式扩展路径（`--extension`，可重复）。
-    pub extension_paths: Vec<PathBuf>,
-    /// 完全关闭扩展（`--no-extensions`）。
-    pub no_extensions: bool,
-    /// 是否交互式询问授权（None = 自动检测 stdin 是否 TTY）。
-    pub extensions_interactive: Option<bool>,
-    /// `--ext-flag NAME=VALUE`。
-    pub ext_flags: Vec<(String, String)>,
-}
+mod options;
+mod sessions;
+
+pub use options::KernelOptions;
 
 /// 内核门面：薄壳唯一可见类型。
 pub struct Kernel {
@@ -75,6 +51,7 @@ pub struct Kernel {
     ext_abort: Arc<AtomicBool>,
     ext_running: Arc<AtomicBool>,
     ext: Option<ExtensionRuntime>,
+    tool_review: Option<Arc<dyn timo_tools::ToolReview>>,
 }
 
 impl Kernel {
@@ -197,6 +174,7 @@ impl Kernel {
             ext_abort: Arc::new(AtomicBool::new(false)),
             ext_running: Arc::new(AtomicBool::new(false)),
             ext: None,
+            tool_review: options.tool_review,
         })
     }
 
@@ -257,73 +235,6 @@ impl Kernel {
     fn commit_outcome(&mut self, outcome: timo_agent::RunOutcome) -> Vec<timo_ai::Message> {
         self.history = Some(outcome.context);
         outcome.new_messages
-    }
-
-    /// 恢复会话（投影历史；后续 run 追加到该文件）。
-    ///
-    /// # Errors
-    /// 会话不存在/损坏 → [`KernelError::Session`]。
-    pub async fn resume(&mut self, id: &str) -> Result<()> {
-        self.ensure_ready().await;
-        let path = self.sessions_dir.join(format!("{id}.jsonl"));
-        let entries = read_entries(&path)?;
-        let writer = SessionWriter::open(
-            &path,
-            Arc::clone(&self.clock),
-            Arc::new(timo_session::IdGen::new()),
-        )?;
-        self.session_id = Some(id.to_string());
-        self.history = Some(project_context(&entries));
-        self.session = Some(Arc::new(tokio::sync::Mutex::new(writer)));
-        if let Some(host) = self.ext.as_ref().and_then(|runtime| runtime.host.as_ref()) {
-            host.notify_event("session_start", serde_json::json!({ "reason": "resume" }));
-        }
-        Ok(())
-    }
-
-    /// 开始一个未落盘的会话草稿；首次 [`Kernel::run`] 才创建会话文件。
-    ///
-    /// 调用后当前会话 id 与历史都被清空（GUI“新建会话”）。
-    pub fn new_session(&mut self) {
-        self.session = None;
-        self.session_id = None;
-        self.history = None;
-    }
-
-    /// 当前会话的投影上下文；草稿或尚无历史时为 `None`。
-    #[must_use]
-    pub fn history(&self) -> Option<&[timo_ai::Message]> {
-        self.history.as_deref()
-    }
-
-    /// 删除一个已落盘的会话文件；删除当前会话时回到草稿态。
-    ///
-    /// id 只接受会话 id 字符（ASCII 字母数字、`-`、`_`），防止路径穿越。
-    ///
-    /// # Errors
-    /// id 非法、文件不存在或删除失败 → [`KernelError::Session`]。
-    pub fn delete_session(&mut self, id: &str) -> Result<()> {
-        let valid = !id.is_empty()
-            && id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-        if !valid {
-            return Err(KernelError::Session(SessionError::NotFound(id.to_string())));
-        }
-        let path = self.sessions_dir.join(format!("{id}.jsonl"));
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-                return Err(KernelError::Session(SessionError::NotFound(id.to_string())));
-            }
-            Err(source) => {
-                return Err(KernelError::Session(SessionError::Io { path, source }));
-            }
-        }
-        if self.session_id.as_deref() == Some(id) {
-            self.new_session();
-        }
-        Ok(())
     }
 
     /// 首次使用前装齐 MCP 工具并构建 agent（bus/队列在 `new` 中已就位，
@@ -387,6 +298,7 @@ impl Kernel {
                     max_turns: self.max_turns,
                     hooks,
                     provider_hooks,
+                    review: self.tool_review.clone(),
                 },
                 self.bus.clone(),
                 Arc::clone(&self.steering),

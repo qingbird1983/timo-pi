@@ -10,6 +10,7 @@ mod definition;
 mod error;
 mod mutate;
 mod registry;
+mod review;
 pub mod tools;
 mod truncate;
 
@@ -20,6 +21,7 @@ pub use definition::{
 pub use error::ToolError;
 pub use mutate::with_file_mutation_queue;
 pub use registry::ToolRegistry;
+pub use review::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
 pub use truncate::{
     GREP_MAX_LINE, MAX_BYTES, MAX_LINES, truncate_head, truncate_middle, truncate_tail,
 };

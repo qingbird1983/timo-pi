@@ -106,6 +106,8 @@ pub struct ToolCallCtx {
     pub updates: tokio::sync::mpsc::Sender<ToolOutput>,
     /// 工作目录。
     pub cwd: Arc<std::path::Path>,
+    /// 执行前审阅器（None = 自动执行，Phase 1/2 行为）。
+    pub review: Option<Arc<dyn crate::review::ToolReview>>,
 }
 
 /// 工具执行 future。

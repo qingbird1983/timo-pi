@@ -183,6 +183,7 @@ impl<'a> Ctx<'a> {
             cancel: self.cancel.clone(),
             updates: tx,
             cwd: self.config.cwd.clone(),
+            review: self.config.review.clone(),
         };
         let out = self.config.tools.execute(name, ctx).await;
         forwarder.abort();
