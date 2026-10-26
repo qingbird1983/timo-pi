@@ -7,7 +7,9 @@ use crate::definition::{ToolDefinition, ToolOutput};
 use crate::error::ToolError;
 
 /// 工具注册表：Phase 1 持内置 + MCP 工具；Phase 2 扩展工具同样入表。
-#[derive(Default)]
+///
+/// 可克隆：工具定义共享执行闭包（`Arc`），克隆用于给 agent 一个装配期快照。
+#[derive(Default, Clone)]
 pub struct ToolRegistry {
     tools: BTreeMap<String, ToolDefinition>,
 }

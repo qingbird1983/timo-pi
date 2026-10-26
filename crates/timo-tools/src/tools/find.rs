@@ -2,7 +2,7 @@
 //!
 //! 输出 posix 相对路径逐行；50KB 截断；limit=1000 默认（pi find.ts 同构）。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -125,9 +125,6 @@ fn find(base: &Path, pattern: &str, limit: usize) -> Result<ToolOutput> {
     }
     Ok(ToolOutput::text(body))
 }
-
-#[allow(dead_code)]
-fn unused(_: PathBuf) {}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

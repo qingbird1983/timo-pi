@@ -3,7 +3,7 @@
 //! 输出格式对齐 pi grep.ts：`relpath:LINE: text`（上下文行 `relpath:LINE- text`）、
 //! 行截断 500、总量 50KB 头截断、limit 注记。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use regex::RegexBuilder;
@@ -245,9 +245,6 @@ fn relative_to(path: &Path) -> String {
         .to_string_lossy()
         .replace('\\', "/")
 }
-
-#[allow(dead_code)]
-fn unused(_: PathBuf) {}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

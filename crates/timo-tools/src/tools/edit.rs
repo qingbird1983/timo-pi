@@ -3,7 +3,6 @@
 //! 模糊匹配规则：NFKC；逐行 trimEnd；智能引号→ASCII；Unicode 破折号族→`-`；
 //! NBSP 族→空格。模糊命中时新文本按行写回（仅触及行），原文件其他行原样保留。
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -316,15 +315,6 @@ fn build_diff(old: &[String], new: &[String]) -> String {
 
 fn line_no(i: usize) -> String {
     format!("{:>4} ", i + 1)
-}
-
-/// 错误辅助复用（未找到路径）。
-#[allow(dead_code)]
-fn not_found(path: PathBuf) -> ToolError {
-    ToolError::Io {
-        path,
-        source: std::io::Error::new(std::io::ErrorKind::NotFound, "Path not found"),
-    }
 }
 
 #[cfg(test)]
