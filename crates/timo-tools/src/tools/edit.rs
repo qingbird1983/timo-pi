@@ -151,14 +151,36 @@ async fn apply_to_file(path: &std::path::Path, edits: &[Edit]) -> Result<ToolOut
     let normalized_text = text.replace("\r\n", "\n");
     let lines: Vec<String> = normalized_text.split('\n').map(String::from).collect();
 
-    let mut claimed: Vec<(usize, usize)> = vec![];
-    let mut applied = 0usize;
-    let mut new_lines = lines.clone();
+    let mut replacements: Vec<Replacement> = vec![];
     let mut first_changed: Option<usize> = None;
     for edit in edits {
         let (start, len, fuzzy) = locate(&lines, &edit.old)?;
-        let range = (start, start + len);
-        if claimed.iter().any(|(a, b)| range.0 < *b && *a < range.1) {
+        // 精确匹配只替换命中片段（保留同行前后缀）；模糊回退按整行块替换。
+        let replacement = if fuzzy {
+            let block_start = byte_offset_of_line(&normalized_text, start);
+            let block_end = byte_offset_of_line(&normalized_text, start + len - 1)
+                + lines[start + len - 1].len();
+            Replacement {
+                start: block_start,
+                end: block_end,
+                text: edit.new.replace("\r\n", "\n"),
+            }
+        } else {
+            let idx = normalized_text
+                .find(&edit.old)
+                .ok_or_else(|| ToolError::InvalidParams {
+                    reason: "oldText not found".into(),
+                })?;
+            Replacement {
+                start: idx,
+                end: idx + edit.old.len(),
+                text: edit.new.replace("\r\n", "\n"),
+            }
+        };
+        if replacements
+            .iter()
+            .any(|r| replacement.start < r.end && r.start < replacement.end)
+        {
             return Err(ToolError::InvalidParams {
                 reason: format!(
                     "edits overlap in {}. Merge them into one edit.",
@@ -166,30 +188,23 @@ async fn apply_to_file(path: &std::path::Path, edits: &[Edit]) -> Result<ToolOut
                 ),
             });
         }
-        claimed.push(range);
-        let new_block: Vec<String> = if fuzzy {
-            edit.new
-                .replace("\r\n", "\n")
-                .split('\n')
-                .map(String::from)
-                .collect()
-        } else {
-            // 精确匹配：整块原文替换（含跨行），展开为行
-            splice_exact(&lines, range, &edit.new)
-        };
-        let _ = fuzzy;
-        replace_range(&mut new_lines, range, new_block);
-        applied += 1;
         if first_changed.is_none() {
-            first_changed = Some(range.0 + 1);
+            first_changed = Some(start + 1);
         }
+        replacements.push(replacement);
     }
-    if applied == 0 {
+    if replacements.is_empty() {
         return Err(ToolError::InvalidParams {
             reason: "no edits applied".into(),
         });
     }
-    let mut out = new_lines.join("\n");
+    // 逆序应用，避免前一次替换移动后一次区间。
+    replacements.sort_by_key(|r| r.start);
+    let mut out = normalized_text.clone();
+    for r in replacements.iter().rev() {
+        out.replace_range(r.start..r.end, &r.text);
+    }
+    let new_lines: Vec<String> = out.split('\n').map(String::from).collect();
     if crlf {
         out = out.replace('\n', "\r\n");
     }
@@ -203,7 +218,8 @@ async fn apply_to_file(path: &std::path::Path, edits: &[Edit]) -> Result<ToolOut
     Ok(ToolOutput {
         content: vec![timo_ai::Content::Text {
             text: format!(
-                "Successfully replaced {applied} block(s) in {}.",
+                "Successfully replaced {} block(s) in {}.",
+                replacements.len(),
                 path.display()
             ),
         }],
@@ -213,6 +229,13 @@ async fn apply_to_file(path: &std::path::Path, edits: &[Edit]) -> Result<ToolOut
         }),
         ..ToolOutput::default()
     })
+}
+
+/// 一次替换的字节区间与替换文本（相对规范化后的原文）。
+struct Replacement {
+    start: usize,
+    end: usize,
+    text: String,
 }
 
 /// 在行数组中定位 old 文本：精确（整文 indexOf）→ 模糊（规范化行滑窗）。
@@ -259,26 +282,6 @@ fn locate(lines: &[String], old: &str) -> Result<(usize, usize, bool)> {
     }
 }
 
-/// 精确替换：范围内首行保留 old 前缀、末行保留 old 后缀，中间插入 new。
-fn splice_exact(lines: &[String], range: (usize, usize), new: &str) -> Vec<String> {
-    let joined = lines.join("\n");
-    let byte_start = byte_offset_of_line(&joined, range.0);
-    let byte_end =
-        byte_offset_of_line(&joined, range.1.saturating_sub(1)) + lines[range.1 - 1].len();
-    let prefix = &joined[..byte_start];
-    let suffix = &joined[byte_end..];
-    let block = if suffix.is_empty() {
-        new.to_string()
-    } else {
-        format!("{new}\n")
-    };
-    let _ = lines;
-    format!("{prefix}{block}{suffix}")
-        .split('\n')
-        .map(String::from)
-        .collect()
-}
-
 fn byte_offset_of_line(joined: &str, line: usize) -> usize {
     joined
         .split('\n')
@@ -286,10 +289,6 @@ fn byte_offset_of_line(joined: &str, line: usize) -> usize {
         .map(|l| l.len() + 1)
         .sum::<usize>()
         .saturating_sub(1)
-}
-
-fn replace_range(lines: &mut Vec<String>, range: (usize, usize), replacement: Vec<String>) {
-    lines.splice(range.0..range.1, replacement);
 }
 
 /// 简易 +/- diff（前 200 行内），pi details.diff 同构精神。
@@ -348,6 +347,79 @@ mod tests {
         assert!(locate(&lines, "omega").is_err());
     }
 
+    async fn apply(name: &str, content: &str, edits: Vec<Edit>) -> String {
+        let dir = std::env::temp_dir().join(format!("timo-edit-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("f.txt");
+        std::fs::write(&p, content).unwrap();
+        apply_to_file(&p, &edits).await.unwrap();
+        std::fs::read_to_string(&p).unwrap()
+    }
+
+    #[tokio::test]
+    async fn single_line_edit_keeps_other_lines_exact() {
+        // 真实事故回归：2 行文件被写成了 5 行（多空行 + 重复行）。
+        let out = apply(
+            "single",
+            "status: draft\nowner: timo\n",
+            vec![Edit {
+                old: "status: draft".into(),
+                new: "status: ready".into(),
+            }],
+        )
+        .await;
+        assert_eq!(out, "status: ready\nowner: timo\n");
+    }
+
+    #[tokio::test]
+    async fn inline_edit_preserves_prefix_and_suffix() {
+        let out = apply(
+            "inline",
+            "a = draft\nkeep\n",
+            vec![Edit {
+                old: "draft".into(),
+                new: "ready".into(),
+            }],
+        )
+        .await;
+        assert_eq!(out, "a = ready\nkeep\n");
+    }
+
+    #[tokio::test]
+    async fn multiline_exact_edit() {
+        let out = apply(
+            "multi",
+            "one\ntwo\nthree\n",
+            vec![Edit {
+                old: "one\ntwo".into(),
+                new: "uno\ndos".into(),
+            }],
+        )
+        .await;
+        assert_eq!(out, "uno\ndos\nthree\n");
+    }
+
+    #[tokio::test]
+    async fn multiple_edits_apply_to_original() {
+        let out = apply(
+            "many",
+            "a: 1\nb: 2\nc: 3\n",
+            vec![
+                Edit {
+                    old: "a: 1".into(),
+                    new: "a: 10".into(),
+                },
+                Edit {
+                    old: "c: 3".into(),
+                    new: "c: 30".into(),
+                },
+            ],
+        )
+        .await;
+        assert_eq!(out, "a: 10\nb: 2\nc: 30\n");
+    }
+
     #[tokio::test]
     async fn end_to_end_crlf_bom_preserved() {
         let dir = std::env::temp_dir().join(format!("timo-edit-{}", std::process::id()));
@@ -362,9 +434,6 @@ mod tests {
         apply_to_file(&p, &edits).await.unwrap();
         let out = std::fs::read(&p).unwrap();
         let s = String::from_utf8_lossy(&out);
-        assert!(s.starts_with('\u{FEFF}'));
-        assert!(s.contains("\r\n"));
-        assert!(s.contains("name = 'B'"));
-        assert!(s.contains("keep"));
+        assert_eq!(s, "\u{FEFF}name = 'B'\r\nkeep\r\n");
     }
 }

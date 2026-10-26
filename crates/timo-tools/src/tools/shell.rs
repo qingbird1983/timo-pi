@@ -112,6 +112,37 @@ fn on_path(program: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Windows 上可用的 `bash` 必须是原生 POSIX 层（Git Bash/MSYS/Cygwin）。
+///
+/// System32 里的 `bash.exe` 是 WSL 启动器：它不认 Windows 工作目录，
+/// 会把命令跑在 Linux 侧（或直接失败），因此视为不可用、回退 PowerShell。
+fn windows_bash_usable() -> bool {
+    static CACHE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *CACHE.get_or_init(|| {
+        if !on_path("bash") {
+            return false;
+        }
+        let out = std::process::Command::new("bash")
+            .args(["-c", "uname -s"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {
+                is_native_bash_uname(&String::from_utf8_lossy(&o.stdout))
+            }
+            _ => false,
+        }
+    })
+}
+
+/// `uname -s` 是否来自 Git Bash/MSYS/Cygwin（纯函数，便于测试）。
+fn is_native_bash_uname(uname: &str) -> bool {
+    let s = uname.to_ascii_lowercase();
+    s.contains("mingw") || s.contains("msys") || s.contains("cygwin")
+}
+
 async fn run_shell(ctx: ToolCallCtx, cwd: Arc<Path>, kind: ShellKind) -> Result<ToolOutput> {
     let _ = ctx.updates; // 进度节流为 Phase 1 不做（roadmap 不做清单）
     let command = crate::tools::write::str_param(&ctx.params, "command")?.to_string();
@@ -120,8 +151,8 @@ async fn run_shell(ctx: ToolCallCtx, cwd: Arc<Path>, kind: ShellKind) -> Result<
         .map(|s| s.saturating_mul(1000))
         .unwrap_or(MAX_TIMEOUT_MS)
         .min(MAX_TIMEOUT_MS);
-    // Windows 上 bash 缺失时按 D1 白名单以 PowerShell 执行同一命令
-    let kind = if kind == ShellKind::Bash && cfg!(windows) && !on_path("bash") {
+    // Windows 上无原生 bash（缺失或只有 WSL 启动器）时按 D1 白名单以 PowerShell 执行
+    let kind = if kind == ShellKind::Bash && cfg!(windows) && !windows_bash_usable() {
         ShellKind::PowerShell
     } else {
         kind
@@ -291,6 +322,14 @@ fn write_full_output(raw: &str) -> PathBuf {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_bash_detection() {
+        assert!(is_native_bash_uname("MINGW64_NT-10.0-19045\n"));
+        assert!(is_native_bash_uname("MSYS_NT-10.0"));
+        assert!(is_native_bash_uname("CYGWIN_NT-10.0"));
+        assert!(!is_native_bash_uname("Linux\n"));
+    }
 
     #[tokio::test]
     async fn echo_and_exit_code() {
