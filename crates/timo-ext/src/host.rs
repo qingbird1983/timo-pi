@@ -192,8 +192,20 @@ impl ExtensionHost {
             .map_err(|_| runtime(ErrorCode::E305, "extension host dropped the reply"))?
     }
 
-    /// 投递一个通知事件（不等待结果；处理顺序与钩子一致）。
+    /// 是否有扩展订阅某事件。
+    #[must_use]
+    pub fn has_hook(&self, event: &str) -> bool {
+        self.state
+            .lock()
+            .map(|state| state.hooks.iter().any(|(_, name)| name == event))
+            .unwrap_or(false)
+    }
+
+    /// 投递一个通知事件（无订阅者时直接丢弃；不等待结果）。
     pub fn notify_event(&self, event: &str, payload: JsonValue) {
+        if !self.has_hook(event) {
+            return;
+        }
         let _ = self.tx.send(Request::Event {
             event: event.to_string(),
             payload,

@@ -7,17 +7,16 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use serde_json::{Value as JsonValue, json};
+use serde_json::json;
 use timo_config::Clock;
 use timo_ext::{
     BasicServices, Capabilities, DiagnosticEntry, DiagnosticReport, Discovered, DiscoveryOptions,
     ErrorCode, ExtHooks, ExtensionDiagnostic, ExtensionHost, Grants, LoadedExtension, Manifest,
-    PackOptions, PermissionStore, Scope, Status, ToolMeta, discover, pack, validate_capabilities,
+    PackOptions, PermissionStore, Scope, Status, discover, pack, validate_capabilities,
 };
 
-use crate::KernelEvent;
-
 mod cli;
+mod events;
 
 /// 单 handler 预算（设计 04 §5）。
 pub const HOOK_BUDGET: Duration = Duration::from_secs(30);
@@ -359,122 +358,11 @@ fn now() -> String {
     format!("unix:{}", (timo_config::SystemClock).now_ms())
 }
 
-/// 扩展工具元数据 → 注册表定义（执行经宿主线程）。
-#[must_use]
-pub fn tool_definition(meta: &ToolMeta, host: Arc<ExtensionHost>) -> timo_tools::ToolDefinition {
-    let name = meta.name.clone();
-    let call_name = name.clone();
-    timo_tools::ToolDefinition {
-        name,
-        label: meta.label.clone(),
-        description: meta.description.clone(),
-        prompt_snippet: meta.prompt_snippet.clone(),
-        prompt_guidelines: meta.prompt_guidelines.clone(),
-        parameters: meta.parameters.clone(),
-        output_schema: meta.output_schema.clone(),
-        exposure: timo_tools::Exposure::Direct,
-        namespace: None,
-        annotations: timo_tools::Annotations::default(),
-        execution_mode: timo_tools::ExecutionMode::Parallel,
-        execute: Arc::new(move |ctx| {
-            let host = Arc::clone(&host);
-            let name = call_name.clone();
-            Box::pin(async move {
-                let args = ctx.params.clone();
-                let result = tokio::task::spawn_blocking(move || host.call_tool(&name, args))
-                    .await
-                    .map_err(|error| {
-                        timo_tools::ToolError::Execution(format!("extension host join: {error}"))
-                    })?
-                    .map_err(|error| timo_tools::ToolError::Execution(error.to_string()))?;
-                let content = serde_json::from_value::<Vec<timo_ai::Content>>(result.content)
-                    .map_err(|error| {
-                        timo_tools::ToolError::Execution(format!(
-                            "extension tool content is invalid: {error}"
-                        ))
-                    })?;
-                Ok(timo_tools::ToolOutput {
-                    content,
-                    details: result.details,
-                    structured_content: result.structured_content,
-                    is_error: result.is_error,
-                    terminate: result.terminate,
-                })
-            })
-        }),
-    }
-}
-
-/// `KernelEvent` → 扩展通知事件（设计 05 §3；只通知，不回读）。
-#[must_use]
-pub fn event_payload(event: &KernelEvent) -> Option<(&'static str, JsonValue)> {
-    let payload = match event {
-        KernelEvent::AgentStarted => ("agent_start", json!({})),
-        KernelEvent::AgentFinished { messages } => ("agent_end", json!({ "messages": messages })),
-        KernelEvent::TurnStarted => ("turn_start", json!({ "timestamp": now() })),
-        KernelEvent::TurnFinished {
-            message,
-            tool_results,
-        } => (
-            "turn_end",
-            json!({ "message": message, "toolResults": tool_results }),
-        ),
-        KernelEvent::MessageAdded { message } => ("message_end", json!({ "message": message })),
-        KernelEvent::ToolCallStarted {
-            tool_call_id,
-            tool_name,
-            args,
-        } => (
-            "tool_execution_start",
-            json!({ "toolCallId": tool_call_id, "toolName": tool_name, "args": args }),
-        ),
-        KernelEvent::ToolCallFinished {
-            tool_call_id,
-            tool_name,
-            result,
-            duration_ms,
-        } => (
-            "tool_execution_end",
-            json!({
-                "toolCallId": tool_call_id,
-                "toolName": tool_name,
-                "result": result,
-                "durationMs": duration_ms,
-            }),
-        ),
-        _ => return None,
-    };
-    Some(payload)
-}
-
-/// 事件转发任务：订阅总线，通知事件投递给扩展（不阻塞内核）。
-pub fn forward_events(
-    mut events: tokio::sync::broadcast::Receiver<KernelEvent>,
-    host: Arc<ExtensionHost>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        while let Ok(event) = events.recv().await {
-            if let Some((name, payload)) = event_payload(&event) {
-                host.notify_event(name, payload);
-            }
-        }
-    })
-}
-
-/// 命令参数：`/name a b` → `["a","b"]`。
-#[must_use]
-pub fn split_command(line: &str) -> Option<(String, JsonValue)> {
-    let line = line.trim().trim_start_matches('/');
-    let mut parts = line.split_whitespace();
-    let name = parts.next()?.to_string();
-    let args: Vec<&str> = parts.collect();
-    Some((name, json!(args)))
-}
+pub use cli::{ExtensionSummary, install_extension, remove_extension, summarize, trust_extension};
+pub use events::{forward_events, split_command, tool_definition};
 
 /// 授权文件路径（CLI 复用）。
 #[must_use]
 pub fn permissions_path(data_dir: &Path) -> PathBuf {
     data_dir.join("permissions.json")
 }
-
-pub use cli::{ExtensionSummary, install_extension, remove_extension, summarize, trust_extension};

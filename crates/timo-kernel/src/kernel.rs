@@ -253,6 +253,7 @@ impl Kernel {
     /// # Errors
     /// 会话不存在/损坏 → [`KernelError::Session`]。
     pub async fn resume(&mut self, id: &str) -> Result<()> {
+        self.ensure_ready().await;
         let path = self.sessions_dir.join(format!("{id}.jsonl"));
         let entries = read_entries(&path)?;
         let writer = SessionWriter::open(
