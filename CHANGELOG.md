@@ -6,6 +6,22 @@
 
 ---
 
+## [0.1.10] - 2026-10-26
+
+### 里程碑：Phase 1 内核与 CLI 全部落地，进入人工验收
+
+- **八个 crate 全部实现并可编译**：timo-config、timo-ai、timo-session、timo-tools、timo-mcp、timo-agent、timo-kernel 门面、timo-cli 冒烟壳；全量测试 117 个通过，fmt/clippy/check-size 门禁全绿。
+- **两种协议可流式输出**：新增可注入传输层 `SseTransport`（默认 reqwest 实现），协议夹具（`fixtures/protocol/`）回放覆盖正常流、工具调用、错误、取消四类路径；修复 OpenAI 协议从不产出流式增量事件的问题（此前 CLI 只看得到最终结果）。
+- **会话与 MCP 夹具**：`fixtures/session/` 四个 v1 格式夹具（线性/工具/未知类型/半行截断）进测试；`fixtures/mcp/echo_server.py` + 集成测试验证 MCP 工具发现、命名空间与统一管线。
+- **内核门面收尾**：MCP 改为首次 run/tools 才连接（失败只通告不阻断）；补齐 `tools()`、`wait_idle()`、中止句柄、无凭证可用的会话列表入口；CLI `run`/`resume`/`sessions` 三命令与 Ctrl+C 两段语义落地。
+- **阶段进度报告**（`docs/design/phase-1/report.md`，进行中）：A4/A5 本地通过；A1~A3 需真实凭证与人工操作，待所有者授权后执行；A6 七条接缝核对通过。
+
+### 当前状态
+
+- Phase 1 进入人工验收：真实任务执行（A1~A3）与 CI 首次运行待完成，完成后报告转正、看板更新、打 tag `phase-1.end`。
+
+---
+
 ## [0.1.9] - 2026-10-26
 
 ### 里程碑：Phase 1 开工（所有者已下达开工通知）

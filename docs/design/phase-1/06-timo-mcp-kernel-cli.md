@@ -38,32 +38,40 @@ Idle → Connecting → Connected → (RequestFailed→lazy 重连) ； Failed�
 
 ```rust
 pub struct Kernel { /* 组装 config/ai/tools/mcp/session/agent */ }
-pub struct KernelOptions { data_dir: Option<PathBuf>, work_dir: PathBuf,
+pub struct KernelOptions { data_dir: Option<PathBuf>, work_dir: Option<PathBuf>,
                            model_override: Option<(String,String)>, thinking: Option<ThinkingLevel>,
-                           api_key: Option<String>, session_dir: Option<PathBuf> }
+                           api_key: Option<String>, session_dir: Option<PathBuf>,
+                           max_turns: Option<usize> }
 impl Kernel {
-    pub fn new(opts: KernelOptions) -> Result<Kernel, KernelError>;   // 配置→目录→注册表→MCP 惰性
+    pub async fn new(opts: KernelOptions) -> Result<Kernel, KernelError>;  // 配置→目录→注册表→MCP 只读配置
     pub fn events(&self) -> broadcast::Receiver<KernelEvent>;         // 事件总线唯一入口
-    pub fn tools(&self) -> Vec<ToolDefinition>;                       // 含 MCP（触发连接）
-    pub async fn run(&self, prompt: &str) -> Result<Vec<Message>>;    // 新会话 or 续会话（resume 后）
-    pub async fn resume(&mut self, id: &SessionId) -> Result<()>;
+    pub async fn tools(&mut self) -> Vec<ToolDefinition>;              // 首次调用触发 MCP 连接与枚举
+    pub async fn run(&mut self, prompt: &str) -> Result<Vec<Message>>; // 新会话 or 续会话（resume 后）
+    pub async fn resume(&mut self, id: &str) -> Result<()>;
     pub fn steer(&self, text: &str); pub fn follow_up(&self, text: &str);
-    pub fn abort(&self); pub async fn wait_idle(&self);
-    pub fn session_id(&self) -> Option<&SessionId>;
+    pub fn abort(&self); pub fn abort_handle(&self) -> Option<AbortHandle>;  // run 借出期间也可中止
+    pub async fn wait_idle(&self);
+    pub fn session_id(&self) -> Option<&str>;
     pub fn list_sessions(&self) -> Vec<SessionInfo>;
+    pub fn sessions_dir(data_dir: Option<&Path>) -> Result<PathBuf>;   // 静态入口：无需模型凭证
+    pub fn list_sessions_at(dir: &Path) -> Vec<SessionInfo>;
 }
 ```
-- 薄壳（cli/未来 desktop）**只 import 此 crate**，不穿透内部（architecture/01 分层原则 2）。
-- 内部组装：内置工具注册（默认激活集）→ MCP 注册表并入 → 每次会话创建 SessionWriter + AgentLoop。
+- 薄壳（cli/未来 desktop）**只 import 此 crate**，不穿透内部（architecture/01 分层原则 2）；门面重导出 `KernelEvent`、`AssistantStreamEvent`、`Content`、`Message`、`Usage`、`ThinkingLevel`、`SessionInfo`、`AbortHandle` 供订阅方匹配事件。
+- 内部组装：内置工具注册（默认激活集）→ MCP 配置读入 → 首次 `run`/`tools` 时连接并并入 → 每次会话创建 SessionWriter + AgentLoop。
+- 实现回填（2026-10-26）：`new`/`tools`/`run` 因装配与历史、连接需要 async；`run`/`resume` 取 `&mut self`（会话与历史在门面内切换）；`tools` 首次调用才连接 MCP（设计 §1.2），`declared_tools()` 提供不触发连接的快照。
 
 ## 3. timo-cli（非交互冒烟壳，仅验收载体）
 
 ```
 timo run "把文件 X 中的 A 改成 B 并验证" [--provider P] [--model M] [--thinking L]
         [--api-key K] [--session-dir D] [--cwd D] [--max-turns N]
-timo resume <SESSION_ID|last> [--once "补充指令"]      # 恢复会话；无 --once 时读 stdin 逐条
+timo resume <SESSION_ID|last> [--once "补充指令"] [--provider P] [--model M] [--thinking L]
+        [--api-key K] [--session-dir D] [--cwd D]
 timo sessions [--cwd D]                                 # 列出会话（id/时间/首条消息）
 ```
+
+> 实现回填（2026-10-26）：`resume` 复用 `run` 的同组参数（恢复会话同样需要凭证、模型覆盖与会话目录；否则 `run --session-dir` 产生的会话无法被 resume 找到）。退出码：0 成功、1 运行错误、2 参数错误、130 中断退出。
 
 - 输出协议（stdout，人读不美饰）：流式文本原样直出；`[tool] name({args 摘要})` 起止行；`[error] …` 到 stderr；usage 摘要在 `AgentFinished` 后一行。
 - 交互（resume 的 stdin 模式）：每行一条 user 消息；`/abort` 中止当前轮；Ctrl+C 第一次=abort 当前 run、第二次=退出；EOF=正常退出。
@@ -73,6 +81,6 @@ timo sessions [--cwd D]                                 # 列出会话（id/时�
 
 | crate | 变体要点 |
 |---|---|
-| timo-mcp | ConfigInvalid{server, reason} / ConnectFailed{server, source} / CallFailed{tool, source} / Timeout{server} |
-| timo-kernel | Config(ConfigError) / Session(SessionError) / Agent(String) / NoModel(ModelNotFound) / Tool(ToolError) |
+| timo-mcp | ConfigInvalid{path, reason} / ServerInvalid{server, reason} / ConnectFailed{server, detail} / CallFailed{tool, detail} / Timeout{server, secs} |
+| timo-kernel | Config(ConfigError) / Session(SessionError) / Ai(AiError) / ModelNotFound(String) / Agent(AgentError) / Mcp(McpError) |
 | timo-cli | 展示层：为上述错误补用户上下文（配置文件路径、建议动作）后 exit code 非 0 |

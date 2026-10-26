@@ -1,41 +1,41 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-26（会话主题：**Phase 1 开工**——详设定稿 + 基础设施，实现按 crate 序推进）
+- 更新：2026-10-26（会话主题：**Phase 1 收尾**——内核门面与 CLI 落地、夹具回放、进入人工验收）
 
 ## 当前阶段与状态
 
-- **Phase 1 实现中**（2026-10-26 所有者下达"开工吧"；tag `phase-1.start`）。Phase 0 已完成（tag `phase-0.end`）。
-- 看板唯一位置：`docs/roadmap/00-roadmap.md` §1。
+- **Phase 1 实现完成、人工验收中**（2026-10-26）。Phase 0 已完成（tag `phase-0.end`）。
+- 实现提交序列：`4889ee6` tools 清理 → `ea22972` mcp 失败状态 → `7cc66be` agent 事件/中止/轮数 → `cce7d22` kernel 门面 → `d4bfe6e` CLI → `02769dd` 依赖清理 → `2f8570d` ai 传输注入+回放 → `014bb67` session 夹具 → `5c74381` mcp echo 集成测试。
+- 看板唯一位置：`docs/roadmap/00-roadmap.md` §1；当前进度报告：`docs/design/phase-1/report.md`（进行中）。
 
-## 最近完成了什么
+## 上一轮完成了什么
 
-- **详设 8 篇定稿**（docs/design/phase-1/00~07）：行为语义全部以 pi 为蓝本（各篇内标注 pi 参照路径）；偏离逐项登记于 00 §5（D1~D10，全部落 ADR-0011 三类白名单）。
-- **会话格式定稿**（architecture/05）：ULID+单调工厂防回拨；不轮转；payload 内联；平台数据目录。草案修订：四种消息 entry 合并为单一 `message` 型；取消 `system.notice`。
-- **依赖准入表初版**（standards/04 附录 A，锁版本线）；顺带修正 §5 笔误（原引用不存在的 04-dependencies.md——standards/09"矛盾当轮修"首例）。
-- pi 侧语义规格已提取（agent 循环/两协议适配/工具与配置/MCP），来自 D:\pi 源码研读，要点已固化进详设，无需重读 pi（除非详设未覆盖处）。
-
-## 实现提交序列（本阶段计划）
-
-1. ✅ 详设 + 定稿 + 开工登记（`phase-1.start`）
-2. workspace 骨架：根 Cargo.toml（workspace members、[workspace.lints]）、.cargo/config.toml（standards/08 §7 原文落地）、.gitignore 补 target/、scripts/check-size + clean-stale、.github/workflows/ci.yml、fixtures/ 空架子随首批夹具建
-3. timo-config → 4. timo-ai（类型/trait/SSE/两协议/目录/auth/retry/fixtures）→ 5. timo-session → 6. timo-tools → 7. timo-mcp → 8. timo-agent → 9. timo-kernel → 10. timo-cli
-11. 中期：CHANGELOG/CONTEXT 同步；收尾：进度报告（接缝核对 architecture/03 + 体量核对 standards/08 + **规范复查 standards/09**）→ 看板 → tag `phase-1.end`
+- **timo-kernel 收尾**：MCP 首次 `run`/`tools` 才连接（失败只发 Error 事件不阻断）；补 `tools()`、`wait_idle()`、`abort_handle()`、无凭证可用的 `sessions_dir`/`list_sessions_at`；门面重导出事件类型（薄壳只依赖本 crate）。
+- **timo-cli 落地**：`run` / `resume <id|last>` / `sessions`；流式正文、`[tool]` 起止行、usage 摘要、错误到 stderr；stdin 逐行与 `/abort`；Ctrl+C 第一次中止、第二次退出。
+- **timo-ai 可测化**：`SseTransport` 注入 + `api_with_transport`；`fixtures/protocol/` 8 个回放用例；**修复 OpenAI 适配器从不产出流式事件**的缺陷（其 on_sse 以前恒返回 None）。
+- **夹具补齐**：`fixtures/session/`（线性/工具/未知型/半行）、`fixtures/mcp/echo_server.py` + 集成测试（A4 自动化）。
+- **门禁**：fmt / clippy `-D warnings` / 全量 117 测试 / check-size 全绿；体量回预算（run.rs 拆分、死代码清零）。
+- **文档**：设计 02/06/07 加"实现回填"；进度报告、CHANGELOG 0.1.10、docs/README 登记。
 
 ## 下一步（按优先级）
 
-1. workspace 骨架提交（含 .cargo/config.toml + scripts + CI）。
-2. timo-config（最简、无内部依赖，作为编译链验证）。
-3. timo-ai types + trait + SSE 解码器 + anthropic 适配（最大单项，先 fixture 后实现）。
+1. **A1~A3 人工验收**：需要真实模型凭证与所有者授权（付费调用）。A1 改文件任务 → A2 会话列表/恢复续聊 → A3 中途 Ctrl+C 与 kill -9 后文件完好。
+2. **A4 上半**：人工配置一个真实第三方 stdio MCP server；HTTP 传输尚未人工验证。
+3. **A5**：推送后确认 GitHub Actions（windows-latest；A4 测试依赖 Python）。
+4. **阶段收尾**：报告转正 → roadmap 看板状态 → tag `phase-1.end`。
+5. Phase 2 扩展宿主设计可与上述并行（内核接口已稳定）。
 
 ## 未决问题
 
-- 无阻塞项。（gpui-kit ↔ gpui-component 谱系待 Phase 3 前核实，不阻塞。）
+- A1~A3 阻塞阶段收尾（需凭证/授权）；不阻塞 Phase 2 设计。
+- MCP 工具"发现失败"不会自动重试发现（已发现工具的调用失败会在调用层重连）——Phase 2 惰性管理补。
+- `LoopConfig` 七个扩展钩子结构占位未落地（D10 不实现执行；占位随 Phase 2 设计，见设计 02 回填与 roadmap backlog）。
+- 取消回放测试依赖"先收到 Delta 再 cancel"；若该路径回归为无事件，测试会挂起而非报红（见下）。
 
 ## 关键提醒
 
-- **方向纪律（ADR-0011）**：遇到"想换更好的做法"→ 三问（pi 是否这么做 / 是否在白名单 / 是否有 ADR 授权），皆否则记 backlog、照 pi 做。详设 00 §5 的 D1~D10 是已授权偏离的**完整清单**，之外不得新增偏离。
-- pi 源码在本机 D:\pi（MIT 许可，可复制数据/fixture/文案，须注明来源）；PI-Desktop/pi-flash 仅思路。
-- 铁律提醒：禁 unsafe/unwrap（库层）、单文件 ≤500 行、公共 API 100% doc comment、Cargo.lock 入库、每 crate 一个实现提交含测试。
-- 写码纪律：`.agents/skills/ponytail`（standards/04 §8）——最小完整改动；绝不削减校验/错误处理/安全/测试。
-- 根入口定位（standards/08 §2）：README 双份=纯说明；AGENTS.md=薄索引；状态唯一来源是本卡。
-- 每阶段收尾：接缝核对（architecture/03）+ 体量核对（standards/08，含 target/）+ **规范复查**（standards/09 四问）。
+- **方向纪律（ADR-0011）**：行为语义以 pi 为唯一蓝本；偏离白名单只有 D1~D10，新增须 ADR/backlog。
+- **事件契约**：OpenAI/Anthropic 都必须产出 `BlockStart → Delta → BlockEnd`；新增协议适配器照抄两适配器的事件时序（回放测试会验证）。
+- **跨 crate 夹具路径**：测试用 `env!("CARGO_MANIFEST_DIR")/../../fixtures/...`；夹具文件头必须写来源声明。
+- **门禁四连**：`cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bash scripts/check-size`；全量测试若 LNK1102 用 `CARGO_BUILD_JOBS=1`。
+- **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对（standards 08；报告模板见 standards 03 §5）。

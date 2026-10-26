@@ -16,16 +16,18 @@ agent 循环是 pi 语义对齐的**核心**：消息→模型→工具调用→
     TurnStarted, TurnFinished { message: Arc<Message>, tool_results: Arc<Vec<Message>> },
     MessageAdded { message: Arc<Message> },                 // message_end 的持久化对应物
     StreamEvent { event: Arc<AssistantStreamEvent> },       // 流式粒度（Start/Delta/…）
-    ToolCallRequested { call: Arc<ToolCall> },              // Phase 1 仅通告；veto 接口 Phase 2
-    ToolCallStarted { tool_call_id, tool_name, args }, ToolCallFinished { tool_call_id, tool_name,
-        result: Arc<ToolResultMessage>, duration_ms: Option<u64> },
+    ToolCallRequested { call: Arc<Content> },               // Phase 1 仅通告；veto 接口 Phase 2
+    ToolCallStarted { tool_call_id: String, tool_name: String, args: Arc<serde_json::Value> },
+    ToolCallFinished { tool_call_id: String, tool_name: String,
+        result: Arc<Message>, duration_ms: Option<u64> },
     ProviderRequest { provider, model }, ProviderResponse { provider, model, usage: Usage },
-    CompactionEvent { /* Phase 5+ 预留，Phase 1 不 emit */ },
-    Error { message: Arc<Message>, context: String },
+    Error { context: String },                              // 循环/装配级错误；协议错误走终态消息
 }
 pub struct EventBus { tx: broadcast::Sender<KernelEvent> }   // capacity 1024；滞后订阅者 Lagged 不致命
 impl EventBus { pub fn subscribe(&self) -> broadcast::Receiver<KernelEvent>; }
 ```
+
+> 实现回填（2026-10-26）：`ToolCallRequested` 携带 `Content` 快照（无独立 ToolCall 类型）；`ToolCallStarted.args` 交参数快照（CLI 起止行用）；`ToolCallFinished.result` 为完整消息；`Error` 不带消息体（MCP 装配失败等无消息可挂）；`CompactionEvent` 留到 Phase 5 再加（Phase 1 无此变体）。事件发送顺序由 `run_agent_loop` 保证：`AgentStarted` 首、`AgentFinished` 末（含取消/错误路径）。
 
 pi AgentEvent ↔ KernelEvent 映射：`agent_start/end→AgentStarted/Finished`；`turn_start/end→TurnStarted/Finished`；`message_start/update/end→StreamEvent`（update 携带 AssistantStreamEvent）+ `message_end→MessageAdded`；`tool_execution_*→ToolCall*`。payload 全为快照（Arc），订阅者不得改内核态。
 
@@ -37,18 +39,21 @@ pub struct LoopConfig {
     pub model: Model, pub api: Arc<dyn ProviderApi>, pub tools: Arc<ToolRegistry>,
     pub thinking_level: ThinkingLevel,
     pub auth: Arc<AuthResolver>,                      // 每次请求重解析（对齐 pi getApiKey）
-    pub session: Option<Arc<SessionWriter>>,          // message 落盘挂点
     pub tool_execution: ToolExecutionMode,            // Parallel(默认)/Sequential
     pub retry: RetrySettings,
-    // —— 注入点（Phase 1 全为 None；Phase 2 由扩展宿主填充，结构先占位 = 接缝）——
-    pub transform_context: Option<ContextTransform>,  // 请求前改写上下文
-    pub prepare_request: Option<PrepareRequest>,      // 每次请求前
-    pub before_tool_call: Option<BeforeToolCall>,     // 可 block（veto 前身）
-    pub after_tool_call: Option<AfterToolCall>,       // 字段级覆盖结果
-    pub finish_turn: Option<FinishTurn>,              // end/continue 决策
-    pub get_steering_messages / get_follow_up_messages: Option<MessageSource>,
+    pub cwd: Arc<Path>,                               // 工具工作目录
+    pub system_prompt: String,                        // 门面组装（设计 03 §4）
+    pub clock: Arc<dyn Clock>,                        // 时间注入（standards/05 §3）
+    pub max_turns: Option<usize>,                     // 单次 run 模型请求轮数上限
 }
+// 会话写入经 run(prompt, history, session) 的 SessionSink 传入（不再放配置）。
 ```
+
+> 实现回填（2026-10-26）：`transform_context` / `prepare_request` / `before_tool_call` /
+> `after_tool_call` / `finish_turn` / `get_steering_messages` / `get_follow_up_messages`
+> 七个扩展钩子的**结构占位未在 Phase 1 落地**（D10 不实现钩子执行；占位推迟到 Phase 2
+> 随扩展宿主一并设计，已登记 roadmap/00 §3 Backlog）。Phase 1 的 steering/follow-up
+> 走 `PendingMessageQueue`（`AgentHandle::steering()/follow_up()`）。
 
 ## 4. 循环算法（对齐 pi runLoop，逐条）
 

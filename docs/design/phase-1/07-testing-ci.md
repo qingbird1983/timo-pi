@@ -29,6 +29,8 @@
 - 来源声明（文件头必注）：SSE 事件序列按官方 API 文档格式手构 + 从 pi 测试（MIT，packages/ai/test/ 内嵌 SSE 样本）提取的事件形状；**不含真实密钥/私有数据**。抓包日期=构建日，标注"文档格式 + pi 测试样本混合来源"。
 - 回放器：`mock transport`（reqwest mock 或注入 `HttpClient` trait——取注入方案，避免额外 mock 依赖）。
 
+> 实现回填（2026-10-26）：注入点已落为 `timo_ai::SseTransport`（默认 `ReqwestTransport`）+ `api_with_transport(kind, transport)`。夹具在 `fixtures/protocol/<api>/{text_flow,tool_call,error_*,cancel_midstream}.sse`，期望终态同目录 `.json`；`crates/timo-ai/tests/replay.rs` 逐夹具回放（含取消路径的"已收增量保留"断言）。HTTP 429 重试由 `retry.rs` / `http.rs` 单测覆盖，不在 SSE 回放范围内。
+
 ## 3. 会话格式兼容 fixtures（standards/05 §2.2，自 v1 起留存）
 
 `fixtures/session/`：`v1-linear.jsonl`（纯对话）、`v1-tools.jsonl`（含工具调用/结果）、`v1-unknown-type.jsonl`（含 `custom.demo` 未知型行）、`v1-truncated-last.jsonl`（半行结尾）。
@@ -65,3 +67,5 @@
 ## 7. 验收场景与测试对应（roadmap §4 A1~A6）
 
 A1 人工执行（真实 LLM）+ mock 版集成测试同路径；A2 `sessions`/`resume` 命令 + §3 断言；A3 = §4 #7 自动化 + 人工复核；A4 集成测试起本地 echo MCP server（stdio，脚本内起子进程）+ 人工一次真实配置；A5 CI 本体；A6 进度报告逐条引用 §4 表结果。
+
+> 实现回填（2026-10-26）：A4 的本地 server 为 `fixtures/mcp/echo_server.py`（Python stdio JSON-RPC，无网络），集成测试 `crates/timo-mcp/tests/stdio_echo.rs` 覆盖惰性连接、命名空间、schema 透传与统一管线调用。
