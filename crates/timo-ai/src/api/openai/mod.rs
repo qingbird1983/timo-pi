@@ -1,6 +1,7 @@
 //! openai-completions 适配器（设计 01 §5；pi: api/openai-completions.ts）。
 
 pub(crate) mod convert;
+pub(crate) mod mapping;
 pub(crate) mod request;
 pub(crate) mod stream;
 
@@ -18,14 +19,20 @@ use crate::types::{AssistantMessage, Context, StopReason};
 
 /// OpenAI Chat Completions 适配器（含兼容网关：deepseek/moonshot/openrouter 等）。
 pub struct OpenAiApi {
-    http: reqwest::Client,
+    transport: std::sync::Arc<dyn http::SseTransport>,
 }
 
 impl OpenAiApi {
-    /// 由共享 HTTP 客户端构造。
+    /// 由共享 HTTP 客户端构造（reqwest 传输）。
     #[must_use]
     pub fn new(http: reqwest::Client) -> Self {
-        Self { http }
+        Self::with_transport(std::sync::Arc::new(http::ReqwestTransport::new(http)))
+    }
+
+    /// 由任意传输实现构造（fixture 回放 / 自定义网关注入点）。
+    #[must_use]
+    pub fn with_transport(transport: std::sync::Arc<dyn http::SseTransport>) -> Self {
+        Self { transport }
     }
 
     /// 端点：`{base_url}/chat/completions`。
@@ -43,7 +50,7 @@ impl ProviderApi for OpenAiApi {
         context: &Context,
         options: StreamOptions,
     ) -> AssistantMessageStream {
-        let http = self.http.clone();
+        let transport = std::sync::Arc::clone(&self.transport);
         let model = model.clone();
         let context = context.clone();
         let (tx, rx) = mpsc::channel(256);
@@ -51,14 +58,14 @@ impl ProviderApi for OpenAiApi {
             let started = Instant::now();
             let base =
                 AssistantMessage::pending("openai-completions", &model.provider, &model.id, 0);
-            run(&http, &model, &context, &options, &tx, base, started).await;
+            run(&transport, &model, &context, &options, &tx, base, started).await;
         });
         AssistantMessageStream::new(rx)
     }
 }
 
 async fn run(
-    http: &reqwest::Client,
+    transport: &std::sync::Arc<dyn http::SseTransport>,
     model: &Model,
     context: &Context,
     options: &StreamOptions,
@@ -75,22 +82,20 @@ async fn run(
         let mut headers = vec![("authorization".to_string(), format!("Bearer {api_key}"))];
         headers.extend(model.headers.iter().cloned());
         headers.extend(options.headers.iter().cloned());
-        http::post_sse(
-            http,
-            http::SseRequest {
+        transport
+            .post_sse(http::SseRequest {
                 url: &OpenAiApi::endpoint(model, options),
                 headers,
                 body: &body,
                 options,
                 provider: &model.provider,
-            },
-        )
-        .await
+            })
+            .await
     })()
     .await;
 
-    let resp = match outcome {
-        Ok(r) => r,
+    let mut body = match outcome {
+        Ok(stream) => stream,
         Err(e) => {
             let _ = tx
                 .send(AssistantStreamEvent::Error {
@@ -111,7 +116,6 @@ async fn run(
         })
         .await;
     let mut dec = SseDecoder::new();
-    let mut body = resp.bytes_stream();
     let mut aborted = false;
     loop {
         tokio::select! {
@@ -120,7 +124,7 @@ async fn run(
                 let bytes = match chunk {
                     Some(Ok(b)) => b,
                     Some(Err(e)) => {
-                        let err = AiError::Transport(e.to_string());
+                        let err = AiError::Transport(e);
                         let _ = tx.send(AssistantStreamEvent::Error {
                             message: finalize(error_message(state.partial(), &err, false), started),
                         }).await;
@@ -130,8 +134,13 @@ async fn run(
                 };
                 for ev in dec.push(&String::from_utf8_lossy(&bytes)) {
                     match state.on_sse(&ev) {
-                        Ok(Some(out)) => { if tx.send(out).await.is_err() { return; } }
-                        Ok(None) => {}
+                        Ok(events) => {
+                            for out in events {
+                                if tx.send(out).await.is_err() {
+                                    return;
+                                }
+                            }
+                        }
                         Err(e) => {
                             let _ = tx.send(AssistantStreamEvent::Error {
                                 message: finalize(error_message(state.partial(), &e, false), started),
@@ -152,8 +161,10 @@ async fn run(
         }
     } else {
         for ev in dec.finish() {
-            if let Ok(Some(out)) = state.on_sse(&ev) {
-                let _ = tx.send(out).await;
+            if let Ok(events) = state.on_sse(&ev) {
+                for out in events {
+                    let _ = tx.send(out).await;
+                }
             }
         }
         let partial = state.partial().clone();

@@ -8,6 +8,8 @@ use crate::errors::AiError;
 use crate::stream::AssistantStreamEvent;
 use crate::types::{AssistantMessage, Content, StopReason, Usage};
 
+use super::mapping::{REASONING_FIELDS, map_finish_reason};
+
 /// chunk 驱动的流状态。
 pub(crate) struct OpenAiStream {
     msg: AssistantMessage,
@@ -22,9 +24,6 @@ pub(crate) struct OpenAiStream {
     finish_reason: Option<StopReason>,
     raw_finish: Option<String>,
 }
-
-/// 推理内容字段候选（首个非空者胜；signature 记字段名供回放路由）。
-const REASONING_FIELDS: &[&str] = &["reasoning_content", "reasoning", "reasoning_text"];
 
 impl OpenAiStream {
     /// 初始化（携带费率卡与 compat 开关）。
@@ -47,16 +46,14 @@ impl OpenAiStream {
         &self.msg
     }
 
-    /// 消费一条 SSE（chunk JSON 或 `[DONE]`）。
+    /// 消费一条 SSE（chunk JSON 或 `[DONE]`）；产出 0~N 个流事件
+    /// （块切换与 finish_reason 可能一次产生多个 BlockEnd）。
     ///
     /// # Errors
     /// JSON 解析失败 → [`AiError::Json`]。
-    pub(crate) fn on_sse(
-        &mut self,
-        sse: &SseEvent,
-    ) -> Result<Option<AssistantStreamEvent>, AiError> {
+    pub(crate) fn on_sse(&mut self, sse: &SseEvent) -> Result<Vec<AssistantStreamEvent>, AiError> {
         if sse.data.trim() == "[DONE]" {
-            return Ok(None);
+            return Ok(vec![]);
         }
         let v: Value = serde_json::from_str(&sse.data).map_err(|e| AiError::Json {
             context: "sse chunk".into(),
@@ -70,18 +67,19 @@ impl OpenAiStream {
         {
             self.msg.response_model.get_or_insert_with(|| m.to_string());
         }
+        let mut out = vec![];
         if let Some(choice) = v.pointer("/choices/0") {
-            self.on_delta(choice)?;
+            self.on_delta(choice, &mut out)?;
             if let Some(fr) = choice.get("finish_reason").and_then(Value::as_str) {
                 self.raw_finish = Some(fr.to_string());
                 self.finish_reason = Some(map_finish_reason(fr));
-                self.close_open_blocks();
+                self.close_all_blocks(&mut out);
             }
         }
         if let Some(u) = v.get("usage").filter(|u| !u.is_null()) {
             self.apply_usage(u);
         }
-        Ok(None)
+        Ok(out)
     }
 
     /// 流收尾：终结全部块并按 finish_reason 产出终态。
@@ -89,7 +87,8 @@ impl OpenAiStream {
     /// # Errors
     /// 缺 finish_reason 且 compat 校验开启 → [`AiError::Sse`]。
     pub(crate) fn finish(mut self) -> Result<AssistantMessage, AiError> {
-        self.close_open_blocks();
+        self.text_index = None;
+        self.thinking_index = None;
         self.finalize_tool_args();
         let stop = match self.finish_reason {
             Some(r) => r,
@@ -118,7 +117,11 @@ impl OpenAiStream {
         Ok(self.msg)
     }
 
-    fn on_delta(&mut self, choice: &Value) -> Result<(), AiError> {
+    fn on_delta(
+        &mut self,
+        choice: &Value,
+        out: &mut Vec<AssistantStreamEvent>,
+    ) -> Result<(), AiError> {
         let delta = match choice.get("delta") {
             Some(d) => d,
             None => return Ok(()),
@@ -128,8 +131,13 @@ impl OpenAiStream {
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
         {
-            let idx = self.open_text();
+            let idx = self.open_text(out);
             self.push_delta(idx, t);
+            out.push(AssistantStreamEvent::Delta {
+                index: idx,
+                delta: t.to_string(),
+                partial: self.msg.clone(),
+            });
         }
         let reasoning = REASONING_FIELDS.iter().find(|f| {
             delta
@@ -139,22 +147,32 @@ impl OpenAiStream {
         });
         if let Some(field) = reasoning {
             let t = delta.get(*field).and_then(Value::as_str).unwrap_or("");
-            let idx = self.open_thinking(field);
+            let idx = self.open_thinking(field, out);
             self.push_delta(idx, t);
+            out.push(AssistantStreamEvent::Delta {
+                index: idx,
+                delta: t.to_string(),
+                partial: self.msg.clone(),
+            });
         }
         if let Some(calls) = delta.get("tool_calls").and_then(Value::as_array) {
             for call in calls {
-                self.on_tool_delta(call)?;
+                self.on_tool_delta(call, out)?;
             }
         }
         Ok(())
     }
 
-    fn on_tool_delta(&mut self, call: &Value) -> Result<(), AiError> {
+    fn on_tool_delta(
+        &mut self,
+        call: &Value,
+        out: &mut Vec<AssistantStreamEvent>,
+    ) -> Result<(), AiError> {
         let index = call.get("index").and_then(Value::as_u64).unwrap_or(0);
         let local = match self.tool_map.get(&index) {
             Some(l) => *l,
             None => {
+                self.close_stream_blocks(out);
                 let local = self.msg.content.len();
                 let id = call
                     .get("id")
@@ -175,6 +193,10 @@ impl OpenAiStream {
                 });
                 self.args_raw.insert(local, String::new());
                 self.tool_map.insert(index, local);
+                out.push(AssistantStreamEvent::BlockStart {
+                    index: local,
+                    partial: self.msg.clone(),
+                });
                 local
             }
         };
@@ -182,28 +204,37 @@ impl OpenAiStream {
             && !frag.is_empty()
         {
             self.args_raw.entry(local).or_default().push_str(frag);
+            out.push(AssistantStreamEvent::Delta {
+                index: local,
+                delta: frag.to_string(),
+                partial: self.msg.clone(),
+            });
         }
         Ok(())
     }
 
-    fn open_text(&mut self) -> usize {
+    fn open_text(&mut self, out: &mut Vec<AssistantStreamEvent>) -> usize {
         if let Some(i) = self.text_index {
             return i;
         }
-        self.close_open_blocks();
+        self.close_stream_blocks(out);
         let idx = self.msg.content.len();
         self.msg.content.push(Content::Text {
             text: String::new(),
         });
         self.text_index = Some(idx);
+        out.push(AssistantStreamEvent::BlockStart {
+            index: idx,
+            partial: self.msg.clone(),
+        });
         idx
     }
 
-    fn open_thinking(&mut self, field: &str) -> usize {
+    fn open_thinking(&mut self, field: &str, out: &mut Vec<AssistantStreamEvent>) -> usize {
         if let Some(i) = self.thinking_index {
             return i;
         }
-        self.close_open_blocks();
+        self.close_stream_blocks(out);
         let idx = self.msg.content.len();
         self.msg.content.push(Content::Thinking {
             thinking: String::new(),
@@ -211,6 +242,10 @@ impl OpenAiStream {
             redacted: false,
         });
         self.thinking_index = Some(idx);
+        out.push(AssistantStreamEvent::BlockStart {
+            index: idx,
+            partial: self.msg.clone(),
+        });
         idx
     }
 
@@ -222,9 +257,35 @@ impl OpenAiStream {
         }
     }
 
-    fn close_open_blocks(&mut self) {
-        self.text_index = None;
-        self.thinking_index = None;
+    /// 关闭当前文本/思考块（发 BlockEnd）；工具块由 [`Self::close_all_blocks`] 关闭。
+    fn close_stream_blocks(&mut self, out: &mut Vec<AssistantStreamEvent>) {
+        if let Some(index) = self.text_index.take() {
+            out.push(AssistantStreamEvent::BlockEnd {
+                index,
+                partial: self.msg.clone(),
+            });
+        }
+        if let Some(index) = self.thinking_index.take() {
+            out.push(AssistantStreamEvent::BlockEnd {
+                index,
+                partial: self.msg.clone(),
+            });
+        }
+    }
+
+    /// finish_reason 到达：先解析工具参数（BlockEnd 时参数完整），再关闭全部块。
+    fn close_all_blocks(&mut self, out: &mut Vec<AssistantStreamEvent>) {
+        self.finalize_tool_args();
+        self.close_stream_blocks(out);
+        let mut tool_blocks: Vec<usize> = self.tool_map.values().copied().collect();
+        tool_blocks.sort_unstable();
+        tool_blocks.dedup();
+        for index in tool_blocks {
+            out.push(AssistantStreamEvent::BlockEnd {
+                index,
+                partial: self.msg.clone(),
+            });
+        }
     }
 
     fn finalize_tool_args(&mut self) {
@@ -277,18 +338,6 @@ impl OpenAiStream {
     }
 }
 
-/// finish_reason → StopReason（`stop/end→Stop`、`length→Length`、
-/// `tool_calls/function_call→ToolUse`，其余含 content_filter → Error）。
-#[must_use]
-pub fn map_finish_reason(raw: &str) -> StopReason {
-    match raw {
-        "stop" | "end" => StopReason::Stop,
-        "length" => StopReason::Length,
-        "tool_calls" | "function_call" => StopReason::ToolUse,
-        _ => StopReason::Error,
-    }
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
@@ -324,6 +373,48 @@ mod tests {
             RateCard::default(),
             Compat::default(),
         )
+    }
+
+    #[test]
+    fn emits_block_and_delta_events() {
+        let mut s = state();
+        let events = s.on_sse(&chunk(json!({"content": "Hi"}))).unwrap();
+        assert!(
+            matches!(events[0], AssistantStreamEvent::BlockStart { index: 0, .. }),
+            "{events:?}"
+        );
+        assert!(
+            matches!(&events[1], AssistantStreamEvent::Delta { index: 0, delta, .. } if delta == "Hi"),
+            "{events:?}"
+        );
+        let events = s
+            .on_sse(&chunk(json!({
+                "tool_calls": [{"index": 0, "id": "call_a", "function": {"name": "read", "arguments": "{\"path\":\"a.txt\"}"}}]
+            })))
+            .unwrap();
+        assert!(
+            matches!(events[0], AssistantStreamEvent::BlockEnd { index: 0, .. }),
+            "{events:?}"
+        );
+        assert!(
+            matches!(events[1], AssistantStreamEvent::BlockStart { index: 1, .. }),
+            "{events:?}"
+        );
+        assert!(
+            matches!(&events[2], AssistantStreamEvent::Delta { index: 1, delta, .. } if delta == "{\"path\":\"a.txt\"}"),
+            "{events:?}"
+        );
+        // finish_reason 关闭工具块（参数此时已完整）
+        let events = s.on_sse(&finish("tool_calls", false)).unwrap();
+        let AssistantStreamEvent::BlockEnd { index: 1, partial } = &events[0] else {
+            panic!("block end expected: {events:?}");
+        };
+        match &partial.content[1] {
+            Content::ToolCall { arguments, .. } => {
+                assert_eq!(arguments["path"], serde_json::json!("a.txt"));
+            }
+            other => panic!("tool call expected: {other:?}"),
+        }
     }
 
     #[test]

@@ -17,7 +17,7 @@ pub mod types;
 /// 结果别名：同步路径以 [`errors::AiError`] 报错。
 pub type Result<T> = std::result::Result<T, errors::AiError>;
 
-pub use api::{ProviderApi, api_for};
+pub use api::{ByteStream, ProviderApi, SseRequest, SseTransport, api_for, api_with_transport};
 pub use auth::{AuthMethod, AuthResolver};
 pub use catalog::{ApiKind, Catalog, Compat, Model, RateCard, calculate_cost};
 pub use errors::AiError;

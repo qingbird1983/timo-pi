@@ -5,6 +5,8 @@ pub mod http;
 pub mod openai;
 pub mod sse;
 
+pub use http::{ByteStream, ReqwestTransport, SseRequest, SseTransport};
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -31,9 +33,17 @@ pub trait ProviderApi: Send + Sync {
 /// 按协议类型取适配器（进程内共享 HTTP 客户端）。
 #[must_use]
 pub fn api_for(kind: ApiKind) -> Arc<dyn ProviderApi> {
-    let http = reqwest::Client::new();
+    api_with_transport(
+        kind,
+        Arc::new(ReqwestTransport::new(reqwest::Client::new())),
+    )
+}
+
+/// 按协议类型取适配器并使用指定传输（fixture 回放 / 自定义网关）。
+#[must_use]
+pub fn api_with_transport(kind: ApiKind, transport: Arc<dyn SseTransport>) -> Arc<dyn ProviderApi> {
     match kind {
-        ApiKind::AnthropicMessages => Arc::new(anthropic::AnthropicApi::new(http)),
-        ApiKind::OpenaiCompletions => Arc::new(openai::OpenAiApi::new(http)),
+        ApiKind::AnthropicMessages => Arc::new(anthropic::AnthropicApi::with_transport(transport)),
+        ApiKind::OpenaiCompletions => Arc::new(openai::OpenAiApi::with_transport(transport)),
     }
 }

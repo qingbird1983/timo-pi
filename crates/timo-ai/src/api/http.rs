@@ -1,5 +1,12 @@
-//! 共享 HTTP 发送：传输层重试（仅初始请求；流开始后不重试，设计 01 §8）。
+//! 传输层：SSE 请求抽象 + reqwest 默认实现（含传输层重试，仅初始请求——
+//! 流开始后不重试，设计 01 §8）。
+//!
+//! 抽象是 fixture 回放的注入点（设计 07 §2）：测试用回放实现替换 `reqwest`。
 
+use std::pin::Pin;
+
+use async_trait::async_trait;
+use futures::{Stream, StreamExt};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
@@ -7,8 +14,11 @@ use crate::errors::{AiError, ERROR_BODY_CAP};
 use crate::retry;
 use crate::stream::StreamOptions;
 
-/// 一次 SSE 请求的参数包（收敛 post_sse 参数量）。
-pub(crate) struct SseRequest<'a> {
+/// 响应字节流（错误以字符串表达，避免把 reqwest 类型泄漏进注入点）。
+pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>, String>> + Send>>;
+
+/// 一次 SSE 请求的参数包（收敛参数量；注入实现只读）。
+pub struct SseRequest<'a> {
     /// 完整端点 URL。
     pub url: &'a str,
     /// 请求头（含鉴权）。
@@ -21,11 +31,41 @@ pub(crate) struct SseRequest<'a> {
     pub provider: &'a str,
 }
 
-/// POST JSON 并期望 SSE 响应；带传输层重试与取消。
-///
-/// # Errors
-/// 重试穷尽/不可重试状态/服务端退避超上限/取消 → [`AiError`]。
-pub(crate) async fn post_sse(
+/// 传输层注入点：真实实现为 [`ReqwestTransport`]，测试用回放实现。
+#[async_trait]
+pub trait SseTransport: Send + Sync {
+    /// POST JSON 并返回 SSE 字节流。
+    ///
+    /// # Errors
+    /// 重试穷尽/不可重试状态/服务端退避超上限/取消 → [`AiError`]。
+    async fn post_sse(&self, request: SseRequest<'_>) -> Result<ByteStream, AiError>;
+}
+
+/// reqwest 实现（进程内共享客户端）。
+pub struct ReqwestTransport {
+    client: reqwest::Client,
+}
+
+impl ReqwestTransport {
+    /// 由共享 HTTP 客户端构造。
+    #[must_use]
+    pub fn new(client: reqwest::Client) -> Self {
+        Self { client }
+    }
+}
+
+#[async_trait]
+impl SseTransport for ReqwestTransport {
+    async fn post_sse(&self, request: SseRequest<'_>) -> Result<ByteStream, AiError> {
+        let resp = post_with_retry(&self.client, request).await?;
+        Ok(Box::pin(resp.bytes_stream().map(|chunk| {
+            chunk.map(|b| b.to_vec()).map_err(|e| e.to_string())
+        })))
+    }
+}
+
+/// POST 并期望 SSE 响应；带传输层重试与取消。
+async fn post_with_retry(
     http: &reqwest::Client,
     request: SseRequest<'_>,
 ) -> Result<reqwest::Response, AiError> {

@@ -1,0 +1,6 @@
+: source: hand-built from the official OpenAI Chat Completions streaming docs; represents
+: a stream that stalls mid-message (no finish_reason). shapes cross-checked against pi
+: tests (MIT); no real keys or private data. built 2026-10-26.
+
+data: {"id":"chatcmpl-fixture-3","model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}
+

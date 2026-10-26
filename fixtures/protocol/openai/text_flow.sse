@@ -1,0 +1,11 @@
+: source: hand-built from the official OpenAI Chat Completions streaming docs; chunk
+: shapes cross-checked against pi tests (MIT); no real keys or private data. built 2026-10-26.
+
+data: {"id":"chatcmpl-fixture-1","object":"chat.completion.chunk","model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fixture-1","model":"gpt-4","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-fixture-1","model":"gpt-4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
+
+data: [DONE]
+
