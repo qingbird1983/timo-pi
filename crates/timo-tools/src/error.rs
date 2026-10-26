@@ -40,4 +40,7 @@ pub enum ToolError {
     /// 取消（转 "Command aborted" 等文案）。
     #[error("Operation aborted")]
     Cancelled,
+    /// MCP 工具错误（timo-mcp 透传）。
+    #[error("MCP: {0}")]
+    Mcp(String),
 }

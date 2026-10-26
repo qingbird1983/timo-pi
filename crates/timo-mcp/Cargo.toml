@@ -3,7 +3,21 @@ name = "timo-mcp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-mcp"
+description = "MCP client via rmcp: server registry, lazy connections, tool merge into the unified pipeline"
+
+[dependencies]
+timo-ai = { workspace = true }
+timo-config = { workspace = true }
+timo-tools = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+rmcp = { workspace = true }
+reqwest = { workspace = true }
 
 [lints]
 workspace = true
