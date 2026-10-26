@@ -55,5 +55,6 @@ futures = "0.3"
 tempfile = "3"
 base64 = "0.22"
 sha2 = "0.10"
+unicode-normalization = "0.1"
 
 # 依赖版本以根 Cargo.lock 实锁为准（standards/04 §1）；准入理由见 docs/standards/04 附录 A。

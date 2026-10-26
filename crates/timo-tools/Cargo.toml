@@ -3,7 +3,22 @@ name = "timo-tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-tools"
+description = "Tool metamodel and built-in tools: read/write/edit/bash/powershell/grep/find"
+
+[dependencies]
+timo-ai = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+jsonschema = { workspace = true }
+regex = { workspace = true }
+ignore = { workspace = true }
+image = { workspace = true }
+base64 = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+unicode-normalization = { workspace = true }
 
 [lints]
 workspace = true
