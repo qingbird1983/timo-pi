@@ -118,6 +118,7 @@ flowchart LR
 | D23 | `registerVirtualModel` 最小实现：仅同 provider 内路由；跨 provider 路由诊断拒绝 | a（范围收敛） | 跨 provider 需多凭证解析器，记 backlog |
 | D24 | `ctx.executeTool` 与嵌套调用不支持（返回错误 + 诊断） | 范围 | 矩阵未列；codemode 属 backlog |
 | D25 | 事件清单按 pi 1.4.0 实际名称校准（architecture/04 的 `error` 不存在；`compact` 实为 `session_*_compact`） | a（文档校准） | 详见 05 §3 |
+| D26 | 禁止 `eval` / `new Function`（打包期拒绝） | c（standards/04 §6） | pi 允许动态求值；本项目只允许打包产物执行 |
 
 ## 7. 接缝核对（architecture/03）
 

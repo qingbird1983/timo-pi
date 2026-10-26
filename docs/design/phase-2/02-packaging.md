@@ -75,7 +75,7 @@ flowchart TD
    - 都不满足 → E101。
 2. **依赖安装**：仅当 `dependencies` 非空。规则：只允许 registry 版本（拒绝 `git:`/`file:`/`link:`/workspace:` 与 lifecycle scripts）；`npm install --ignore-scripts --no-audit --no-fund --no-package-lock`；临时目录在系统 temp，完成后只保留 `node_modules` 供打包，打包后删除。
 3. **打包**：rolldown `input=entry`、`format=esm`、`platform=neutral`、`target=es2020`、`treeshake=true`、**不 minify**（诊断可读）、不生成 sourcemap；`external` = 01 §1 的 shim specifier 列表。
-4. **禁用面扫描**：对**打包产物**再扫一遍（防止依赖内联带入）：`node:*`、Node 裸内建、`require(`、`import(` 非字面量、`process.` 顶层引用 → E104/E105。
+4. **禁用面扫描**：对**打包产物**再扫一遍（防止依赖内联带入）：`node:*`、Node 裸内建、`require(`、`import(` 非字面量、`process.` 顶层引用 → E104/E105；`eval(` / `new Function(` → E105（standards/04 §6）。
 5. **能力静态扫描**：命中 `pi.exec(`、`fetch(`、`new WebSocket(`、`XMLHttpRequest`、`pi.registerProvider(` 等，生成建议能力清单（**建议值，不是事实**；运行期仍以 manifest 声明 + 用户授予为准）。
 6. **写盘**：先写临时目录，全部成功后原子 rename；失败不留半成品。
 
@@ -88,7 +88,7 @@ flowchart TD
 | 顶层 await | 允许（ESM），但工厂执行前会先完成模块求值；超过工厂预算 → E202 |
 | `export default` | 必须是函数（同步/异步均可）；缺失或非函数 → E202 |
 | 动态导入 | 仅接受字符串字面量且指向已打包模块；否则 E105 |
-| `eval` / `new Function` | 允许（QuickJS 沙箱内），但不享受任何宿主能力；静态扫描不阻断 |
+| `eval` / `new Function` | **禁止**（standards/04 §6：只允许打包产物执行）；静态扫描命中 → E105 |
 | 全局 `__dirname`/`__filename` | 不提供；引用即运行期 ReferenceError（E202/E303） |
 
 ## 5. 错误分类总表
@@ -103,7 +103,7 @@ flowchart TD
 | E102 | npm 依赖安装失败（无 Node/registry 不可达/版本不存在） | 打印 npm stderr 尾部 + 解决建议 | 是 |
 | E103 | 模块解析失败（依赖缺失、未知 specifier） | 指出缺失模块与引用方 | 是 |
 | E104 | 引用 `node:*` 或 Node 裸内建 | 列出模块与调用点 | 是 |
-| E105 | 非法依赖源或非字面量动态导入 | 指出语句位置 | 是 |
+| E105 | 非法依赖源、非字面量动态导入或动态求值（`eval`/`new Function`） | 指出语句位置 | 是 |
 | E106 | 语法超出目标（oxc 报错） | 打印行列与片段 | 是 |
 | E107 | 打包器内部错误 | 打印错误链；建议锁版本复现 | 是 |
 | E108 | 产物/目录超限（5 MiB / 20 MiB） | 提示拆分或删依赖 | 是 |
@@ -159,7 +159,7 @@ flowchart TD
     "status": "loaded",
     "sourceHash": "sha256:…",
     "registered": { "tools": ["plugin_permission_gate_…"], "commands": [], "hooks": ["tool_call"] },
-    "degraded": [{ "member": "ctx.ui.setWidget", "class": "tui", "code": "E302" }],
+    "degraded": [{ "member": "ctx.ui.setWidget", "class": "tui", "reason": "TUI member is a no-op" }],
     "errors": []
   }],
   "summary": { "loaded": 1, "degraded": 0, "failed": 0 }

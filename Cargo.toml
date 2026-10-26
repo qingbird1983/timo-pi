@@ -7,6 +7,7 @@ members = [
     "crates/timo-session",
     "crates/timo-tools",
     "crates/timo-mcp",
+    "crates/timo-ext",
     "crates/timo-agent",
     "crates/timo-kernel",
     "apps/timo-cli",
@@ -33,6 +34,7 @@ timo-ai = { path = "crates/timo-ai" }
 timo-session = { path = "crates/timo-session" }
 timo-tools = { path = "crates/timo-tools" }
 timo-mcp = { path = "crates/timo-mcp" }
+timo-ext = { path = "crates/timo-ext" }
 timo-agent = { path = "crates/timo-agent" }
 timo-kernel = { path = "crates/timo-kernel" }
 
