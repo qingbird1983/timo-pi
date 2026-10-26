@@ -1,0 +1,664 @@
+{
+ "provider": "openai",
+ "api": "openai-completions",
+ "base_url": "https://api.openai.com/v1",
+ "env": [
+  "OPENAI_API_KEY"
+ ],
+ "models": {
+  "gpt-4": {
+   "name": "GPT-4",
+   "reasoning": false,
+   "input": [
+    "text"
+   ],
+   "cost": {
+    "input": 30,
+    "output": 60,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 8192,
+   "max_tokens": 8192
+  },
+  "gpt-4-turbo": {
+   "name": "GPT-4 Turbo",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 10,
+    "output": 30,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 4096
+  },
+  "gpt-4.1": {
+   "name": "GPT-4.1",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2,
+    "output": 8,
+    "cache_read": 0.5,
+    "cache_write": 0.0
+   },
+   "context_window": 1047576,
+   "max_tokens": 32768
+  },
+  "gpt-4.1-mini": {
+   "name": "GPT-4.1 mini",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.4,
+    "output": 1.6,
+    "cache_read": 0.1,
+    "cache_write": 0.0
+   },
+   "context_window": 1047576,
+   "max_tokens": 32768
+  },
+  "gpt-4.1-nano": {
+   "name": "GPT-4.1 nano",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.1,
+    "output": 0.4,
+    "cache_read": 0.025,
+    "cache_write": 0.0
+   },
+   "context_window": 1047576,
+   "max_tokens": 32768
+  },
+  "gpt-4o": {
+   "name": "GPT-4o",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2.5,
+    "output": 10,
+    "cache_read": 1.25,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 16384
+  },
+  "gpt-4o-2024-05-13": {
+   "name": "GPT-4o (2024-05-13)",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 5,
+    "output": 15,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 4096
+  },
+  "gpt-4o-2024-08-06": {
+   "name": "GPT-4o (2024-08-06)",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2.5,
+    "output": 10,
+    "cache_read": 1.25,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 16384
+  },
+  "gpt-4o-2024-11-20": {
+   "name": "GPT-4o (2024-11-20)",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2.5,
+    "output": 10,
+    "cache_read": 1.25,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 16384
+  },
+  "gpt-4o-mini": {
+   "name": "GPT-4o mini",
+   "reasoning": false,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.15,
+    "output": 0.6,
+    "cache_read": 0.075,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 16384
+  },
+  "gpt-5": {
+   "name": "GPT-5",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 1.25,
+    "output": 10,
+    "cache_read": 0.125,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5-mini": {
+   "name": "GPT-5 Mini",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.25,
+    "output": 2,
+    "cache_read": 0.025,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5-nano": {
+   "name": "GPT-5 Nano",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.05,
+    "output": 0.4,
+    "cache_read": 0.005,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5-pro": {
+   "name": "GPT-5 Pro",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 15,
+    "output": 120,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 272000
+  },
+  "gpt-5.1": {
+   "name": "GPT-5.1",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 1.25,
+    "output": 10,
+    "cache_read": 0.125,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5.2": {
+   "name": "GPT-5.2",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 1.75,
+    "output": 14,
+    "cache_read": 0.175,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5.2-pro": {
+   "name": "GPT-5.2 Pro",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 21,
+    "output": 168,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5.3-codex": {
+   "name": "GPT-5.3 Codex",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 1.75,
+    "output": 14,
+    "cache_read": 0.175,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5.3-codex-spark": {
+   "name": "GPT-5.3 Codex Spark",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 1.75,
+    "output": 14,
+    "cache_read": 0.175,
+    "cache_write": 0.0
+   },
+   "context_window": 128000,
+   "max_tokens": 32000
+  },
+  "gpt-5.4": {
+   "name": "GPT-5.4",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2.5,
+    "output": 15,
+    "cache_read": 0.25,
+    "cache_write": 0.0
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.4-mini": {
+   "name": "GPT-5.4 mini",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.75,
+    "output": 4.5,
+    "cache_read": 0.075,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5.4-nano": {
+   "name": "GPT-5.4 nano",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.2,
+    "output": 1.25,
+    "cache_read": 0.02,
+    "cache_write": 0.0
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "gpt-5.4-pro": {
+   "name": "GPT-5.4 Pro",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 30,
+    "output": 180,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.5": {
+   "name": "GPT-5.5",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 5,
+    "output": 30,
+    "cache_read": 0.5,
+    "cache_write": 0.0
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.5-pro": {
+   "name": "GPT-5.5 Pro",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 30,
+    "output": 180,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.6": {
+   "name": "GPT-5.6",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 4,
+    "output": 20,
+    "cache_read": 0.4,
+    "cache_write": 5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.6-luna": {
+   "name": "GPT-5.6 Luna",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.2,
+    "output": 1.2,
+    "cache_read": 0.02,
+    "cache_write": 0.25
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.6-sol": {
+   "name": "GPT-5.6 Sol",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 4,
+    "output": 20,
+    "cache_read": 0.4,
+    "cache_write": 5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-5.6-terra": {
+   "name": "GPT-5.6 Terra",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2,
+    "output": 12,
+    "cache_read": 0.2,
+    "cache_write": 2.5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-6-astra": {
+   "name": "GPT-6 Astra",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 10,
+    "output": 50,
+    "cache_read": 1,
+    "cache_write": 12.5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-6-luna": {
+   "name": "GPT-6 Luna",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 0.1,
+    "output": 0.5,
+    "cache_read": 0.01,
+    "cache_write": 0.125
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-6-sol": {
+   "name": "GPT-6 Sol",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2,
+    "output": 10,
+    "cache_read": 0.2,
+    "cache_write": 2.5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-6.1-sol": {
+   "name": "GPT-6.1 Sol",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2,
+    "output": 10,
+    "cache_read": 0.1,
+    "cache_write": 2.5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-daybreak-blue-latest": {
+   "name": "Daybreak Blue",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 4,
+    "output": 20,
+    "cache_read": 0.4,
+    "cache_write": 5
+   },
+   "context_window": 1050000,
+   "max_tokens": 128000
+  },
+  "gpt-daybreak-red-latest": {
+   "name": "Daybreak Red",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 12.5,
+    "output": 75,
+    "cache_read": 1.25,
+    "cache_write": 15.625
+   },
+   "context_window": 400000,
+   "max_tokens": 128000
+  },
+  "o1": {
+   "name": "o1",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 15,
+    "output": 60,
+    "cache_read": 7.5,
+    "cache_write": 0.0
+   },
+   "context_window": 200000,
+   "max_tokens": 100000
+  },
+  "o1-pro": {
+   "name": "o1-pro",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 150,
+    "output": 600,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 200000,
+   "max_tokens": 100000
+  },
+  "o3": {
+   "name": "o3",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 2,
+    "output": 8,
+    "cache_read": 0.5,
+    "cache_write": 0.0
+   },
+   "context_window": 200000,
+   "max_tokens": 100000
+  },
+  "o3-mini": {
+   "name": "o3-mini",
+   "reasoning": true,
+   "input": [
+    "text"
+   ],
+   "cost": {
+    "input": 1.1,
+    "output": 4.4,
+    "cache_read": 0.55,
+    "cache_write": 0.0
+   },
+   "context_window": 200000,
+   "max_tokens": 100000
+  },
+  "o3-pro": {
+   "name": "o3-pro",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 20,
+    "output": 80,
+    "cache_read": 0.0,
+    "cache_write": 0.0
+   },
+   "context_window": 200000,
+   "max_tokens": 100000
+  },
+  "o4-mini": {
+   "name": "o4-mini",
+   "reasoning": true,
+   "input": [
+    "text",
+    "image"
+   ],
+   "cost": {
+    "input": 1.1,
+    "output": 4.4,
+    "cache_read": 0.275,
+    "cache_write": 0.0
+   },
+   "context_window": 200000,
+   "max_tokens": 100000
+  }
+ }
+}

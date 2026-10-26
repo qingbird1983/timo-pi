@@ -3,7 +3,18 @@ name = "timo-ai"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-ai"
+description = "LLM protocol layer: message model, anthropic/openai adapters, catalog, auth, retry"
+
+[dependencies]
+timo-config = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
 
 [lints]
 workspace = true

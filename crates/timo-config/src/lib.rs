@@ -6,6 +6,7 @@
 // 测试代码自由使用 unwrap/expect（standards/04 §2）。
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod clock;
 mod credentials;
 mod error;
 mod models_file;
@@ -13,6 +14,7 @@ mod paths;
 mod settings;
 mod thinking;
 
+pub use clock::{Clock, FixedClock, SystemClock};
 pub use credentials::ValueRef;
 pub use error::ConfigError;
 pub use models_file::{CostRates, CostTier, CustomModel, CustomProvider, load_custom_providers};
