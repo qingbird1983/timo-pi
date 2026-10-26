@@ -152,7 +152,7 @@ flowchart TD
 ```json
 {
   "generatedAt": "2026-10-26T12:00:00Z",
-  "kernel": "0.1.14",
+  "kernelVersion": "<cargo 包版本>",
   "extensions": [{
     "id": "permission-gate",
     "path": "…/extensions/permission-gate",

@@ -49,7 +49,7 @@ graph TD
 
 | crate | 增量 |
 |---|---|
-| timo-agent | 新增 `LoopHooks` trait 与 `LoopConfig.hooks: Option<Arc<dyn LoopHooks>>`；`run.rs` 在 4 个节点调用（见 04 §2）。默认 `None`，Phase 1 行为逐字节不变 |
+| timo-agent | 新增 `LoopHooks` trait 与 `LoopConfig.hooks: Option<Arc<dyn LoopHooks>>`；`run.rs` 在 6 个节点调用（见 04 §2/§3）。默认 `None`，Phase 1 行为逐字节不变 |
 | timo-ai | 新增 `ProviderHooks` trait 与 `StreamOptions.provider_hooks`；两协议适配器在请求体/请求头/响应元数据三处调用；无钩子时零行为变化 |
 | timo-kernel | 装配扩展宿主；扩展工具先于系统提示构建入表；`set_model` / 命令分发 / 诊断查询成为门面 API |
 | timo-cli | `ext` 子命令（`list/add/remove/doctor/trust`）；`--extension` / `--no-extensions` / `--ext-flag`；REPL 斜杠命令分发 |
