@@ -15,7 +15,7 @@
 - **信任链**：开发密钥与签名包只放在用户数据目录；官方 `nsh` 命令完成生成密钥、签发证书、打包与校验；密钥不入库、不打印。
 - **真机验收（DeepSeek）**：接受写文件（内容正确）、拒绝写文件（文件不存在、模型收到原因）、深色主题跟随、最大化时面板跟随；`taskkill /F` 强杀后重开，会话与两轮工具过程完整恢复。
 - **修复与拆分**：修复 GPUI 全局导入遮蔽 `#[test]` 导致的递归（P-010）；NSH 模块按 500 行上限拆成隔离层与页面两部分。
-- 门禁：fmt / clippy / 228 tests（`--features nsh-poc` 23 tests）/ check-size 通过；`target/` 约 39GB 触发软上限登记。
+- 门禁：fmt / clippy / 228 tests（`--features nsh-poc` 23 tests）/ check-size 通过；`target/` 约 38GB 触发软上限登记。
 - 报告：`docs/design/phase-3/report.md`；tag `phase-3.end`。
 
 ---
