@@ -1,4 +1,4 @@
-# Phase 1 阶段进度报告（进行中）
+# Phase 1 阶段进度报告（验收完成，CI 待确认）
 
 - 日期：2026-10-26
 - 本阶段目标（一句话）：做出一个没有界面、但能读文件、改文件、跑命令并把全过程存成可恢复会话的 AI 内核。
@@ -15,11 +15,11 @@
 
 | # | 场景 | 结果 | 说明 |
 |---|---|---|---|
-| A1 | 真实执行"改文件并验证" | **未执行** | 需要真实模型凭证与所有者授权（会产生费用），留给人工验收 |
-| A2 | 会话可读、可列出、可恢复 | **部分通过** | 命令与投影读取已实现，`fixtures/session` 四个夹具测试通过；真实续聊随 A1 一起验 |
-| A3 | 中途 Ctrl+C / kill -9 | **自动化部分通过** | 取消贯穿与落盘测试通过；真实进程 kill -9 需人工执行 |
-| A4 | stdio MCP server 工具可用 | **自动化通过** | `fixtures/mcp/echo_server.py` + `crates/timo-mcp/tests/stdio_echo.rs`；真实第三方 server 配置待人工 |
-| A5 | CI 全绿 | **本地通过，CI 待跑** | `fmt` / `clippy -D warnings` / `test --workspace`（117 个测试）/ `check-size` 全绿；推送到远端后以 Actions 结果为准 |
+| A1 | 真实执行"改文件并验证" | **通过** | DeepSeek `deepseek-flash` 真实执行：read → edit → bash(cat) → 汇报，文件字节正确。首次运行暴露 `edit` 行重复缺陷，已修复并加回归 |
+| A2 | 会话可读、可列出、可恢复 | **通过** | `sessions` 列出 3 个会话；`resume last --once` 续聊成功，entry 9→13、parent 链完整 |
+| A3 | 中途 Ctrl+C / kill -9 | **通过（强杀路径）** | 运行中 `taskkill /F /IM timo.exe` 强杀：会话文件 3 行全为合法 JSON、parent 链完整；Ctrl+C 两段语义为代码级实现，未做信号自动化 |
+| A4 | stdio MCP server 工具可用 | **通过** | 自动化 echo server 集成测试 + 真实模型对话：模型发现并调用 `mcp__echo__echo`，返回 `echo: hello from mcp` |
+| A5 | CI 全绿 | **本地通过，CI 待跑** | `fmt` / `clippy -D warnings` / `test --workspace`（122 个测试）/ `check-size` 全绿；推送到远端后以 Actions 结果为准 |
 | A6 | 接缝核对 | **通过** | 见下节逐条 |
 
 ## 关键接缝核对（architecture/03 七条）
@@ -58,16 +58,18 @@
 
 ## 已知问题与风险
 
-- **A1~A3 未执行**：需要真实凭证、付费调用与人工操作；在完成前本阶段不能宣布收尾。
+- **真实运行暴露并已修复两个缺陷**：`edit` 精确替换会重复后续行/插入空行（已改为字节区间替换并加精确内容回归）；Windows 上 `bash` 可能落到 WSL 启动器导致工作目录失效（已改为原生 MSYS 探测失败时回退 PowerShell）。
+- **Ctrl+C 两段语义未做信号自动化**：kill -9 路径已真实验证；Ctrl+C 依赖控制台信号，代码路径已实现，留待人工复核。
 - **MCP 工具发现失败不自动重试**：首个 `run`/`tools` 时失败只通告一次；已发现工具的调用失败会在调用层重连。Phase 2 惰性管理时补"重新发现"。
 - **扩展钩子结构占位未落地**：`LoopConfig` 的七个 Phase 2 钩子字段未加（D10 不实现执行；占位随 Phase 2 一并设计，已入 backlog）。
-- **CI 首次结果未知**：本地门禁全绿，需 push 后确认 windows-latest 环境（Python 可用性用于 A4）一致。
-- 真实第三方 MCP server 的 HTTP 传输尚未人工验证（stdio 已自动化覆盖）。
+- **CI 首次结果未知**：本地门禁全绿，需 push 后确认 windows-latest 环境（A4 测试依赖 Python）一致。
+- 真实第三方 MCP server 的 HTTP 传输尚未人工验证（stdio 已自动化 + 真模型覆盖）。
 
 ## 对下阶段的影响
 
-- Phase 1 剩余只有人工验收与报告转正；内核接口已稳定，Phase 2 扩展宿主设计可并行启动。
-- 本轮修复的 OpenAI 流式事件缺陷属于"接缝 #6"回归，Phase 2 的 GUI/扩展订阅方直接受益。
+- Phase 1 只剩 A5 远端 CI 确认与阶段 tag；真实任务、会话恢复、强杀、MCP 工具调用均已跑通。
+- Phase 2 扩展宿主设计可启动；内核接口已稳定。
+- 本轮修复的 OpenAI 流式事件、`edit` 行重复、WSL bash 三项缺陷都属于真实验收才暴露的问题；Phase 2 的 GUI/扩展订阅方直接受益。
 
 ## 文档更新清单
 

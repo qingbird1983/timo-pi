@@ -51,7 +51,7 @@ docs/
 | design/phase-1/05-timo-config.md | 定稿 | 数据目录、settings/models.json、模型解析 |
 | design/phase-1/06-timo-mcp-kernel-cli.md | 定稿 | MCP 并入、kernel 门面、CLI 冒烟壳 |
 | design/phase-1/07-testing-ci.md | 定稿 | fixture 计划、接缝自动化、CI 与构建卫生脚本 |
-| design/phase-1/report.md | 进行中 | Phase 1 阶段进度报告（A1~A3 待人工验收） |
+| design/phase-1/report.md | 验收完成（CI 待确认） | Phase 1 阶段进度报告（A1~A6 结果与接缝核对） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |

@@ -53,18 +53,22 @@ pub struct ToolOutput { content: Vec<Content>, details: Value, structured_conten
 - 与 edit 共享**每绝对路径互斥队列**（串行化同文件变更）。
 
 ### edit
-- 参数：`{path, edits: [{old_text, new_text}]}`（一次多编辑）。
+- 参数：`{path, edits: [{oldText, newText}]}`（一次多编辑；参数名对齐 pi 的 camelCase）。
 - 精确优先：先原样 `indexOf`；未中→**模糊匹配**（NFKC；逐行 trimEnd；智能引号→ASCII；Unicode 破折号族→`-`；NBSP 族→空格）——模糊命中时仅回写受影响行。
-- 校验（抛错）：old_text 空 / 未找到（"must match exactly including all whitespace"）/ 命中 N>1（must be unique）/ 编辑区间重叠 / 无变化（no-op）。
-- 匹配一律对**原文件**一次性完成、按偏移倒序应用；BOM 剥离后还原；CRLF 检出并保留。
-- 成功：`Successfully replaced N block(s) in <path>.`；details 含 diff（+/− 行号格式）与 unified patch。
+- 校验（抛错）：oldText 空 / 未找到（"must match exactly including all whitespace"）/ 命中 N>1（must be unique）/ 编辑区间重叠 / 无变化（no-op）。
+- 匹配一律对**原文件**一次性完成、按字节区间倒序应用（精确=仅替换命中片段，保留同行前后缀；模糊=整行块替换）；BOM 剥离后还原；CRLF 检出并保留。
+- 成功：`Successfully replaced N block(s) in <path>.`；details 含 diff（+/− 行号格式）。
+
+> 实现回填（2026-10-26，真机验收）：修复了"精确替换后把整文件行再 splice 回原行数组"导致的后续行重复/空行插入；回填为字节区间替换，并加精确内容回归测试（单行/行内/跨行/多编辑/CRLF+BOM）。
 
 ### bash
-- 参数：`{command: string, timeout?: u64 秒（**无默认超时**，上限 2^31−1 ms）}`。
+- 参数：`{command: string, timeout?: u64 秒（缺省=上限值，上限 2^31−1 ms）}`。
 - 执行：经配置 shell（`settings.shell_path`；Windows 未配置时探测 bash→PowerShell 顺序）；进程组杀树（超时/取消）。
 - 输出：**尾截断**（最后 2000 行/50KB，允许半行）；空输出→`(no output)`；截断→`[Showing lines A-B of T. Full output: <tempfile>]`（临时文件前缀 `timo-bash`）。
 - 退出码非 0→is_error + `\n\nCommand exited with code N`；超时→错误含已捕获输出 + `Command timed out after N seconds`；取消→`Command aborted`。
 - 子进程环境：默认注入 `TIMO_SESSION_ID/TIMO_PROVIDER/TIMO_MODEL`（对齐 pi PI_*，命名随项目）；透传父环境。
+
+> 实现回填（2026-10-26，真机验收）：Windows 上仅当 `bash` 是原生 MSYS/Cygwin 构建（`uname -s` 含 mingw/msys/cygwin）才使用；System32 的 WSL 启动器不认 Windows 工作目录，按不可用处理并回退 PowerShell。
 
 ### powershell
 - 与 bash 同一执行机（同参数 schema）；固定 PowerShell + `[Console]::OutputEncoding=UTF8` 前导；临时文件前缀 `timo-powershell`。（Windows 支持的正式通道；Phase 1 注册但不在默认激活集——pi 同构。）
