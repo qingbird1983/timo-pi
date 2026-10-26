@@ -16,10 +16,14 @@ thiserror = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 rquickjs = { workspace = true }
+async-trait = { workspace = true }
+timo-ai = { workspace = true }
+timo-agent = { workspace = true }
 rolldown = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+timo-tools = { workspace = true }
 
 [lints]
 workspace = true

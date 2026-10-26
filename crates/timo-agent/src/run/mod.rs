@@ -6,16 +6,14 @@
 
 use std::sync::Arc;
 
-use timo_ai::{
-    AssistantMessage, AssistantStreamEvent, Content, Message, StopReason, ToolResultMessage,
-};
+use timo_ai::{AssistantMessage, AssistantStreamEvent, Content, Message, StopReason};
 use timo_config::Clock;
 use timo_session::SessionWriter;
 use tokio_util::sync::CancellationToken;
 
 use crate::events::{EventBus, KernelEvent};
+use crate::hooks::{BeforeAgentStart, RouteRequest};
 use crate::queue::PendingMessageQueue;
-use crate::tool_calls::{error_result_message, tool_args, tool_id, tool_name};
 
 /// 工具批执行模式（pi toolExecution）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -51,6 +49,10 @@ pub struct LoopConfig {
     pub clock: std::sync::Arc<dyn Clock>,
     /// 单次 run 的模型请求轮数上限（None = 不限）。
     pub max_turns: Option<usize>,
+    /// 循环钩子（扩展宿主注入；None = 与 Phase 1 逐字节等价）。
+    pub hooks: Option<std::sync::Arc<dyn crate::hooks::LoopHooks>>,
+    /// 供应商钩子（透传到每次请求；None = 无钩子）。
+    pub provider_hooks: Option<std::sync::Arc<dyn timo_ai::ProviderHooks>>,
 }
 
 /// 会话写入口（MessageAdded 落盘挂点；None = 无会话）。
@@ -80,6 +82,17 @@ pub async fn run_agent_loop(
     session: SessionSink,
     cancel: CancellationToken,
 ) -> Vec<Message> {
+    let mut system_prompt = config.system_prompt.clone();
+    if let Some(hooks) = &config.hooks
+        && let Some(replaced) = hooks
+            .before_agent_start(BeforeAgentStart {
+                prompt: &prompt,
+                system_prompt: &system_prompt,
+            })
+            .await
+    {
+        system_prompt = replaced;
+    }
     channels.bus.emit(KernelEvent::AgentStarted);
     let mut ctx = Ctx {
         config,
@@ -88,6 +101,9 @@ pub async fn run_agent_loop(
         session,
         messages: history,
         new_messages: Vec::new(),
+        system_prompt: Some(system_prompt),
+        model: config.model.clone(),
+        thinking_level: config.thinking_level,
     };
     for m in prompt {
         ctx.push_message(m).await;
@@ -179,6 +195,9 @@ struct Ctx<'a> {
     session: SessionSink,
     messages: Vec<Message>,
     new_messages: Vec<Message>,
+    system_prompt: Option<String>,
+    model: timo_ai::Model,
+    thinking_level: timo_config::ThinkingLevel,
 }
 
 impl<'a> Ctx<'a> {
@@ -202,17 +221,18 @@ impl<'a> Ctx<'a> {
     }
 
     /// 一次模型请求（含 assistant 轮次重试；设计 02 §4.c/d）。
-    async fn request(&self) -> AssistantMessage {
+    async fn request(&mut self) -> AssistantMessage {
         let mut attempt: u32 = 0;
         loop {
+            self.apply_route().await;
             self.bus.emit(KernelEvent::ProviderRequest {
-                provider: self.config.model.provider.clone(),
-                model: self.config.model.id.clone(),
+                provider: self.model.provider.clone(),
+                model: self.model.id.clone(),
             });
             let message = self.request_once().await;
             self.bus.emit(KernelEvent::ProviderResponse {
-                provider: self.config.model.provider.clone(),
-                model: self.config.model.id.clone(),
+                provider: self.model.provider.clone(),
+                model: self.model.id.clone(),
                 usage: message.usage.clone(),
             });
             let retryable = message.stop_reason == StopReason::Error
@@ -239,14 +259,50 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    async fn request_once(&self) -> AssistantMessage {
+    /// 虚拟模型路由（每次请求前；D23 仅同 provider）。
+    async fn apply_route(&mut self) {
+        let Some(hooks) = self.config.hooks.clone() else {
+            return;
+        };
+        let choice = hooks
+            .route_model(RouteRequest {
+                model: &self.model,
+                messages: &self.messages,
+            })
+            .await;
+        if let Some(choice) = choice {
+            self.model = choice.model;
+            if let Some(level) = choice.thinking_level {
+                self.thinking_level = level;
+            }
+        }
+    }
+
+    async fn request_once(&mut self) -> AssistantMessage {
+        let mut messages = self.messages.clone();
+        if let Some(hooks) = self.config.hooks.clone() {
+            if let Some(next) = hooks.transform_context(messages.clone()).await {
+                messages = next;
+            }
+            let backup = messages.clone();
+            let transformed = hooks
+                .transform_full_context(self.system_prompt.clone(), messages)
+                .await;
+            messages = match transformed {
+                Some((system, next)) => {
+                    self.system_prompt = system;
+                    next
+                }
+                None => backup,
+            };
+        }
         let api_key = match self.config.auth.resolve().await {
             Ok(k) => k,
             Err(e) => return self.error_terminal(&e.to_string(), false),
         };
         let ctx = timo_ai::Context {
-            system_prompt: Some(self.system_prompt_value()),
-            messages: self.messages.clone(),
+            system_prompt: self.system_prompt.clone(),
+            messages,
             tools: self
                 .config
                 .tools
@@ -258,19 +314,16 @@ impl<'a> Ctx<'a> {
                     parameters: d.parameters.clone(),
                 })
                 .collect(),
-            thinking_level: Some(self.config.thinking_level),
+            thinking_level: Some(self.thinking_level),
         };
         let options = timo_ai::StreamOptions {
             api_key: Some(api_key),
             cancel: self.cancel.clone(),
             max_retries: 0,
+            provider_hooks: self.config.provider_hooks.clone(),
             ..timo_ai::StreamOptions::default()
         };
-        let mut stream = self
-            .config
-            .api
-            .stream(&self.config.model, &ctx, options)
-            .await;
+        let mut stream = self.config.api.stream(&self.model, &ctx, options).await;
         let mut terminal: Option<AssistantMessage> = None;
         while let Some(ev) = stream.next_event().await {
             match &ev {
@@ -290,15 +343,11 @@ impl<'a> Ctx<'a> {
         })
     }
 
-    fn system_prompt_value(&self) -> String {
-        self.config.system_prompt.clone()
-    }
-
     fn error_terminal(&self, reason: &str, cancelled: bool) -> AssistantMessage {
         let mut m = AssistantMessage::pending(
-            self.config.model.api.as_str(),
-            &self.config.model.provider,
-            &self.config.model.id,
+            self.model.api.as_str(),
+            &self.model.provider,
+            &self.model.id,
             self.now_ms(),
         );
         m.stop_reason = if cancelled {
@@ -313,161 +362,6 @@ impl<'a> Ctx<'a> {
     fn now_ms(&self) -> i64 {
         self.config.clock.now_ms()
     }
-
-    /// 工具批执行（设计 02 §5）；返回（结果消息, 是否全部 terminate）。
-    async fn execute_tools(&self, calls: &[Content]) -> (Vec<Message>, bool) {
-        match self.config.tool_execution {
-            ToolExecutionMode::Sequential => self.execute_tools_sequential(calls).await,
-            ToolExecutionMode::Parallel => self.execute_tools_parallel(calls).await,
-        }
-    }
-
-    async fn execute_tools_sequential(&self, calls: &[Content]) -> (Vec<Message>, bool) {
-        let mut out = vec![];
-        let mut all_term = true;
-        for call in calls {
-            if self.cancel.is_cancelled() {
-                out.push(self.fail_tool_call(call, "Operation aborted").await);
-                all_term = false;
-                continue;
-            }
-            let (m, term) = self.run_one(call).await;
-            all_term &= term;
-            out.push(m);
-        }
-        let non_empty = !out.is_empty();
-        (out, all_term && non_empty)
-    }
-
-    async fn execute_tools_parallel(&self, calls: &[Content]) -> (Vec<Message>, bool) {
-        // 并发执行（join_all 轮询并发，IO 语义）；结果按原始顺序回填（pi 同构）
-        let futures = calls.iter().map(|call| async {
-            if self.cancel.is_cancelled() {
-                return (self.fail_tool_call(call, "Operation aborted").await, false);
-            }
-            self.run_one(call).await
-        });
-        let results = futures::future::join_all(futures).await;
-        let all_term = results.iter().all(|(_, t)| *t);
-        let non_empty = !results.is_empty();
-        (
-            results.into_iter().map(|(m, _)| m).collect(),
-            all_term && non_empty,
-        )
-    }
-
-    /// 单工具全流程：Requested → Started → 执行 → Finished；Err 转错误 result（is_error）。
-    async fn run_one(&self, call: &Content) -> (Message, bool) {
-        let started = std::time::Instant::now();
-        let name = tool_name(call);
-        let id = tool_id(call);
-        self.bus.emit(KernelEvent::ToolCallRequested {
-            call: Arc::new(call.clone()),
-        });
-        self.bus.emit(KernelEvent::ToolCallStarted {
-            tool_call_id: id.clone(),
-            tool_name: name.clone(),
-            args: tool_args(call),
-        });
-        let result = self.execute_validated(call).await;
-        let duration = started.elapsed().as_millis() as u64;
-        match result {
-            Ok(output) => {
-                let message = Message::ToolResult(ToolResultMessage {
-                    tool_call_id: id.clone(),
-                    tool_name: name.clone(),
-                    content: output.content,
-                    is_error: output.is_error,
-                    usage: None,
-                    duration_ms: Some(duration),
-                    timestamp: self.now_ms(),
-                });
-                self.bus.emit(KernelEvent::ToolCallFinished {
-                    tool_call_id: id.clone(),
-                    tool_name: name.clone(),
-                    result: Arc::new(message.clone()),
-                    duration_ms: Some(duration),
-                });
-                (message, output.terminate)
-            }
-            Err(e) => {
-                let message =
-                    error_result_message(&id, &name, &e.to_string(), Some(duration), self.now_ms());
-                self.bus.emit(KernelEvent::ToolCallFinished {
-                    tool_call_id: id.clone(),
-                    tool_name: name.clone(),
-                    result: Arc::new(message.clone()),
-                    duration_ms: Some(duration),
-                });
-                (message, false)
-            }
-        }
-    }
-
-    async fn execute_validated(
-        &self,
-        call: &Content,
-    ) -> timo_tools::Result<timo_tools::ToolOutput> {
-        let Content::ToolCall {
-            name,
-            arguments,
-            arguments_error,
-            ..
-        } = call
-        else {
-            return Err(timo_tools::ToolError::InvalidParams {
-                reason: "not a tool call".into(),
-            });
-        };
-        if let Some(err) = arguments_error {
-            return Err(timo_tools::ToolError::InvalidParams {
-                reason: format!("arguments are not valid JSON: {err}"),
-            });
-        }
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<timo_tools::ToolOutput>(16);
-        let bus = self.bus.clone();
-        let id = tool_id(call);
-        let (fid, ftool) = (id.clone(), name.clone());
-        let forwarder = tokio::spawn(async move {
-            while let Some(partial) = rx.recv().await {
-                bus.emit(KernelEvent::ToolCallUpdate {
-                    tool_call_id: fid.clone(),
-                    tool_name: ftool.clone(),
-                    partial: Arc::new(partial),
-                });
-            }
-        });
-        let ctx = timo_tools::ToolCallCtx {
-            tool_call_id: id.clone(),
-            params: arguments.clone(),
-            cancel: self.cancel.clone(),
-            updates: tx,
-            cwd: self.config.cwd.clone(),
-        };
-        let out = self.config.tools.execute(name, ctx).await;
-        forwarder.abort();
-        out
-    }
-
-    /// 截断批中失败的工具调用（pi failToolCallsFromTruncatedMessage）。
-    async fn fail_tool_call(&self, call: &Content, reason: &str) -> Message {
-        let name = tool_name(call);
-        let id = tool_id(call);
-        self.bus.emit(KernelEvent::ToolCallRequested {
-            call: Arc::new(call.clone()),
-        });
-        self.bus.emit(KernelEvent::ToolCallStarted {
-            tool_call_id: id.clone(),
-            tool_name: name.clone(),
-            args: tool_args(call),
-        });
-        let message = error_result_message(&id, &name, reason, None, self.now_ms());
-        self.bus.emit(KernelEvent::ToolCallFinished {
-            tool_call_id: id.clone(),
-            tool_name: name.clone(),
-            result: Arc::new(message.clone()),
-            duration_ms: None,
-        });
-        message
-    }
 }
+
+mod tools;

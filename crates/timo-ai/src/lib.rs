@@ -10,6 +10,7 @@ pub mod api;
 pub mod auth;
 pub mod catalog;
 pub mod errors;
+pub mod hooks;
 pub mod retry;
 pub mod stream;
 pub mod types;
@@ -21,6 +22,7 @@ pub use api::{ByteStream, ProviderApi, SseRequest, SseTransport, api_for, api_wi
 pub use auth::{AuthMethod, AuthResolver};
 pub use catalog::{ApiKind, Catalog, Compat, Model, RateCard, calculate_cost};
 pub use errors::AiError;
+pub use hooks::{ProviderHooks, apply_header_patch};
 pub use stream::{AssistantMessageStream, AssistantStreamEvent, StreamOptions};
 pub use types::{
     AssistantMessage, Content, Context, Cost, Message, StopReason, SystemMessage, Tool,

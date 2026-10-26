@@ -162,6 +162,33 @@ module.exports = function (pi) {
 }
 
 #[test]
+fn context_is_reusable_after_budget_interrupt() {
+    let source = r#"
+let first = true;
+module.exports = function (pi) {
+  pi.on("tool_call", async () => {
+    if (first) {
+      first = false;
+      while (true) {}
+    }
+    return { input: { ok: true } };
+  });
+};
+"#;
+    let fixture = Fixture::with_budget("spin", source, Duration::from_millis(100));
+    let error = fixture
+        .host
+        .dispatch("tool_call", json!({ "input": {} }))
+        .unwrap_err();
+    assert_eq!(error.code(), Some(ErrorCode::E301));
+    let next = fixture
+        .host
+        .dispatch("tool_call", json!({ "input": {} }))
+        .expect("context stays usable after interrupt");
+    assert_eq!(next["input"]["ok"], true);
+}
+
+#[test]
 fn rejecting_factory_reports_e202() {
     let source = "module.exports = function () { throw new Error('boom'); };";
     let dir = tempfile::tempdir().unwrap();

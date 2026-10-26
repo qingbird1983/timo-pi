@@ -254,6 +254,8 @@ impl Kernel {
                     system_prompt,
                     clock: Arc::clone(&self.clock),
                     max_turns: self.max_turns,
+                    hooks: None,
+                    provider_hooks: None,
                 },
                 self.bus.clone(),
                 Arc::clone(&self.steering),

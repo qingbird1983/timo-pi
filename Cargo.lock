@@ -4207,6 +4207,7 @@ dependencies = [
 name = "timo-ext"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "rolldown",
  "rquickjs",
  "serde",
@@ -4214,6 +4215,9 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
+ "timo-agent",
+ "timo-ai",
+ "timo-tools",
  "tokio",
 ]
 

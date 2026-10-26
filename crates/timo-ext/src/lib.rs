@@ -6,6 +6,7 @@
 // 测试代码自由使用 unwrap/expect（standards/04 §2）。
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod bridge;
 mod diag;
 mod discovery;
 mod error;
@@ -14,6 +15,7 @@ mod manifest;
 #[cfg(feature = "pack")]
 mod pack;
 
+pub use bridge::{ExtHooks, MAX_EVENT_BYTES};
 pub use diag::{
     DegradeClass, DegradedItem, DiagnosticEntry, DiagnosticReport, ErrorCode, ExtensionDiagnostic,
     Phase, RegisteredItems, Status, Summary,

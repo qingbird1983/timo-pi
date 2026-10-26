@@ -135,6 +135,8 @@ fn handle(api: Arc<dyn ProviderApi>) -> AgentHandle {
         system_prompt: "test".into(),
         clock: Arc::new(FixedClock::new(1_000)),
         max_turns: None,
+        hooks: None,
+        provider_hooks: None,
     })
 }
 

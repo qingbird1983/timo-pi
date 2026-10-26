@@ -54,7 +54,7 @@ pub enum AssistantStreamEvent {
 }
 
 /// 流选项（每次请求一份；api_key 由调用方按认证优先级解析后注入）。
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct StreamOptions {
     /// 已解析的凭证（None = 走模型目录默认，通常在 Resolver 已定）。
     pub api_key: Option<String>,
@@ -72,6 +72,24 @@ pub struct StreamOptions {
     pub base_url: Option<String>,
     /// 额外请求头（追加；同名列覆盖默认）。
     pub headers: Vec<(String, String)>,
+    /// 供应商钩子（扩展宿主注入；None = 无钩子）。
+    pub provider_hooks: Option<std::sync::Arc<dyn crate::hooks::ProviderHooks>>,
+}
+
+impl std::fmt::Debug for StreamOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StreamOptions")
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("cancel", &self.cancel)
+            .field("max_tokens", &self.max_tokens)
+            .field("temperature", &self.temperature)
+            .field("max_retries", &self.max_retries)
+            .field("max_retry_delay_ms", &self.max_retry_delay_ms)
+            .field("base_url", &self.base_url)
+            .field("headers", &self.headers)
+            .field("provider_hooks", &self.provider_hooks.is_some())
+            .finish()
+    }
 }
 
 impl Default for StreamOptions {
@@ -85,6 +103,7 @@ impl Default for StreamOptions {
             max_retry_delay_ms: 60_000,
             base_url: None,
             headers: vec![],
+            provider_hooks: None,
         }
     }
 }

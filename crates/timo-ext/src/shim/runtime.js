@@ -65,7 +65,12 @@ function __timo_make_ctx(config) {
     abort: () => native.abort(),
     isIdle: () => !native.isRunning(),
     hasPendingMessages: () => false,
-    getSystemPrompt: () => String(config.systemPrompt || ""),
+    getSystemPrompt: () =>
+      String(
+        globalThis.__timo_system_prompt !== undefined
+          ? globalThis.__timo_system_prompt
+          : config.systemPrompt || "",
+      ),
     getContextUsage: () => undefined,
     compact: () => __timo_diag_once("ctx.compact", "E202", "ctx.compact is not implemented"),
     shutdown: () => __timo_diag_once("ctx.shutdown", "E202", "ctx.shutdown is not implemented"),
@@ -302,6 +307,8 @@ globalThis.__timo_dispatch = async function (event, payloadJson) {
           if (result && result.systemPrompt !== undefined) {
             current = { ...current, systemPrompt: result.systemPrompt };
           }
+        } else if (result !== undefined && result !== null) {
+          merged = result;
         }
       } catch (error) {
         __timo_diag(

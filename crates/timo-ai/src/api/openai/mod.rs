@@ -78,10 +78,20 @@ async fn run(
             .api_key
             .clone()
             .ok_or_else(|| AiError::NoApiKey(format!("provider {}", model.provider)))?;
-        let body = request::build_body(model, context, options);
+        let mut body = request::build_body(model, context, options);
+        if let Some(hooks) = &options.provider_hooks
+            && let Some(replaced) = hooks.before_request(body.clone()).await
+        {
+            body = replaced;
+        }
         let mut headers = vec![("authorization".to_string(), format!("Bearer {api_key}"))];
         headers.extend(model.headers.iter().cloned());
         headers.extend(options.headers.iter().cloned());
+        if let Some(hooks) = &options.provider_hooks
+            && let Some(patch) = hooks.before_headers(headers.clone()).await
+        {
+            headers = crate::hooks::apply_header_patch(headers, patch);
+        }
         transport
             .post_sse(http::SseRequest {
                 url: &OpenAiApi::endpoint(model, options),

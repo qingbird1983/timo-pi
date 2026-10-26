@@ -180,6 +180,7 @@ pub(crate) struct HostState {
     pub(crate) commands: Vec<(String, String)>,
     pub(crate) hooks: Vec<(String, String)>,
     pub(crate) diagnostics: Vec<DiagnosticEntry>,
+    pub(crate) system_prompt: String,
 }
 
 enum Request {
@@ -198,6 +199,7 @@ enum Request {
         payload: JsonValue,
         reply: Sender<Result<JsonValue>>,
     },
+    SetSystemPrompt(String),
     Shutdown,
 }
 
@@ -322,6 +324,31 @@ impl ExtensionHost {
             .map(|state| state.diagnostics.clone())
             .unwrap_or_default()
     }
+
+    /// 记录一条诊断（宿主侧主动上报，如事件超限）。
+    pub fn note(&self, code: ErrorCode, message: impl Into<String>) {
+        if let Ok(mut state) = self.state.lock() {
+            state.diagnostics.push(DiagnosticEntry::new(code, message));
+        }
+    }
+
+    /// 更新所有 Context 可见的系统提示（`ctx.getSystemPrompt`）。
+    pub fn set_system_prompt(&self, prompt: impl Into<String>) {
+        let prompt = prompt.into();
+        if let Ok(mut state) = self.state.lock() {
+            state.system_prompt.clone_from(&prompt);
+        }
+        let _ = self.tx.send(Request::SetSystemPrompt(prompt));
+    }
+
+    /// 当前生效系统提示。
+    #[must_use]
+    pub fn system_prompt(&self) -> String {
+        self.state
+            .lock()
+            .map(|state| state.system_prompt.clone())
+            .unwrap_or_default()
+    }
 }
 
 impl Drop for ExtensionHost {
@@ -393,6 +420,12 @@ fn actor(
                 let result = dispatch_all(&contexts, &state, &event, payload, &deadline, budget);
                 let _ = reply.send(result);
             }
+            Request::SetSystemPrompt(prompt) => {
+                for (_, context) in &contexts {
+                    let _ = context
+                        .with(|ctx| ctx.globals().set("__timo_system_prompt", prompt.clone()));
+                }
+            }
             Request::Shutdown => break,
         }
     }
@@ -410,7 +443,7 @@ fn fail_request(request: Request, message: &str) {
         Request::Dispatch { reply, .. } => {
             let _ = reply.send(Err(error()));
         }
-        Request::Shutdown => {}
+        Request::SetSystemPrompt(_) | Request::Shutdown => {}
     }
 }
 

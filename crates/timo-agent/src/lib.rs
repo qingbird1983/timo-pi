@@ -9,6 +9,7 @@
 mod agent;
 mod error;
 mod events;
+mod hooks;
 mod queue;
 mod run;
 mod tool_calls;
@@ -16,6 +17,10 @@ mod tool_calls;
 pub use agent::{AbortHandle, AgentHandle};
 pub use error::AgentError;
 pub use events::{EventBus, KernelEvent};
+pub use hooks::{
+    BeforeAgentStart, BeforeToolCall, LoopHooks, RouteChoice, RouteRequest, ToolOutcome,
+    ToolOutputPatch,
+};
 pub use queue::PendingMessageQueue;
 pub use run::{LoopConfig, RunChannels, SessionSink, ToolExecutionMode, run_agent_loop};
 

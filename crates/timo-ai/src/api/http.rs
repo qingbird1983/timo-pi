@@ -97,7 +97,23 @@ async fn post_with_retry(
             r = req.send() => r,
         };
         match sent {
-            Ok(resp) if resp.status().is_success() => return Ok(resp),
+            Ok(resp) if resp.status().is_success() => {
+                if let Some(hooks) = &options.provider_hooks {
+                    let status = resp.status().as_u16();
+                    let headers = resp
+                        .headers()
+                        .iter()
+                        .map(|(name, value)| {
+                            (
+                                name.as_str().to_string(),
+                                value.to_str().unwrap_or_default().to_string(),
+                            )
+                        })
+                        .collect();
+                    hooks.after_response(status, headers).await;
+                }
+                return Ok(resp);
+            }
             Ok(resp) => {
                 let status = resp.status().as_u16();
                 let should_retry = resp

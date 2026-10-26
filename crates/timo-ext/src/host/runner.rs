@@ -30,6 +30,13 @@ pub(super) fn load_one(
     context.with(|ctx| -> Result<()> {
         native::install(&ctx, id, Arc::clone(&state), Arc::clone(&services)).map_err(js_error)?;
         ctx.eval::<(), _>(RUNTIME_JS).map_err(js_error)?;
+        let prompt = state
+            .lock()
+            .map(|state| state.system_prompt.clone())
+            .unwrap_or_default();
+        ctx.globals()
+            .set("__timo_system_prompt", prompt)
+            .map_err(js_error)?;
         let wrapped = format!(
             "(function(){{var module={{exports:{{}}}};var exports=module.exports;\n{bundle}\n;globalThis.__timo_factory=(module.exports&&module.exports.default)?module.exports.default:module.exports;}})();"
         );
@@ -219,7 +226,11 @@ pub(super) fn dispatch_all(
                 }
                 merged = current.clone();
             }
-            _ => {}
+            _ => {
+                if !result.is_null() {
+                    merged = result;
+                }
+            }
         }
     }
     if !any {
@@ -245,8 +256,13 @@ pub(super) fn invoke<'js>(
     let value = match outcome {
         Ok(value) => value,
         Err(error) => {
+            let expired = deadline.get().is_some_and(|at| Instant::now() >= at);
             deadline.set(None);
-            return Err(js_error(error));
+            return Err(if expired {
+                runtime(ErrorCode::E301, "extension handler exceeded its budget")
+            } else {
+                js_error(error)
+            });
         }
     };
     let settled = if value.is_promise() {
