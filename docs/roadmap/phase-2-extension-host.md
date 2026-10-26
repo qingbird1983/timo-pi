@@ -1,6 +1,6 @@
 # Phase 2：编排类扩展宿主（A 轨）
 
-- 状态：进行中（设计定稿 2026-10-26，实现未开始）
+- 状态：完成（2026-10-26；验收报告 `docs/design/phase-2/report.md`，tag `phase-2.end`）
 - 参考估时：3~6 周
 - 关联：ADR-0003/0006/0011；architecture/02~04；design/phase-2/00~05
 

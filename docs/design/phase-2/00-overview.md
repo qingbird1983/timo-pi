@@ -120,6 +120,8 @@ flowchart LR
 | D25 | 事件清单按 pi 1.4.0 实际名称校准（architecture/04 的 `error` 不存在；`compact` 实为 `session_*_compact`） | a（文档校准） | 详见 05 §3 |
 | D26 | 禁止 `eval` / `new Function`（打包期拒绝） | c（standards/04 §6） | pi 允许动态求值；本项目只允许打包产物执行 |
 | D27 | bundle 为单文件 CJS（`bundle.cjs`），QuickJS 内以 `module`/`exports` 垫片单次求值 | a（运行时载体） | rquickjs 无 ESM loader；顶层 await 不支持 → E106；产物内 `require()` 仍禁止 |
+| D28 | 安装期静态扫描的"建议能力"写入 manifest 作为声明 | a（安装命令） | 本项目没有扩展作者手写 manifest 的流程；建议值仍需用户授予，未声明/未授予一律拒绝 |
+| D29 | 通知事件队列无界（原设计 1024 有界丢最旧） | c（稳定性债） | 无订阅者直接丢弃；有订阅者按序投递；积压上限与丢弃计数记 backlog |
 
 ## 7. 接缝核对（architecture/03）
 

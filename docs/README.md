@@ -52,6 +52,7 @@ docs/
 | design/phase-1/06-timo-mcp-kernel-cli.md | 定稿 | MCP 并入、kernel 门面、CLI 冒烟壳 |
 | design/phase-1/07-testing-ci.md | 定稿 | fixture 计划、接缝自动化、CI 与构建卫生脚本 |
 | design/phase-1/report.md | 定稿 | Phase 1 阶段进度报告（A1~A6 全通过，CI run 40308144023 全绿） |
+| design/phase-2/report.md | 定稿 | Phase 2 阶段进度报告（B1~B6 全通过；真实 DeepSeek 会话验收） |
 | design/phase-2/00-overview.md | 定稿 | Phase 2 总览：模块布局、装载管线、关键决策、D11~D25 偏离、接缝核对 |
 | design/phase-2/01-shim-api.md | 定稿 | shim API 对照表：模块/注册/动作/ctx/工具契约/JS↔Rust 类型映射 |
 | design/phase-2/02-packaging.md | 定稿 | 安装期打包管线、错误分类总表 E1xx~E4xx、诊断报告格式 |

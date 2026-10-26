@@ -76,7 +76,7 @@ flowchart TD
 2. **依赖安装**：仅当 `dependencies` 非空。规则：只允许 registry 版本（拒绝 `git:`/`file:`/`link:`/workspace:` 与 lifecycle scripts）；`npm install --ignore-scripts --no-audit --no-fund --no-package-lock`；临时目录在系统 temp，完成后只保留 `node_modules` 供打包，打包后删除。
 3. **打包**：rolldown `input=entry`、`format=cjs`、`platform=neutral`、`target=es2020`、`treeshake=true`、**不 minify**（诊断可读）、不生成 sourcemap；`external` = 01 §1 的 shim specifier 列表。产物以 `module.exports` 暴露工厂（D27）。
 4. **禁用面扫描**：对**打包产物**再扫一遍（防止依赖内联带入）：`node:*`、Node 裸内建、`require(`、`import(` 非字面量、`process.` 顶层引用 → E104/E105；`eval(` / `new Function(` → E105（standards/04 §6）。
-5. **能力静态扫描**：命中 `pi.exec(`、`fetch(`、`new WebSocket(`、`XMLHttpRequest`、`pi.registerProvider(` 等，生成建议能力清单（**建议值，不是事实**；运行期仍以 manifest 声明 + 用户授予为准）。
+5. **能力静态扫描**：命中 `pi.exec(`、`fetch(`、`new WebSocket(`、`XMLHttpRequest`、`pi.registerProvider(` 等，生成建议能力清单（**建议值，不是事实**）。`timo ext add` 会把建议中的 `exec`/域名写入 manifest 作为**声明**（D28），运行期仍以"manifest 声明 + 用户授予"为准。
 6. **写盘**：先写临时目录，全部成功后原子 rename；失败不留半成品。
 
 ## 4. 转换与兼容规则

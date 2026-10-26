@@ -1,50 +1,45 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-26（会话主题：**Phase 2 实现：扩展宿主骨架**）
+- 更新：2026-10-26（会话主题：**Phase 2 收尾：全链路接入 + 真机验收**）
 
 ## 当前阶段与状态
 
-- **Phase 1 ✅ 完成**（tag `phase-1.end`）：A1~A6 通过，CI 全绿。
-- **Phase 2 进行中**：设计定稿（tag `phase-2.start`）；提交序列第 2 步（`timo-ext` 骨架）完成。
-- 设计稿：`docs/design/phase-2/00-overview.md` ~ `05-shim-events.md`（6 篇，全部定稿）。
+- **Phase 1 ✅ 完成**（tag `phase-1.end`）。
+- **Phase 2 ✅ 完成**（tag `phase-2.end`）：A 轨扩展宿主全链路打通，B1~B6 真机（DeepSeek）验收通过，四道门禁全绿（185 个测试）。
+- 验收报告：`docs/design/phase-2/report.md`（证据、偏差 D27/D28/D29、限制、收尾清单）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-2-extension-host.md`。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
-- **新建 `crates/timo-ext` 并接入 workspace**：discovery / manifest / diag 三模块 + 18 个测试。
-- **发现**：项目 `.timo`、pi 兼容 `.pi`、用户目录、显式路径；三种入口写法；目录/文件 id 派生；四类问题进诊断（E101/E204/E205/E206）。
-- **manifest**：schema/id/相对路径/指纹格式校验；源码目录稳定 sha256 指纹（排序 + 长度前缀），为授权失效做准备。
-- **诊断**：28 个错误码（E1xx/E2xx/E3xx/E4xx）、JSON（summary 现算）与人读表。
-- **规范修正**：按 standards/04 §6 禁止 `eval`/`new Function`，设计 02/00 同步（D26）。
-- **体量**：单文件最大 413 行；门禁四连通过；隐形字符扫描干净。
+- **内核装载**：`ensure_ready` 完成"发现 → 打包 → 授权 → 装载"，扩展工具带完整元数据（暴露面/注释/执行模式）注册进工具表，内核事件转发给扩展；`resume` 也会先装载。
+- **CLI 面**：`timo ext list/add/remove/trust/doctor`；`--extension`、`--no-extensions`、`--ext-flag`；REPL `/ext` 与扩展斜杠命令（`plugin_<id>_` 后缀匹配）。
+- **诊断归属**：钩子超时/处理器抛错按扩展 id 记录，运行结束汇总；无订阅者的事件不再入队。
+- **真机 B1~B6**：hello（钩子改写参数/系统提示）、guard（否决 `rm -rf`）、net（E402 → 授权放行）、exec（E401 → 授权成功）、fs（E403 / `node:fs` E104）、slow（E301 后会话继续）。
+- **收尾**：设计 00/02/04 回填 D28/D29 与实测结论；CHANGELOG 0.1.19；看板与阶段文档置完成；本卡重写。
 
 ## 下一步（按优先级）
 
-1. **pack 模块**：先登记依赖准入（`rquickjs`/`rolldown`/`oxc`），再实现 rolldown 打包、禁用面扫描（node:*/eval）、E1xx；自写夹具。
-2. **shim + host**：模块别名、`VERSION=1.4.0`、惰性 Proxy、hello 样本跑通。
-3. **钩子**：事件桥、`LoopHooks`（先 `before_agent_start`/`transform_context`/`before_tool_call`/`after_tool_call`）、`ProviderHooks`、30s 预算、abort 退休。
-4. **权限与 CLI**：宿主闸门、`timo ext` 子命令、斜杠命令、诊断呈现。
-5. 之后才做 B1~B6 验收与收尾。
-
-> 施工顺序唯一来源：`docs/design/phase-2/00-overview.md` §8。实现前不再补设计文档；发现设计错误先改文档再写码。
+1. **Phase 3 开工前**：读 `docs/roadmap/phase-3-desktop.md`，按"文档先行"先出桌面阶段设计（gpui-kit 技能已 vendored）。
+2. 债务按需排期（不阻塞 Phase 3 启动）：
+   - D29：扩展事件通知队列无上界（极端刷屏时内存增长）。
+   - D23：`registerVirtualModel` 只支持同 provider 路由。
+   - `fs.*` 能力只有声明校验，无运行期 API。
+3. `target/` 体积接近软阈值；需要时安装 `cargo-sweep` 清理（不影响门禁）。
 
 ## 未决问题
 
-- `rquickjs` 中断后 Context 可复用性：首日探针；不可恢复则整 Context 重建并标 degraded。
-- rolldown Rust API 在 1.2.x 的稳定性：锁次版本、适配层隔离。
-- `registerVirtualModel` 跨 provider 路由（D23 已收敛为同 provider）。
-- `fs.*` 能力本版无暴露面（契约先行，B4 只验声明校验）。
-- 30s 预算与 UI 等待/exec/fetch 的边界（已定：后三者不计入，需实现期验证）。
-- `message_end`/`input` 等可改写事件是否升级为支持：等真实样本驱动。
+- `message_end` / `input` 等可改写事件是否升级为支持：等真实扩展需求驱动。
+- 扩展 UI（`ui.*`）只做惰性降级 + 诊断，完整 TUI 桥留待后续阶段。
 
 ## 关键提醒
 
-- **接缝 #2**：`timo-agent` 循环只调用注入的 `LoopHooks` 固定方法，禁止出现扩展/插件名分支；`None` 时与 Phase 1 逐字节等价。
-- **不得复制 pi 源码**（铁律 7）：仓内夹具一律自写；B1/B2 人工验收直接指向本机 pi 检出目录。
-- **权限强制点唯一**：QuickJS 无 OS 能力，所有 exec/net/fs 只能走宿主函数；不得出现第二条放行路径。
-- **诊断可执行**：每条错误必须含码 + 原因 + 定位 + 下一步；`failed/degraded` 逐项可见。
+- **接缝 #2**：`timo-agent` 循环只调用注入的 `LoopHooks`，禁止出现扩展名分支；`None` 时与 Phase 1 逐字节等价。
+- **不得复制 pi 源码**（铁律 7）：仓内夹具一律自写；GPL 项目只读思路。
+- **权限强制点唯一**：QuickJS 无 OS 能力，exec/net/fs 只能走宿主函数。
+- **产物是 CJS**：内嵌 QuickJS 不加载 ESM；顶层 await 记 E106（D27），改夹具/文档前先看设计 02。
 - **门禁四连**：`cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && bash scripts/check-size`。
-- **500 行 gate**：纯类型/报告类测试优先放 `tests/`，避免实现文件在收尾时被迫删内容或拆模块。
+- **500 行 gate**：大模块按职责拆（`run/`、`extensions/` 已有先例），纯测试放 `tests/`。
 - **写中文文件后扫隐形字符**：`grep -nP '[\x{3040}-\x{30ff}\x{200b}-\x{200f}\x{feff}]'`。
 - **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对。
+- 踩坑索引：P-001 流事件静默回归；P-002 编辑重复行；P-003 Windows bash 是 WSL；P-004 上游摘要当合同；P-005 设计格式与运行时能力不符。

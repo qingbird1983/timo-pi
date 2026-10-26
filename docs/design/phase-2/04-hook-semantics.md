@@ -119,7 +119,8 @@ pub trait ProviderHooks: Send + Sync {
   2. 宿主侧定时器在 deadline 触发时置中断标志（线程安全）；
   3. handler 被中断 → 丢弃其结果，记 E301，继续下一个 handler；会话不受影响。
 - **可恢复性**：必须证明"被中断后同一 Context 仍能执行下一条脚本"（B3 断言）。若 rquickjs 实测不可恢复：重建该扩展 Context 并标记 `degraded`（工具/命令注销，钩子停用），记 E301 附"context rebuilt"；会话继续。
-- **测试注入**：预算与时钟可注入（standards/05 §3）；CI 用 100~300ms 预算，生产 30s。
+- **测试注入**：预算与时钟可注入（standards/05 §3）；CI 用 100~300ms 预算，生产 30s。实现以 `TIMO_EXT_BUDGET_MS` 覆盖预算（仅测试/诊断用），缺省 30s。
+- **实测结论**：中断后同一 Context 可继续执行下一条脚本（`context_is_reusable_after_budget_interrupt`），无需重建。
 - **工具执行**不适用本预算（见 01 §6）；只受取消令牌约束。
 
 ## 6. 快照隔离（detach）
@@ -182,6 +183,6 @@ pub trait ProviderHooks: Send + Sync {
 ## 11. 待决问题
 
 - **改参后重新校验**：本项目比 pi 更严（pi 不重新校验）。这是 standards/06 的安全要求，记为"受限差异"；若真实样本依赖"改参绕过原 schema"，再评估。
-- **中断线程安全**：`Runtime::interrupt()` 的跨线程语义需在实现首日做探针验证；不成立则改为扩展线程自驱动 deadline。
-- **通知积压**：1024 上限与丢弃策略需在 B1 长会话实测后定。
+- ~~**中断线程安全**~~：已实现为扩展线程内 deadline + QuickJS 中断处理器（不跨线程调用 `Runtime::interrupt`），探针通过。
+- **通知积压**：本版队列无界（D29）；有界上限与丢弃计数待 Phase 3 前实现。
 - **ui 等待与预算的边界**：对话框取消（用户 Ctrl+C）与 run abort 的关系需在 CLI 实现时统一（当前：对话框取消只让 handler 收到取消值，不 abort run）。
