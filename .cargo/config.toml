@@ -1,0 +1,14 @@
+# 构建产物治理（docs/standards/08 §7 原文落地）
+# 全仓库唯一 cargo workspace、唯一 target/；清扫一律走 scripts/clean-stale（按龄，不全清）。
+
+[profile.dev]
+# 保留回溯行号，砍掉大部分调试信息体积（经验值 60~80%）
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+# 依赖以 O2 编译：运行更快，体积反小于全量 debuginfo
+opt-level = 2
+
+[profile.release]
+strip = "debuginfo"
+lto = "thin"

@@ -1,0 +1,16 @@
+[package]
+name = "timo-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Timo-pi non-interactive smoke CLI (acceptance vehicle only)"
+
+[[bin]]
+name = "timo"
+path = "src/main.rs"
+
+[dependencies]
+timo-kernel = { workspace = true }
+
+[lints]
+workspace = true

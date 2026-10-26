@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# 体量核对（docs/standards/08 §4/§7）
+# 1) 单源文件 >500 行 → fail（行内含 SIZE-EXEMPT(<理由>) 注释可豁免，须在进度报告登记）
+# 2) #[allow(dead_code)] 无归属注释（同行或上一行含 TODO( 或 dead-code:）→ fail
+# 3) target/ 体积对照 15GB 软上限 → 超 warn
+set -uo pipefail
+cd "$(dirname "$0")/.."
+fail=0
+
+while IFS= read -r f; do
+    lines=$(wc -l < "$f")
+    if [ "$lines" -gt 500 ]; then
+        if grep -q "SIZE-EXEMPT(" "$f"; then
+            echo "WARN  $f: $lines 行（已豁免：$(grep -o 'SIZE-EXEMPT([^)]*)' "$f" | head -1)）"
+        else
+            echo "FAIL  $f: $lines 行 > 500（标准 08 §4；如确需豁免加 SIZE-EXEMPT(理由) 注释并登记进度报告）"
+            fail=1
+        fi
+    fi
+    if grep -n "allow(dead_code)" "$f" | while IFS=: read -r ln _; do
+            prev=$((ln - 1)); [ "$prev" -ge 1 ] && ctx=$(sed -n "${prev}p;${ln}p" "$f")
+            [ "$prev" -lt 1 ] && ctx=$(sed -n "${ln}p" "$f")
+            echo "$ctx" | grep -qE "TODO\(|dead-code:" || echo "ORPHAN $f:$ln"
+        done | grep -q ORPHAN; then
+        echo "FAIL  $f: 存在无归属的 #[allow(dead_code)]（标准 08 §4 零容忍）"
+        fail=1
+    fi
+done < <(find crates apps -name "*.rs" -type f 2>/dev/null)
+
+if [ -d target ]; then
+    kb=$(du -sk target 2>/dev/null | cut -f1)
+    gb=$((kb / 1024 / 1024))
+    if [ "$gb" -ge 15 ]; then
+        echo "WARN  target/ 约 ${gb}GB ≥ 15GB 软上限（标准 08 §7）——运行 scripts/clean-stale"
+    else
+        echo "OK    target/ 约 ${gb}GB（软上限 15GB）"
+    fi
+fi
+
+if [ "$fail" -ne 0 ]; then
+    echo "check-size: FAIL"; exit 1
+fi
+echo "check-size: OK"

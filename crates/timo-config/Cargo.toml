@@ -1,0 +1,9 @@
+[package]
+name = "timo-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Timo-pi kernel crate: timo-config"
+
+[lints]
+workspace = true

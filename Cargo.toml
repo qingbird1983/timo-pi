@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+# crate 划分见 docs/architecture/02 §1；实现级设计见 docs/design/phase-1/
+members = [
+    "crates/timo-config",
+    "crates/timo-ai",
+    "crates/timo-session",
+    "crates/timo-tools",
+    "crates/timo-mcp",
+    "crates/timo-agent",
+    "crates/timo-kernel",
+    "apps/timo-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# 硬门槛（docs/standards/04）：库层禁 unwrap/expect/panic 外泄；公共 API doc comment。
+# 测试豁免：单元测试经 lib.rs 的 cfg_attr(test) 放行；集成测试在文件顶部放行。
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[workspace.dependencies]
+timo-config = { path = "crates/timo-config" }
+timo-ai = { path = "crates/timo-ai" }
+timo-session = { path = "crates/timo-session" }
+timo-tools = { path = "crates/timo-tools" }
+timo-mcp = { path = "crates/timo-mcp" }
+timo-agent = { path = "crates/timo-agent" }
+timo-kernel = { path = "crates/timo-kernel" }
+
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "process", "io-util", "time", "signal", "fs"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+reqwest = { version = "0.13", features = ["json", "stream", "rustls-tls"], default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+async-trait = "0.1"
+jsonschema = "0.60"
+regex = "1"
+ignore = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
+ulid = "3"
+dirs = "7"
+clap = { version = "4.6", features = ["derive"] }
+rmcp = { version = "3.7", features = ["client", "transport-child-process", "transport-streamable-http-client", "macros"] }
+futures = "0.3"
+tempfile = "3"
+base64 = "0.22"
+sha2 = "0.10"
+
+# 依赖版本以根 Cargo.lock 实锁为准（standards/04 §1）；准入理由见 docs/standards/04 附录 A。
