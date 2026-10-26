@@ -35,6 +35,8 @@
 
 > 例外：`ctx.ui.notify`/`select`/`confirm`/`input` 属于通用对话框语义，映射到当前前端的对应实现（CLI 用简单文本交互、GUI 用 gpui-kit 对话框）——列为**支持**。
 
+> **2026-10-26 修订（事件名与成员状态校准）**：本节事件清单以 `docs/design/phase-2/05-shim-events.md` 为准——pi 1.4.0 不存在 `error` 事件；`compact` 实际是 `session_before_compact`/`session_compact`/`session_compact_failed`，且本版无 compaction，归缓做；`message_*`/`tool_execution_*` 由内核事件直接映射，列为只读通知支持；`registerVirtualModel` 为受限支持（仅同 provider 路由）。本次修订不改变三分类策略，只校准名称与逐项状态。
+
 ### 1.4 约束与兼容标记
 
 - 版本检查：shim 导出的 `VERSION` 常量独立维护（仿 PI-Desktop 假版本策略），与本项目真实版本解耦。

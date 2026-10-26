@@ -52,6 +52,12 @@ docs/
 | design/phase-1/06-timo-mcp-kernel-cli.md | 定稿 | MCP 并入、kernel 门面、CLI 冒烟壳 |
 | design/phase-1/07-testing-ci.md | 定稿 | fixture 计划、接缝自动化、CI 与构建卫生脚本 |
 | design/phase-1/report.md | 定稿 | Phase 1 阶段进度报告（A1~A6 全通过，CI run 40308144023 全绿） |
+| design/phase-2/00-overview.md | 定稿 | Phase 2 总览：模块布局、装载管线、关键决策、D11~D25 偏离、接缝核对 |
+| design/phase-2/01-shim-api.md | 定稿 | shim API 对照表：模块/注册/动作/ctx/工具契约/JS↔Rust 类型映射 |
+| design/phase-2/02-packaging.md | 定稿 | 安装期打包管线、错误分类总表 E1xx~E4xx、诊断报告格式 |
+| design/phase-2/03-permissions.md | 定稿 | 权限能力清单 v1、双闸授予/失效、强制点与硬拒路径 |
+| design/phase-2/04-hook-semantics.md | 定稿 | 钩子派发、30s 预算、快照隔离、abort 退休、错误隔离 |
+| design/phase-2/05-shim-events.md | 定稿 | pi 1.4.0 全量事件矩阵（41 项逐项分类与发射点） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |

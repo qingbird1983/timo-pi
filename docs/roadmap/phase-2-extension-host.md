@@ -1,8 +1,8 @@
 # Phase 2：编排类扩展宿主（A 轨）
 
-- 状态：未开始（依赖 Phase 1 验收通过）
+- 状态：进行中（设计定稿 2026-10-26，实现未开始）
 - 参考估时：3~6 周
-- 关联：ADR-0003/0006；architecture/04 §1~3
+- 关联：ADR-0003/0006/0011；architecture/02~04；design/phase-2/00~05
 
 ## 1. 目标（一句话）
 
@@ -23,9 +23,14 @@ pi 官方生态中"不碰 UI 的编排类扩展"能在本项目内核上装载�
 ### 不做
 B 轨 TSX 插件面（Phase 4）；A 轨 v2 成员的实现（仅保留"未实现"诊断）；图形化权限管理界面
 
-## 3. 文档交付物
+## 3. 文档交付物（2026-10-26 全部定稿）
 
-- `docs/design/phase-2/`：shim API 对照表（pi 签名 → 本项目实现的语义差异清单）、打包管线错误分类表、权限能力清单 v1
+- `docs/design/phase-2/00-overview.md`：模块布局、装载管线、关键决策、偏离登记 D11~D25、接缝核对
+- `docs/design/phase-2/01-shim-api.md`：shim API 对照表（pi 签名 → 语义差异）、类型映射
+- `docs/design/phase-2/02-packaging.md`：安装期打包管线、错误分类总表 E1xx~E4xx、诊断报告
+- `docs/design/phase-2/03-permissions.md`：权限能力清单 v1、双闸、强制点
+- `docs/design/phase-2/04-hook-semantics.md`：30s 预算、detach、abort 退休、错误隔离
+- `docs/design/phase-2/05-shim-events.md`：pi 1.4.0 全量事件矩阵（41 项逐项分类）
 
 ## 4. 验收场景
 
