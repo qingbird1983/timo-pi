@@ -7,16 +7,52 @@ app:
 sidebar:
   title: 会话
   empty: 暂无会话
+  new: 新建会话
 
 chat:
-  draft: 新会话
-  shell_ready: 桌面壳已就绪
-  shell_pending: 会话、聊天与工具审阅将在后续批次接入
+  empty_session: 新会话
+  placeholder: 输入任务，Enter 发送，Shift+Enter 换行
+  welcome_title: 开始一个任务
+  welcome_hint: 描述你要做的事；Timo 会读文件、改代码、跑命令，并把过程展示在这里。
+  config_hint: 内核未连接，请检查模型与凭证配置
+  booting: 正在连接内核…
+  generating: 生成中…
+  send: 发送
+  stop: 停止
+  usage: "%{tokens} tokens"
+  trace_title: "工具过程 · %{n} 步"
+  trace_truncated: "… 已截断（共 %{n} 行）"
+  tool_queued: 等待
+  tool_running: 运行中
+  tool_done: 完成
+  tool_failed: 失败
+  tool_interrupted: 上次运行中断
+  delete: 删除会话
+  delete_title: "删除会话「%{title}」？"
+  delete_body: 磁盘上的会话文件将被删除，无法恢复。
+  delete_confirm: 删除
+  open_failed: "打开会话失败：%{message}"
+  delete_failed: "删除会话失败：%{message}"
+  run_failed: "运行失败：%{message}"
+  fatal: "内核启动失败：%{message}"
+  busy: 运行中不可切换会话
+  lagged: "事件通道落后，丢失 %{n} 条事件"
 
 status:
   ready: 就绪
-  kernel_offline: 内核未连接
+  running: 运行中
+  offline: 内核未连接
+  disconnected: 未连接
 
 theme:
   to_dark: 切换到深色
   to_light: 切换到浅色
+
+tool:
+  read: 读取
+  write: 写入
+  edit: 编辑
+  bash: 命令
+  powershell: 命令
+  grep: 搜索
+  find: 查找

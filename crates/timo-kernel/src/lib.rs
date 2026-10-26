@@ -34,7 +34,10 @@ pub fn data_dir() -> Result<PathBuf> {
 pub use resolve::ResolvedModel;
 use std::path::PathBuf;
 pub use timo_agent::{AbortHandle, KernelEvent, SessionSink};
-pub use timo_ai::{AssistantStreamEvent, Content, Message, Usage};
+pub use timo_ai::{
+    AssistantMessage, AssistantStreamEvent, Content, Message, StopReason, ToolResultMessage, Usage,
+    UserMessage,
+};
 pub use timo_config::ThinkingLevel;
 pub use timo_session::SessionInfo;
 

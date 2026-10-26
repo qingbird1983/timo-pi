@@ -10335,6 +10335,9 @@ dependencies = [
  "gpui-kit",
  "nsh-platform-gpui",
  "rust-i18n",
+ "serde_json",
+ "timo-kernel",
+ "tokio",
 ]
 
 [[package]]

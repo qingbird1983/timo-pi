@@ -7,6 +7,8 @@
 extern crate rust_i18n;
 
 pub mod app;
+mod bridge;
+mod features;
 pub mod i18n;
 pub mod theme;
 

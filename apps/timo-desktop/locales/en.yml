@@ -7,16 +7,52 @@ app:
 sidebar:
   title: Sessions
   empty: No sessions yet
+  new: New session
 
 chat:
-  draft: New session
-  shell_ready: Desktop shell is ready
-  shell_pending: Sessions, chat and tool review arrive in later batches
+  empty_session: New session
+  placeholder: Type a task. Enter sends, Shift+Enter inserts a newline.
+  welcome_title: Start a task
+  welcome_hint: Describe what you need. Timo reads files, edits code, runs commands and shows the work here.
+  config_hint: Kernel offline. Check the model and credential settings.
+  booting: Connecting to the kernel…
+  generating: Generating…
+  send: Send
+  stop: Stop
+  usage: "%{tokens} tokens"
+  trace_title: "Tool trace · %{n} steps"
+  trace_truncated: "… truncated (%{n} lines total)"
+  tool_queued: Queued
+  tool_running: Running
+  tool_done: Done
+  tool_failed: Failed
+  tool_interrupted: Interrupted last run
+  delete: Delete session
+  delete_title: "Delete session \"%{title}\"?"
+  delete_body: The session file on disk will be deleted. This cannot be undone.
+  delete_confirm: Delete
+  open_failed: "Failed to open the session: %{message}"
+  delete_failed: "Failed to delete the session: %{message}"
+  run_failed: "Run failed: %{message}"
+  fatal: "Kernel failed to start: %{message}"
+  busy: Finish or stop the current run before switching sessions
+  lagged: "Event channel lagged; %{n} events were dropped"
 
 status:
   ready: Ready
-  kernel_offline: Kernel offline
+  running: Running
+  offline: Kernel offline
+  disconnected: Not connected
 
 theme:
   to_dark: Switch to dark
   to_light: Switch to light
+
+tool:
+  read: Read
+  write: Write
+  edit: Edit
+  bash: Command
+  powershell: Command
+  grep: Grep
+  find: Find
