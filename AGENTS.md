@@ -13,7 +13,7 @@
 | 看进度 / 阶段规划 | [docs/roadmap/00-roadmap.md](docs/roadmap/00-roadmap.md)（唯一看板）+ 当前 phase 文档 |
 | 查"为什么这么设计" | [docs/adr/](docs/adr/)（编号递增，只增不改） |
 | 查系统设计与约束 | [docs/architecture/](docs/architecture/)（先读 01；接缝必读 03；插件 04；会话格式 05） |
-| 查做事规则 | [docs/standards/](docs/standards/)（8 篇） |
+| 查做事规则 | [docs/standards/](docs/standards/)（9 篇；规范自身的复查与进化见 [standards/09](docs/standards/09-standards-review.md)） |
 | 写码纪律（各阶段写代码时） | [.agents/skills/ponytail/](.agents/skills/ponytail/SKILL.md)——最小完整改动纪律（MIT，vendored） |
 | 桌面开发（Phase 3） | [.agents/skills/](.agents/skills/README.md)——gpui-kit 官方技能（框架/设计规范，vendored） |
 | 查术语 | [docs/glossary.md](docs/glossary.md) |

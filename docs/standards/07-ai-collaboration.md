@@ -23,7 +23,7 @@
 | 设计 | 产出/修订 `docs/design/phase-N/` 并转定稿；重大取舍写 ADR |
 | 实现 | 遵守 standards/04/05/06；feature 分支；小步提交 |
 | 验收 | 逐条执行验收场景（含一票否决项）；接缝核对（architecture/03） |
-| 收尾 | 《阶段进度报告》→ README 看板 → CHANGELOG → tag `phase-N.end` → 更新 AGENTS.md 阶段指针 |
+| 收尾 | 《阶段进度报告》（含接缝核对、体量核对、**规范复查** standards/09）→ README 看板 → CHANGELOG → tag `phase-N.end` → 更新 AGENTS.md 阶段指针 |
 
 ## 4. 对所有者的沟通规则
 
