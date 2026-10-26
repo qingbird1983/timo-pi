@@ -6,7 +6,7 @@
 
 ## 1. 阶段总览与看板（本表是**唯一进度看板**）
 
-> 自 0.1.2 起，README 不再重复看板；阶段状态只在本表维护。状态变更必须同步 CHANGELOG 与 `.agents/CONTEXT.md`。**最近更新：2026-10-26。**
+> 自 0.1.2 起，README 不再重复看板；阶段状态只在本表维护。状态变更必须同步 CHANGELOG 与 `.agents/CONTEXT.md`。**最近更新：2026-10-27。**
 
 ```mermaid
 graph LR
@@ -23,7 +23,7 @@ graph LR
 | Phase 0 | 仓库初始化、规范与设计定稿、文档先行落盘 | — | ✅ 完成（2026-10-26） |
 | Phase 1 | 无界面的最小可用内核：2 种协议 + 循环 + 工具 + 会话 + MCP | 6~10 周 | ✅ 完成（2026-10-26，tag `phase-1.end`） |
 | Phase 2 | pi 编排类扩展可装载生效（A 轨） | 3~6 周 | ✅ 完成（2026-10-26，tag `phase-2.end`；报告 `docs/design/phase-2/report.md`） |
-| Phase 3 | gpui-kit 桌面壳日常可用 + NSH 嵌入 PoC | 4~8 周 | 进行中（设计定稿 2026-10-26；tag `phase-3.start`，实现未开始） |
+| Phase 3 | gpui-kit 桌面壳日常可用 + NSH 嵌入 PoC | 4~8 周 | 进行中（设计定稿 2026-10-26；最小窗口已跑通 2026-10-27；下一步 K0/K1） |
 | Phase 4 | GUI 原生插件系统闭环（B 轨） | 4~8 周 | 未开始 |
 
 \* 单人全职参考值，仅量级感知。Phase 2 与 Phase 3 可并行。

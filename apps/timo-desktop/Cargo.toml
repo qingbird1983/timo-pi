@@ -1,0 +1,32 @@
+[package]
+name = "timo-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Timo desktop shell (Phase 3)"
+
+[[bin]]
+name = "timo-desktop"
+path = "src/main.rs"
+
+[features]
+default = []
+# NSH 只在这个 feature 下编译；默认构建不引入 NSH（设计 03 §2）。
+nsh-poc = ["dep:nsh-platform-gpui"]
+
+[dependencies]
+# 版本边界见 docs/design/phase-3/00-overview.md §3；升级任一依赖前重跑 NSH 编译探针。
+gpui-kit = { version = "=0.8.0", features = ["gpui-fast"] }
+# 直接钉版本，确保 gpui-kit 与 NSH 共用同一 GPUI 后端（不 import）。
+gpui-fast = "=0.1.10"
+gpui-fast-platform = "=0.1.10"
+rust-i18n = "=4.2.4"
+nsh-platform-gpui = { version = "=0.3.0", default-features = false, features = [
+    "js",
+], optional = true }
+
+[dev-dependencies]
+gpui-kit = { version = "=0.8.0", features = ["gpui-fast", "test-support"] }
+
+[lints]
+workspace = true

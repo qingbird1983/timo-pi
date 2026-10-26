@@ -11,6 +11,7 @@ members = [
     "crates/timo-agent",
     "crates/timo-kernel",
     "apps/timo-cli",
+    "apps/timo-desktop",
 ]
 
 [workspace.package]

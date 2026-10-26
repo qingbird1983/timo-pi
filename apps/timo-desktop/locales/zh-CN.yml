@@ -1,0 +1,22 @@
+_version: 1
+
+app:
+  title: Timo
+  tagline: 编码代理
+
+sidebar:
+  title: 会话
+  empty: 暂无会话
+
+chat:
+  draft: 新会话
+  shell_ready: 桌面壳已就绪
+  shell_pending: 会话、聊天与工具审阅将在后续批次接入
+
+status:
+  ready: 就绪
+  kernel_offline: 内核未连接
+
+theme:
+  to_dark: 切换到深色
+  to_light: 切换到浅色

@@ -1,0 +1,22 @@
+_version: 1
+
+app:
+  title: Timo
+  tagline: Coding agent
+
+sidebar:
+  title: Sessions
+  empty: No sessions yet
+
+chat:
+  draft: New session
+  shell_ready: Desktop shell is ready
+  shell_pending: Sessions, chat and tool review arrive in later batches
+
+status:
+  ready: Ready
+  kernel_offline: Kernel offline
+
+theme:
+  to_dark: Switch to dark
+  to_light: Switch to light
