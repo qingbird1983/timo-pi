@@ -3,28 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Timo 桌面壳 · 方案原型</title>
+<title>Timo 桌面壳 · 粗原型（参考稿方向）</title>
 <style>
   :root {
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --sidebar: #eef0f3;
-    --surface-2: #f9fafb;
-    --fg: #1f2328;
-    --muted: #69707a;
-    --faint: #9aa1ab;
-    --border: #e1e4e8;
-    --border-strong: #cfd4da;
-    --accent: #2f6fed;
-    --accent-soft: #e8efff;
+    --bg: #ffffff;
+    --sidebar: #f8f8f9;
+    --surface-2: #f6f6f7;
+    --surface-3: #f1f1f3;
+    --fg: #202124;
+    --muted: #7d828b;
+    --faint: #a5a9b1;
+    --border: #ececee;
+    --border-strong: #dedfe2;
+    --accent: #1f9d55;
+    --accent-soft: #eaf6ef;
     --danger: #c94343;
-    --danger-soft: #fdecec;
-    --success: #2c7a52;
-    --success-soft: #e8f5ee;
-    --warn: #9a6700;
-    --warn-soft: #fff4d6;
-    --add: #e6f4ea;
-    --del: #fdecec;
+    --danger-soft: #fdf1f1;
+    --warn: #a06a00;
+    --warn-soft: #fffaf0;
+    --warn-border: #f0e0b0;
+    --add: #eef8f0;
+    --del: #fdf1f1;
     --mono: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
     --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   }
@@ -32,225 +31,290 @@
   html, body { height: 100%; }
   body {
     margin: 0;
-    background: #dfe2e7;
+    background: #e9eaec;
     font-family: var(--sans);
     color: var(--fg);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
-    padding: 24px;
+    gap: 12px;
+    padding: 22px;
   }
-  .caption { font-size: 12px; color: #5b626c; letter-spacing: .02em; }
+  .caption { font-size: 12px; color: #666c75; letter-spacing: .01em; }
   .app {
     width: min(1440px, 100%);
-    height: min(900px, calc(100vh - 70px));
+    height: min(900px, calc(100vh - 64px));
     min-width: 1040px;
-    min-height: 640px;
-    background: var(--surface);
-    border: 1px solid #c9ced5;
-    border-radius: 12px;
+    min-height: 660px;
+    background: var(--bg);
+    border: 1px solid #d6d8dc;
+    border-radius: 10px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 24px 60px rgba(20, 25, 35, .18);
+    box-shadow: 0 20px 50px rgba(20, 25, 35, .14);
   }
-  /* title bar */
+  /* ---- title bar ---- */
   .titlebar {
-    height: 44px;
-    flex: 0 0 44px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 0 12px 0 16px;
+    height: 40px; flex: 0 0 40px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px 0 14px;
     border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--bg);
   }
   .brand-mark {
-    width: 22px; height: 22px; border-radius: 6px;
-    background: var(--fg); color: #fff;
+    width: 20px; height: 20px; border-radius: 6px;
+    border: 1px solid var(--fg); color: var(--fg);
     display: grid; place-items: center;
-    font-weight: 700; font-size: 12px;
+    font-weight: 700; font-size: 11px;
   }
-  .titlebar .title { font-size: 13px; font-weight: 600; }
+  .titlebar .title { font-size: 12.5px; font-weight: 600; }
   .titlebar .crumb { color: var(--faint); font-size: 12px; }
   .titlebar .spacer { flex: 1; }
-  .win-controls { display: flex; gap: 2px; }
+  .win-controls { display: flex; gap: 1px; }
   .win-controls span {
-    width: 34px; height: 28px; display: grid; place-items: center;
-    color: var(--muted); font-size: 13px; border-radius: 4px;
+    width: 32px; height: 26px; display: grid; place-items: center;
+    color: var(--muted); font-size: 12px; border-radius: 4px;
   }
   .win-controls .close:hover { background: var(--danger-soft); color: var(--danger); }
-  /* body */
+  /* ---- body ---- */
   .body { flex: 1; display: flex; min-height: 0; position: relative; }
   .sidebar {
-    width: 260px; flex: 0 0 260px;
+    width: 248px; flex: 0 0 248px;
     background: var(--sidebar);
     border-right: 1px solid var(--border);
     display: flex; flex-direction: column; min-height: 0;
   }
-  .sidebar-head { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 10px; }
-  .btn {
-    height: 32px; border-radius: 6px; border: 1px solid var(--border-strong);
-    background: var(--surface); color: var(--fg);
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    font-size: 13px; font-family: inherit; padding: 0 12px; white-space: nowrap;
+  .sidebar-brand {
+    height: 38px; flex: 0 0 38px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px;
   }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
-  .btn.danger { background: var(--surface); border-color: #e6b3b3; color: var(--danger); }
-  .btn.small { height: 28px; font-size: 12px; padding: 0 9px; }
-  .new-session { width: 100%; justify-content: flex-start; font-weight: 600; }
-  .new-session .plus { font-size: 15px; line-height: 1; color: var(--muted); }
-  .search {
-    height: 30px; border: 1px solid var(--border); background: var(--surface);
-    border-radius: 6px; display: flex; align-items: center; gap: 8px;
-    padding: 0 10px; color: var(--faint); font-size: 12px;
+  .sidebar-brand .name { font-size: 12.5px; font-weight: 650; }
+  .sidebar-brand .spacer { flex: 1; }
+  .icon-btn {
+    width: 24px; height: 24px; border: 0; background: transparent;
+    color: var(--muted); border-radius: 5px; display: grid; place-items: center;
+    font-size: 12px; padding: 0;
   }
-  .search .kbd { margin-left: auto; }
-  .kbd {
-    font-family: var(--sans); font-size: 10px; color: var(--muted);
-    border: 1px solid var(--border-strong); border-bottom-width: 2px;
-    border-radius: 4px; padding: 1px 4px; background: var(--surface);
+  .nav { padding: 2px 8px 8px; display: flex; flex-direction: column; gap: 1px; }
+  .nav-row {
+    height: 31px; display: flex; align-items: center; gap: 9px;
+    padding: 0 9px; border-radius: 6px; font-size: 12.5px; color: var(--fg);
   }
-  .session-list { flex: 1; overflow: hidden; padding: 6px 8px 10px; }
+  .nav-row .ico { width: 14px; text-align: center; color: var(--muted); font-size: 12px; }
+  .nav-row .spacer { flex: 1; }
+  .nav-row .kbd { color: var(--faint); font-size: 10.5px; }
+  .nav-row:hover, .session:hover { background: var(--surface-3); }
+  .nav-row.selected { background: var(--surface-3); }
+  .sidebar-scroll { flex: 1; overflow: hidden; padding: 0 8px 8px; }
   .group-label {
-    font-size: 11px; color: var(--faint); padding: 10px 8px 6px;
-    letter-spacing: .04em;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--faint); padding: 11px 8px 5px;
   }
+  .group-label .caret { font-size: 9px; }
+  .group-label .spacer { flex: 1; }
   .session {
-    padding: 8px 9px; border-radius: 6px; display: flex; flex-direction: column; gap: 3px;
-    margin-bottom: 2px; cursor: default;
+    height: 29px; display: flex; align-items: center;
+    margin-left: 14px; padding: 0 8px; border-radius: 6px;
+    font-size: 12.5px; color: #3d424a;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .session .name { font-size: 13px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .session .meta { font-size: 11px; color: var(--faint); display: flex; gap: 8px; }
-  .session.active { background: #fff; border: 1px solid var(--border); box-shadow: 0 1px 1px rgba(0,0,0,.03); }
-  .session.active .name { font-weight: 600; }
+  .session.active { background: var(--surface-3); color: var(--fg); font-weight: 550; }
   .sidebar-foot {
-    border-top: 1px solid var(--border); padding: 10px 12px;
-    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+    height: 36px; flex: 0 0 36px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; padding: 0 12px;
+    color: var(--faint); font-size: 13px;
   }
-  .model-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
   .sidebar-foot .spacer { flex: 1; }
-  /* main */
+  .version { font-size: 10.5px; color: var(--faint); }
+  /* ---- main ---- */
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
   .chat-head {
-    height: 52px; flex: 0 0 52px; background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 10px; padding: 0 18px;
+    height: 46px; flex: 0 0 46px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 16px;
   }
-  .chat-head .title { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .badge {
-    font-size: 11px; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
-    background: var(--surface-2); color: var(--muted); border: 1px solid var(--border);
-  }
-  .badge.run { background: var(--accent-soft); color: var(--accent); border-color: #c7d7ff; }
-  .badge.warn { background: var(--warn-soft); color: var(--warn); border-color: #f0ddaa; }
-  .badge.ok { background: var(--success-soft); color: var(--success); border-color: #bfe0cd; }
+  .chat-head .doc { color: var(--muted); font-size: 13px; }
+  .chat-head .title { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .state { font-size: 11px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .chat-head .spacer { flex: 1; }
-  .messages { flex: 1; overflow: hidden; padding: 18px 28px 8px; display: flex; flex-direction: column; gap: 18px; }
-  .msg { display: flex; gap: 12px; max-width: 880px; }
-  .avatar {
-    width: 28px; height: 28px; border-radius: 7px; flex: 0 0 28px;
-    display: grid; place-items: center; font-size: 11px; font-weight: 700;
-    background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+  .icon-btn:hover { background: var(--surface-3); color: var(--fg); }
+  .stop-btn {
+    height: 26px; padding: 0 9px; border: 1px solid var(--border-strong);
+    background: var(--bg); border-radius: 6px; font-size: 11.5px; color: var(--fg);
+    display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
   }
-  .avatar.agent { background: var(--fg); color: #fff; border-color: var(--fg); }
-  .msg .content { min-width: 0; flex: 1; font-size: 13.5px; line-height: 1.65; }
-  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; align-items: center; }
-  .msg.user { align-self: flex-end; max-width: 760px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
-  .msg.user .who { margin-bottom: 2px; }
-  .msg.user .content { font-size: 13px; }
-  p { margin: 0 0 8px; }
-  p:last-child { margin-bottom: 0; }
-  code.inline { font-family: var(--mono); font-size: 12px; background: #eceff3; border-radius: 4px; padding: 1px 4px; }
-  .tool-card {
-    border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
-    margin: 10px 0 4px; overflow: hidden;
+  .stop-btn .sq { width: 7px; height: 7px; background: var(--danger); border-radius: 1px; }
+  .progress { height: 2px; flex: 0 0 2px; background: #f0f0f1; }
+  .progress span { display: block; width: 24%; height: 100%; background: #c9ccd2; }
+  .chat-meta {
+    height: 26px; flex: 0 0 26px; display: flex; align-items: center;
+    justify-content: flex-end; padding: 0 16px; font-size: 10.5px; color: var(--faint);
+    gap: 8px;
   }
-  .tool-card.review { border-color: #e3c56b; box-shadow: 0 0 0 2px rgba(227,197,107,.18); }
-  .tool-row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 40px; }
-  .tool-icon {
-    width: 22px; height: 22px; border-radius: 5px; background: var(--surface-2);
-    border: 1px solid var(--border); display: grid; place-items: center;
-    font-size: 10px; color: var(--muted); font-family: var(--mono);
+  .messages { flex: 1; overflow: hidden; padding: 6px 32px 10px; }
+  .thread { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .user-msg {
+    align-self: flex-end; max-width: 72%;
+    background: var(--surface-2); border-radius: 12px;
+    padding: 7px 13px; font-size: 13px; line-height: 1.65;
   }
-  .tool-name { font-size: 12.5px; font-weight: 600; }
-  .tool-info { min-width: 0; }
-  .tool-summary { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tool-row .spacer { flex: 1; }
-  .tool-duration { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
-  .tool-body {
-    border-top: 1px solid var(--border); background: var(--surface-2);
-    padding: 8px 12px; font-family: var(--mono); font-size: 11.5px; color: var(--muted);
-    display: flex; gap: 12px; align-items: center;
+  .run-divider {
+    display: flex; align-items: center; gap: 6px;
+    border-top: 1px solid #f1f1f2; padding-top: 9px; margin-top: 3px;
+    color: var(--muted); font-size: 11px;
   }
-  .add { color: var(--success); }
-  .del { color: var(--danger); }
-  .tool-body .btn { margin-left: auto; }
+  .run-divider .ok { color: var(--accent); }
+  .assistant { font-size: 13.5px; line-height: 1.8; color: var(--fg); }
+  .assistant p { margin: 0 0 9px; }
+  .assistant p:last-child { margin-bottom: 0; }
+  code.inline { font-family: var(--mono); font-size: 11.5px; background: var(--surface-3); border-radius: 4px; padding: 1px 4px; }
   .streaming::after {
-    content: ""; display: inline-block; width: 7px; height: 14px;
+    content: ""; display: inline-block; width: 6px; height: 13px;
     background: var(--fg); margin-left: 3px; vertical-align: -2px;
     animation: blink 1s steps(1) infinite;
   }
   @keyframes blink { 50% { opacity: 0; } }
-  .composer-wrap { padding: 10px 28px 16px; }
-  .composer {
-    border: 1px solid var(--border-strong); background: var(--surface);
-    border-radius: 8px; padding: 10px 10px 8px 12px;
-    display: flex; flex-direction: column; gap: 8px;
-    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  /* trace */
+  .trace {
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); overflow: hidden; margin: 2px 0;
   }
-  .composer .placeholder { font-size: 13px; color: var(--faint); min-height: 22px; }
-  .composer .row { display: flex; align-items: center; gap: 8px; }
-  .composer .hint { font-size: 11px; color: var(--faint); }
-  .composer .row .spacer { flex: 1; }
-  .stop { background: var(--surface); border-color: var(--border-strong); color: var(--fg); }
-  .stop .square { width: 8px; height: 8px; background: var(--danger); border-radius: 1px; }
-  /* review sheet */
+  .trace-head {
+    height: 34px; display: flex; align-items: center; gap: 7px;
+    padding: 0 10px; font-size: 12.5px; font-weight: 600;
+  }
+  .trace-head .spark { color: var(--fg); font-size: 12px; }
+  .trace-head .path {
+    font-family: var(--mono); font-size: 11px; font-weight: 400;
+    color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .trace-head .spacer { flex: 1; }
+  .trace-head .stat { font-family: var(--mono); font-size: 10.5px; font-weight: 400; }
+  .trace-head .stat .add { color: var(--accent); }
+  .trace-head .stat .del { color: var(--danger); }
+  .trace-row {
+    min-height: 29px; display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; font-size: 12px; color: var(--muted);
+    border-top: 1px solid #f4f4f5;
+  }
+  .trace-row .ico { width: 14px; text-align: center; font-size: 11px; color: var(--faint); }
+  .trace-row .label { color: var(--fg); }
+  .trace-row .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trace-row .spacer { flex: 1; }
+  .trace-row .check { color: var(--accent); font-size: 11px; }
+  .trace-row.needs-review {
+    background: var(--warn-soft); border-top-color: var(--warn-border);
+  }
+  .trace-row.needs-review .label { color: var(--warn); }
+  .mini-btn {
+    height: 24px; padding: 0 8px; border-radius: 5px;
+    border: 1px solid var(--border-strong); background: var(--bg);
+    color: var(--fg); font-size: 11px; font-family: inherit; white-space: nowrap;
+  }
+  .mini-btn:hover { background: var(--surface-2); }
+  .mini-btn.primary { background: var(--fg); border-color: var(--fg); color: #fff; }
+  .mini-btn.danger { background: var(--bg); border-color: #e7c2c2; color: var(--danger); }
+  /* composer */
+  .composer-area { padding: 7px 32px 10px; }
+  .composer-shell { max-width: 760px; margin: 0 auto; }
+  .composer {
+    border: 1px solid var(--border-strong); border-radius: 16px;
+    background: var(--bg); padding: 11px 10px 8px 13px;
+    box-shadow: 0 6px 22px rgba(20, 25, 35, .045);
+  }
+  .placeholder { font-size: 13px; color: var(--faint); padding: 1px 1px 12px; }
+  .composer-row { display: flex; align-items: center; gap: 7px; }
+  .plus-btn {
+    width: 25px; height: 25px; border: 0; background: transparent;
+    color: var(--muted); border-radius: 6px; font-size: 17px; line-height: 1;
+  }
+  .plus-btn:hover { background: var(--surface-3); }
+  .pill {
+    height: 24px; padding: 0 9px; border: 1px solid var(--border);
+    background: var(--bg); border-radius: 999px; color: var(--muted);
+    font-size: 11px; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .pill .tiny { font-size: 10px; color: var(--faint); }
+  .composer-row .spacer { flex: 1; }
+  .model {
+    font-size: 11.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px;
+  }
+  .model .spark { color: var(--fg); }
+  .send-btn {
+    width: 29px; height: 29px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--surface-3); color: var(--faint); font-size: 14px;
+    display: grid; place-items: center;
+  }
+  .folder-bar {
+    max-width: 760px; margin: 6px auto 0;
+    border-radius: 8px; background: var(--surface-2);
+    height: 30px; display: flex; align-items: center; gap: 7px;
+    padding: 0 11px; font-size: 11.5px; color: var(--muted);
+  }
+  .folder-bar .spacer { flex: 1; }
+  .statusbar {
+    height: 28px; flex: 0 0 28px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; padding: 0 14px;
+    color: var(--faint); font-size: 13px;
+  }
+  .statusbar .spacer { flex: 1; }
+  /* review panel */
   .review {
-    width: 440px; flex: 0 0 440px; background: var(--surface);
+    width: 400px; flex: 0 0 400px; background: var(--bg);
     border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0;
   }
-  .review-head { padding: 13px 16px 11px; border-bottom: 1px solid var(--border); }
-  .review-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
-  .review-title .spacer { flex: 1; }
-  .review-sub { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
-  .file-head {
-    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2);
-    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px;
+  .review-head {
+    height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 8px;
+    padding: 0 14px; border-bottom: 1px solid var(--border);
   }
-  .file-head .stat { margin-left: auto; font-family: var(--sans); }
-  .diff { flex: 1; overflow: hidden; font-family: var(--mono); font-size: 11.5px; line-height: 1.65; background: var(--surface); }
-  .hunk { color: var(--faint); background: var(--surface-2); padding: 4px 14px; border-bottom: 1px solid var(--border); }
-  .line { display: grid; grid-template-columns: 38px 38px 16px 1fr; white-space: pre; }
-  .line .ln { text-align: right; padding-right: 8px; color: var(--faint); font-variant-numeric: tabular-nums; user-select: none; }
+  .review-head .title { font-size: 13px; font-weight: 650; }
+  .review-head .count { font-size: 10.5px; color: var(--faint); }
+  .review-head .spacer { flex: 1; }
+  .review-note { font-size: 11.5px; color: var(--muted); line-height: 1.65; padding: 11px 14px 8px; }
+  .review-card {
+    margin: 2px 12px 12px; border-radius: 10px; background: var(--surface-2);
+    overflow: hidden; border: 1px solid var(--border);
+  }
+  .file-head {
+    height: 36px; display: flex; align-items: center; gap: 7px;
+    padding: 0 11px; font-family: var(--mono); font-size: 11px;
+  }
+  .file-head .path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-head .spacer { flex: 1; }
+  .file-head .stat { font-family: var(--mono); font-size: 10.5px; }
+  .file-head .stat .add { color: var(--accent); }
+  .file-head .stat .del { color: var(--danger); }
+  .diff { background: var(--bg); font-family: var(--mono); font-size: 10.8px; line-height: 1.62; overflow: hidden; }
+  .hunk { color: var(--faint); background: var(--surface-2); padding: 4px 10px; border-bottom: 1px solid var(--border); }
+  .line { display: grid; grid-template-columns: 30px 30px 13px 1fr; white-space: pre; }
+  .line .ln { text-align: right; padding-right: 6px; color: var(--faint); font-variant-numeric: tabular-nums; user-select: none; }
   .line .sign { text-align: center; color: var(--faint); user-select: none; }
-  .line .code { padding-right: 10px; overflow: hidden; text-overflow: ellipsis; }
+  .line .code { padding-right: 8px; overflow: hidden; text-overflow: ellipsis; }
   .line.add { background: var(--add); }
-  .line.add .sign { color: var(--success); }
+  .line.add .sign { color: var(--accent); }
   .line.del { background: var(--del); }
   .line.del .sign { color: var(--danger); }
-  .review-foot { border-top: 1px solid var(--border); padding: 11px 16px; display: flex; flex-direction: column; gap: 8px; }
-  .review-foot .why { font-size: 11.5px; color: var(--muted); }
-  .review-foot .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .review-foot { margin-top: auto; padding: 10px 14px 13px; border-top: 1px solid var(--border); }
+  .review-foot .why { font-size: 11px; color: var(--muted); margin-bottom: 9px; }
+  .review-foot .actions { display: flex; align-items: center; gap: 7px; }
   .review-foot .actions .spacer { flex: 1; }
-  .queue { font-size: 11px; color: var(--muted); }
+  /* responsive */
   @media (max-width: 1200px) {
     .app { min-width: 960px; }
     .review {
-      position: absolute; top: 52px; right: 0; bottom: 0;
-      width: min(520px, 56%); z-index: 5;
-      box-shadow: -18px 0 36px rgba(20, 25, 35, .14);
+      position: absolute; top: 48px; right: 0; bottom: 0;
+      width: min(460px, 54%); z-index: 5;
+      box-shadow: -16px 0 32px rgba(20, 25, 35, .12);
     }
   }
-  /* misc */
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
 <body>
-  <div class="app" role="application" aria-label="Timo 桌面应用原型">
+  <div class="app" role="application" aria-label="Timo 桌面应用粗原型">
     <div class="titlebar">
       <div class="brand-mark" aria-hidden="true">T</div>
       <div class="title">Timo</div>
@@ -260,187 +324,171 @@
     </div>
 
     <div class="body">
-      <aside class="sidebar" aria-label="会话">
-        <div class="sidebar-head">
-          <button class="btn new-session"><span class="plus">＋</span>新建会话</button>
-          <div class="search">
-            <span aria-hidden="true">⌕</span><span>搜索会话</span><span class="kbd">Ctrl K</span>
-          </div>
+      <aside class="sidebar" aria-label="会话导航">
+        <div class="sidebar-brand">
+          <div class="brand-mark" aria-hidden="true">T</div>
+          <span class="name">Timo</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" aria-label="收起侧栏">◧</button>
         </div>
-        <div class="session-list">
-          <div class="group-label">今天</div>
-          <div class="session active">
-            <div class="name">重构扩展装载管线</div>
-            <div class="meta"><span>刚刚</span><span>12 条消息</span></div>
-          </div>
-          <div class="session">
-            <div class="name">修复 Windows 路径解析</div>
-            <div class="meta"><span>2 小时前</span><span>8 条消息</span></div>
-          </div>
-          <div class="session">
-            <div class="name">给会话列表加搜索</div>
-            <div class="meta"><span>4 小时前</span><span>21 条消息</span></div>
-          </div>
-          <div class="group-label">昨天</div>
-          <div class="session">
-            <div class="name">审查权限双闸实现</div>
-            <div class="meta"><span>昨天 18:40</span><span>34 条消息</span></div>
-          </div>
-          <div class="session">
-            <div class="name">整理 Phase 2 验收记录</div>
-            <div class="meta"><span>昨天 09:12</span><span>16 条消息</span></div>
-          </div>
+        <div class="nav">
+          <div class="nav-row"><span class="ico">＋</span><span>新建会话</span><span class="spacer"></span><span class="kbd">Ctrl N</span></div>
+          <div class="nav-row"><span class="ico">⌕</span><span>搜索会话</span><span class="spacer"></span><span class="kbd">Ctrl K</span></div>
+          <div class="nav-row"><span class="ico">◇</span><span>扩展与诊断</span></div>
+        </div>
+        <div class="sidebar-scroll">
+          <div class="group-label"><span class="caret">⌄</span><span>Timo</span><span class="spacer"></span></div>
+          <div class="session active">重构扩展装载管线</div>
+          <div class="session">修复 Windows 路径解析</div>
+          <div class="session">审查权限双闸实现</div>
+          <div class="group-label"><span class="caret">⌄</span><span>TITY</span><span class="spacer"></span></div>
+          <div class="session">给会话列表加搜索</div>
+          <div class="session">整理 Phase 2 验收记录</div>
+          <div class="session">桌面壳信息架构讨论</div>
         </div>
         <div class="sidebar-foot">
-          <span class="model-dot" aria-hidden="true"></span>
-          <span>deepseek-flash</span>
+          <span>⚙ 设置</span>
           <span class="spacer"></span>
-          <button class="btn ghost small">设置</button>
+          <span class="version">v0.1.0</span>
         </div>
       </aside>
 
       <main class="main">
         <div class="chat-head">
+          <span class="doc" aria-hidden="true">▢</span>
           <div class="title">重构扩展装载管线</div>
-          <span class="badge run">运行中</span>
-          <span class="badge">deepseek-flash</span>
+          <span class="state"><span class="dot" aria-hidden="true"></span>运行中</span>
           <div class="spacer"></div>
-          <button class="btn small stop"><span class="square" aria-hidden="true"></span>停止</button>
+          <button class="icon-btn" aria-label="侧栏开关">◧</button>
+          <button class="stop-btn"><span class="sq" aria-hidden="true"></span>停止</button>
         </div>
+        <div class="progress" aria-hidden="true"><span></span></div>
+        <div class="chat-meta"><span>≈ 10.3K / 1M</span><span>11%</span></div>
 
         <div class="messages">
-          <div class="msg user">
-            <div class="content">
-              <div class="who">你</div>
-              把扩展装载的错误归属整理一下：钩子超时和处理器抛错都要算到对应扩展头上，运行结束时统一汇总。顺便补一条多轮上下文不丢的回归测试。
-            </div>
-          </div>
+          <div class="thread">
+            <div class="user-msg">重构扩展装载的错误归属，顺手补一条多轮上下文不丢的回归测试。</div>
 
-          <div class="msg">
-            <div class="avatar agent" aria-hidden="true">T</div>
-            <div class="content">
-              <div class="who">Timo <span class="badge">工具审阅开启</span></div>
+            <div class="run-divider"><span class="ok">✓</span><span>已工作 0 分 02 秒</span></div>
+            <div class="assistant">
               <p>先确认事件归属路径，再改装载收尾逻辑。已定位到两处：钩子派发只记录通用错误、运行结束没有按扩展归并。准备先读 <code class="inline">extensions/mod.rs</code> 与 <code class="inline">host/runner.rs</code>。</p>
-
-              <div class="tool-card">
-                <div class="tool-row">
-                  <div class="tool-icon">R</div>
-                  <div class="tool-info">
-                    <div class="tool-name">读取文件</div>
-                    <div class="tool-summary">crates/timo-kernel/src/extensions/mod.rs</div>
-                  </div>
-                  <div class="spacer"></div>
-                  <span class="badge ok">完成</span>
-                  <span class="tool-duration">0.03s</span>
-                </div>
-              </div>
-
-              <div class="tool-card">
-                <div class="tool-row">
-                  <div class="tool-icon">$</div>
-                  <div class="tool-info">
-                    <div class="tool-name">执行命令</div>
-                    <div class="tool-summary">cargo test -p timo-kernel --test extensions</div>
-                  </div>
-                  <div class="spacer"></div>
-                  <span class="badge ok">完成</span>
-                  <span class="tool-duration">1.24s</span>
-                </div>
-                <div class="tool-body">2 passed; 0 failed; finished in 0.02s</div>
-              </div>
-
-              <div class="tool-card review">
-                <div class="tool-row">
-                  <div class="tool-icon">E</div>
-                  <div class="tool-info">
-                    <div class="tool-name">编辑文件</div>
-                    <div class="tool-summary">crates/timo-kernel/src/kernel.rs</div>
-                  </div>
-                  <div class="spacer"></div>
-                  <span class="badge warn">待确认</span>
-                  <button class="btn small">审阅改动</button>
-                </div>
-                <div class="tool-body">
-                  <span class="add">+7</span><span class="del">−1</span>
-                  <span>保留完整上下文，供下一轮复用</span>
-                  <span class="queue">待审 1 / 2</span>
-                </div>
-              </div>
-
-              <p class="streaming">同时补一条回归测试：连续两次 run 应把第一轮消息带入第二轮请求。</p>
             </div>
+
+            <div class="user-msg">工具审阅按执行前拦截做，拒绝要不留副作用。</div>
+
+            <div class="run-divider"><span class="ok">✓</span><span>已工作 0 分 12 秒</span></div>
+            <div class="trace">
+              <div class="trace-head">
+                <span class="spark">✦</span><span>编辑文件</span>
+                <span class="path">crates/timo-kernel/src/kernel.rs</span>
+                <span class="spacer"></span>
+                <span class="stat"><span class="add">+7</span> <span class="del">−1</span></span>
+                <span class="ico" style="color:var(--faint)">⌄</span>
+              </div>
+              <div class="trace-row">
+                <span class="ico">◌</span><span class="label">思考</span>
+                <span class="text">先读 kernel.rs 与 runner.rs，确认 history 的生命周期。</span>
+                <span class="spacer"></span><span class="check">✓</span>
+              </div>
+              <div class="trace-row">
+                <span class="ico">▤</span><span class="label">读取</span>
+                <span class="text">crates/timo-kernel/src/kernel.rs · 0.03s</span>
+                <span class="spacer"></span><span class="check">✓</span>
+              </div>
+              <div class="trace-row needs-review">
+                <span class="ico">✎</span><span class="label">写入前审阅</span>
+                <span class="text">保留完整上下文，供下一轮复用</span>
+                <span class="spacer"></span>
+                <button class="mini-btn">审阅改动</button>
+              </div>
+            </div>
+
+            <div class="assistant streaming">同时补一条回归测试：连续两次 run 应把第一轮消息带入第二轮请求。</div>
           </div>
         </div>
 
-        <div class="composer-wrap">
-          <div class="composer" aria-label="输入任务">
-            <div class="placeholder">等待审阅完成后可继续输入…</div>
-            <div class="row">
-              <span class="hint">Enter 发送 · Shift+Enter 换行 · Ctrl K 命令</span>
-              <span class="spacer"></span>
-              <button class="btn ghost small">附件</button>
-              <button class="btn primary small" disabled style="opacity:.45">发送</button>
+        <div class="composer-area">
+          <div class="composer-shell">
+            <div class="composer" aria-label="输入任务">
+              <div class="placeholder">输入任务，或 / 命令、@ 引用文件</div>
+              <div class="composer-row">
+                <button class="plus-btn" aria-label="添加">＋</button>
+                <span class="pill"><span class="tiny">◇</span>审阅开启</span>
+                <span class="pill">思考：中</span>
+                <span class="spacer"></span>
+                <span class="model"><span class="spark">✦</span>deepseek-flash<span class="tiny">⌄</span></span>
+                <button class="send-btn" aria-label="发送">↑</button>
+              </div>
             </div>
+            <div class="folder-bar"><span>▢</span><span>工作区：timo-pi</span><span class="spacer"></span><span>切换</span></div>
           </div>
+        </div>
+
+        <div class="statusbar">
+          <span><span class="dot" style="display:inline-block;margin-right:6px"></span>就绪</span>
+          <span>审阅开启</span>
+          <span>工作区 timo-pi</span>
+          <span class="spacer"></span>
+          <span>v0.1.0</span>
         </div>
       </main>
 
       <aside class="review" aria-label="审阅文件改动">
         <div class="review-head">
-          <div class="review-title">
-            <span>审阅文件改动</span>
-            <span class="badge warn">1 / 2</span>
+          <span class="title">审阅文件改动</span>
+          <span class="count">1 / 2</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" aria-label="关闭审阅">×</button>
+        </div>
+        <div class="review-note">工具在写入前暂停，等待你的决定。拒绝不会产生任何文件改动。</div>
+
+        <div class="review-card">
+          <div class="file-head">
+            <span class="path">crates/timo-kernel/src/kernel.rs</span>
             <span class="spacer"></span>
-            <button class="btn ghost small" aria-label="关闭审阅">×</button>
+            <span class="stat"><span class="add">+7</span> <span class="del">−1</span></span>
           </div>
-          <div class="review-sub">工具在写入前暂停，等待你的决定。拒绝不会产生任何文件改动。</div>
-        </div>
-
-        <div class="file-head">
-          <span>crates/timo-kernel/src/kernel.rs</span>
-          <span class="stat"><span class="add">+7</span> <span class="del">−1</span></span>
-        </div>
-
-        <div class="diff" aria-label="统一 diff">
-          <div class="hunk">@@ -231,7 +231,15 @@ impl Kernel</div>
-          <div class="line"><span class="ln">231</span><span class="ln">231</span><span class="sign"> </span><span class="code">        self.ensure_ready().await;</span></div>
-          <div class="line"><span class="ln">232</span><span class="ln">232</span><span class="sign"> </span><span class="code">        if self.session.is_none() {</span></div>
-          <div class="line"><span class="ln">233</span><span class="ln">233</span><span class="sign"> </span><span class="code">            self.open_new_session()?;</span></div>
-          <div class="line"><span class="ln">234</span><span class="ln">234</span><span class="sign"> </span><span class="code">        }</span></div>
-          <div class="line del"><span class="ln">235</span><span class="ln"></span><span class="sign">−</span><span class="code">        let history = self.history.take().unwrap_or_default();</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">235</span><span class="sign">+</span><span class="code">        let mut history = self.history.take().unwrap_or_default();</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">236</span><span class="sign">+</span><span class="code">        let carried = history.clone();</span></div>
-          <div class="line"><span class="ln">236</span><span class="ln">237</span><span class="sign"> </span><span class="code">        self.ext_abort.store(false, Ordering::SeqCst);</span></div>
-          <div class="line"><span class="ln">237</span><span class="ln">238</span><span class="sign"> </span><span class="code">        self.ext_running.store(true, Ordering::SeqCst);</span></div>
-          <div class="line"><span class="ln">238</span><span class="ln">239</span><span class="sign"> </span><span class="code">        let session = self.session.clone();</span></div>
-          <div class="line"><span class="ln">239</span><span class="ln">240</span><span class="sign"> </span><span class="code">        let Some(agent) = self.agent.as_ref() else {</span></div>
-          <div class="line"><span class="ln">240</span><span class="ln">241</span><span class="sign"> </span><span class="code">            return Err(KernelError::Agent(</span></div>
-          <div class="line"><span class="ln">241</span><span class="ln">242</span><span class="sign"> </span><span class="code">                timo_agent::AgentError::Setup("agent not assembled".into()),</span></div>
-          <div class="line"><span class="ln">242</span><span class="ln">243</span><span class="sign"> </span><span class="code">            ));</span></div>
-          <div class="line"><span class="ln">243</span><span class="ln">244</span><span class="sign"> </span><span class="code">        };</span></div>
-          <div class="line"><span class="ln">244</span><span class="ln">245</span><span class="sign"> </span><span class="code">        let out = agent.run(prompt.to_string(), history, session).await;</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">246</span><span class="sign">+</span><span class="code">        if let Ok(new_messages) = &amp;out {</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">247</span><span class="sign">+</span><span class="code">            let mut next = carried;</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">248</span><span class="sign">+</span><span class="code">            next.extend(new_messages.iter().cloned());</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">249</span><span class="sign">+</span><span class="code">            self.history = Some(next);</span></div>
-          <div class="line add"><span class="ln"></span><span class="ln">250</span><span class="sign">+</span><span class="code">        }</span></div>
-          <div class="line"><span class="ln">245</span><span class="ln">251</span><span class="sign"> </span><span class="code">        if let Some(runtime) = &amp;mut self.ext {</span></div>
-          <div class="line"><span class="ln">246</span><span class="ln">252</span><span class="sign"> </span><span class="code">            runtime.absorb_runtime_errors();</span></div>
-          <div class="line"><span class="ln">247</span><span class="ln">253</span><span class="sign"> </span><span class="code">        }</span></div>
+          <div class="diff" aria-label="统一 diff">
+            <div class="hunk">@@ -231,7 +231,15 @@ impl Kernel</div>
+            <div class="line"><span class="ln">231</span><span class="ln">231</span><span class="sign"> </span><span class="code">        self.ensure_ready().await;</span></div>
+            <div class="line"><span class="ln">232</span><span class="ln">232</span><span class="sign"> </span><span class="code">        if self.session.is_none() {</span></div>
+            <div class="line"><span class="ln">233</span><span class="ln">233</span><span class="sign"> </span><span class="code">            self.open_new_session()?;</span></div>
+            <div class="line"><span class="ln">234</span><span class="ln">234</span><span class="sign"> </span><span class="code">        }</span></div>
+            <div class="line del"><span class="ln">235</span><span class="ln"></span><span class="sign">−</span><span class="code">        let history = self.history.take().unwrap_or_default();</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">235</span><span class="sign">+</span><span class="code">        let mut history = self.history.take().unwrap_or_default();</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">236</span><span class="sign">+</span><span class="code">        let carried = history.clone();</span></div>
+            <div class="line"><span class="ln">236</span><span class="ln">237</span><span class="sign"> </span><span class="code">        self.ext_abort.store(false, Ordering::SeqCst);</span></div>
+            <div class="line"><span class="ln">237</span><span class="ln">238</span><span class="sign"> </span><span class="code">        self.ext_running.store(true, Ordering::SeqCst);</span></div>
+            <div class="line"><span class="ln">238</span><span class="ln">239</span><span class="sign"> </span><span class="code">        let session = self.session.clone();</span></div>
+            <div class="line"><span class="ln">239</span><span class="ln">240</span><span class="sign"> </span><span class="code">        let Some(agent) = self.agent.as_ref() else {</span></div>
+            <div class="line"><span class="ln">240</span><span class="ln">241</span><span class="sign"> </span><span class="code">            return Err(KernelError::Agent(</span></div>
+            <div class="line"><span class="ln">241</span><span class="ln">242</span><span class="sign"> </span><span class="code">                timo_agent::AgentError::Setup("agent not assembled".into()),</span></div>
+            <div class="line"><span class="ln">242</span><span class="ln">243</span><span class="sign"> </span><span class="code">            ));</span></div>
+            <div class="line"><span class="ln">243</span><span class="ln">244</span><span class="sign"> </span><span class="code">        };</span></div>
+            <div class="line"><span class="ln">244</span><span class="ln">245</span><span class="sign"> </span><span class="code">        let out = agent.run(prompt.to_string(), history, session).await;</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">246</span><span class="sign">+</span><span class="code">        if let Ok(new_messages) = &amp;out {</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">247</span><span class="sign">+</span><span class="code">            let mut next = carried;</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">248</span><span class="sign">+</span><span class="code">            next.extend(new_messages.iter().cloned());</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">249</span><span class="sign">+</span><span class="code">            self.history = Some(next);</span></div>
+            <div class="line add"><span class="ln"></span><span class="ln">250</span><span class="sign">+</span><span class="code">        }</span></div>
+            <div class="line"><span class="ln">245</span><span class="ln">251</span><span class="sign"> </span><span class="code">        if let Some(runtime) = &amp;mut self.ext {</span></div>
+            <div class="line"><span class="ln">246</span><span class="ln">252</span><span class="sign"> </span><span class="code">            runtime.absorb_runtime_errors();</span></div>
+            <div class="line"><span class="ln">247</span><span class="ln">253</span><span class="sign"> </span><span class="code">        }</span></div>
+          </div>
         </div>
 
         <div class="review-foot">
-          <div class="why">影响：<span style="font-family:var(--mono)">kernel.rs</span> · 拒绝后模型会收到错误结果，文件保持原样。</div>
+          <div class="why">影响：kernel.rs · 拒绝后模型会收到错误结果，文件保持原样。</div>
           <div class="actions">
-            <button class="btn ghost small">在编辑器中打开</button>
+            <button class="mini-btn">在编辑器中打开</button>
             <span class="spacer"></span>
-            <button class="btn danger small">拒绝</button>
-            <button class="btn primary small">接受改动</button>
+            <button class="mini-btn danger">拒绝</button>
+            <button class="mini-btn primary">接受改动</button>
           </div>
         </div>
       </aside>
     </div>
   </div>
-  <div class="caption">方案原型（方向稿）· 布局、层级与审阅流程；颜色/间距以主题 token 为准，不作为最终视觉。</div>
+  <div class="caption">粗原型 · 只借鉴参考稿的留白与信息层级；导航、胶囊、状态栏与审阅流程按 Timo 的对象重写。细节与视觉皮后续再做。</div>
 </body>
 </html>

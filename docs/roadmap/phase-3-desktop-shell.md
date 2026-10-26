@@ -26,7 +26,7 @@ B 轨插件系统（Phase 4）；多窗口/复杂布局；主题系统（token �
 - [02 凭证、钥匙串与桌面设置](../design/phase-3/02-credentials-and-settings.md)：引用语法、平台后端、脱敏与 C3 验收
 - [03 NSH 嵌入与签名包 PoC](../design/phase-3/03-nsh-embedding.md)：AppView 隔离层、信任链、热更/回退、C4 证据
 - [04 工具审阅接缝与 diff 审查](../design/phase-3/04-tool-review.md)：执行前审阅、拒绝语义、并发与 CLI 兼容
-- [原型（方向稿）](../design/phase-3/prototype.html)：三栏布局、工具卡片、diff 审阅
+- [原型（方向稿）](../design/phase-3/prototype.html)：会话侧栏、工具过程 trace、diff 审阅
 - 决策：[ADR-0012](../adr/ADR-0012-tool-review-seam.md)
 
 ## 4. 验收场景

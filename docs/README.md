@@ -64,7 +64,7 @@ docs/
 | design/phase-3/02-credentials-and-settings.md | 定稿 | 钥匙串引用、桌面设置、脱敏边界与 C3 验收 |
 | design/phase-3/03-nsh-embedding.md | 定稿 | AppView 隔离层、签名包信任链、热更/回退与 C4 证据 |
 | design/phase-3/04-tool-review.md | 定稿 | 执行前审阅接缝、拒绝语义、并发与 CLI 兼容 |
-| design/phase-3/prototype.html | 定稿（方向稿） | 桌面壳布局、工具卡片与 diff 审阅原型 |
+| design/phase-3/prototype.html | 定稿（方向稿） | 桌面壳布局、工具过程 trace 与 diff 审阅原型 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
