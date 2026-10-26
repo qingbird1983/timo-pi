@@ -13,7 +13,7 @@ use crate::bridge::BridgeCommand;
 
 impl DesktopApp {
     pub(crate) fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
+        let sidebar = v_flex()
             .w(SIDEBAR_WIDTH)
             .h_full()
             .flex_shrink_0()
@@ -69,9 +69,10 @@ impl DesktopApp {
                         }
                         rows
                     }),
-            )
-            .id("sidebar")
-            .test_support()
+            );
+        #[cfg(feature = "nsh-poc")]
+        let sidebar = sidebar.child(self.nsh_entry(cx));
+        sidebar.id("sidebar").test_support()
     }
 
     fn session_row(&self, session: &SessionInfo, cx: &mut Context<Self>) -> AnyElement {

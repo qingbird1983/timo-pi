@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# 生成 NSH PoC 的开发签名密钥与两个签名包（设计 03 §5）。
+#
+# 只调用官方 `nsh` CLI：keygen → certify → publish → verify。
+# 产物写入用户数据目录（默认 <数据目录>/timo-pi/nsh-poc），不入仓库；
+# 私钥留在该目录的 keys/ 下，不打印、不提交。
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+NSH="${NSH:-nsh}"
+DATA="${APPDATA:-$HOME/.local/share}"
+if command -v cygpath >/dev/null 2>&1; then
+  DATA=$(cygpath -u "$DATA")
+fi
+ROOT="${TIMO_NSH_POC_DIR:-$DATA/timo-pi/nsh-poc}"
+KEYS="$ROOT/keys"
+TRUST="$ROOT/trust"
+PKGS="$ROOT/packages"
+WORK="$ROOT/work"
+
+mkdir -p "$KEYS" "$TRUST" "$PKGS" "$WORK"
+
+if [ ! -f "$KEYS/root.secret" ]; then
+  "$NSH" keygen "$KEYS/root"
+fi
+if [ ! -f "$KEYS/release.secret" ]; then
+  "$NSH" keygen "$KEYS/release"
+fi
+if [ ! -f "$KEYS/release.cert.json" ]; then
+  "$NSH" certify \
+    --root "$KEYS/root.secret" \
+    --key "$KEYS/release.pub" \
+    --apps com.timo.poc \
+    --days 365 \
+    --out "$KEYS/release.cert.json"
+fi
+cp "$KEYS/root.pub" "$TRUST/root.pub"
+
+rm -rf "$WORK/v1" "$WORK/v2" "$WORK/crash"
+mkdir -p "$WORK/v1" "$WORK/v2" "$WORK/crash"
+cp fixtures/nsh-poc/panel.tsx "$WORK/v1/App.tsx"
+sed \
+  -e 's/VERSION = "1.0.0"/VERSION = "2.0.0"/' \
+  -e 's/ACCENT = "#2563eb"/ACCENT = "#c2410c"/' \
+  fixtures/nsh-poc/panel.tsx > "$WORK/v2/App.tsx"
+{
+  echo 'throw new Error("poc boom: startup failure");'
+  sed \
+    -e 's/VERSION = "1.0.0"/VERSION = "3.0.0"/' \
+    fixtures/nsh-poc/panel.tsx
+} > "$WORK/crash/App.tsx"
+
+"$NSH" publish "$WORK/v1/App.tsx" \
+  --key "$KEYS/release.secret" \
+  --cert "$KEYS/release.cert.json" \
+  --out "$PKGS/poc-v1.nshpkg" \
+  --id com.timo.poc \
+  --app-version 1.0.0 \
+  --build 1
+"$NSH" publish "$WORK/v2/App.tsx" \
+  --key "$KEYS/release.secret" \
+  --cert "$KEYS/release.cert.json" \
+  --out "$PKGS/poc-v2.nshpkg" \
+  --id com.timo.poc \
+  --app-version 2.0.0 \
+  --build 2
+"$NSH" publish "$WORK/crash/App.tsx" \
+  --key "$KEYS/release.secret" \
+  --cert "$KEYS/release.cert.json" \
+  --out "$PKGS/poc-crash.nshpkg" \
+  --id com.timo.poc \
+  --app-version 3.0.0 \
+  --build 3
+
+cp "$PKGS/poc-v2.nshpkg" "$PKGS/poc-tampered.nshpkg"
+size=$(wc -c < "$PKGS/poc-tampered.nshpkg")
+printf '\377' | dd of="$PKGS/poc-tampered.nshpkg" bs=1 seek=$((size / 2)) conv=notrunc status=none
+cp fixtures/nsh-poc/panel.tsx "$PKGS/poc-unsigned.bin"
+
+"$NSH" verify "$PKGS/poc-v1.nshpkg" --root "$TRUST/root.pub"
+"$NSH" verify "$PKGS/poc-v2.nshpkg" --root "$TRUST/root.pub"
+
+echo
+echo "signed packages: $PKGS"
+echo "trust root:      $TRUST/root.pub"
+echo "dev keys:        $KEYS (never commit)"

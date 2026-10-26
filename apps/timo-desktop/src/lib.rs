@@ -36,6 +36,8 @@ pub fn run() {
                 cx,
             ));
             options.window_min_size = Some(size(px(960.), px(600.)));
+            // NSH 文档要求：失焦时不要让 GPUI 把帧率降到 30fps（设计 03 §3）。
+            options.inactive_frame_interval = None;
 
             if let Err(error) = gpui_kit::open_window(options, cx, |window, cx| {
                 cx.new(|cx| app::DesktopApp::new(window, cx))

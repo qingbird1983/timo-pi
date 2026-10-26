@@ -136,3 +136,36 @@ palette:
   toggle_theme: Toggle theme
   model: Model
   choose_model: Choose a model…
+
+nsh:
+  entry: Plugin preview (experimental)
+  title: Plugin preview (NSH PoC)
+  back: Back to chat
+  empty: No signed package loaded yet
+  no_package: No accepted package
+  current: "Current package %{id} v%{version} (build %{build})"
+  load_v1: Load v1
+  load_v2: Load v2 (hot update)
+  load_crash: Load crashing package (test)
+  load_unsigned: Load unsigned bytes (test)
+  load_tampered: Load tampered package (test)
+  reset_trust: Reset trust
+  stop: Stop preview
+  verified: "Signature valid: v%{version} (build %{build}); accepting after a 1 s health check"
+  accepted: "Accepted v%{version} (sha256 %{sha256}…)"
+  rejected: "%{file} rejected: %{error}"
+  unexpected_accept: Unsigned bytes passed verification (PoC failure)
+  pending_failed: "New package failed to start; keeping the previous panel: %{error}"
+  pending_error: "New package reported an error; keeping the previous panel: %{error}"
+  accept_failed: "Recording the build failed: %{error}"
+  runtime_failed: "Preview stopped: %{error}"
+  runtime_error: "Preview error: %{error}"
+  stopped: Preview stopped
+  trust_reset: Accepted build records cleared
+  missing: "Missing package %{path}: %{error} (run scripts/build-nsh-poc first)"
+  no_root: "No trust root: run scripts/build-nsh-poc to create the development keys"
+  verify_failed: "Signature verification failed: %{error}"
+  dir_failed: "Cannot access %{path}: %{error}"
+  trust_failed: "Cannot read trust state: %{error}"
+  root_read_failed: "Cannot read the root key: %{error}"
+  root_invalid: "Invalid root key: %{error}"

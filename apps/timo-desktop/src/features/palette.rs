@@ -40,6 +40,10 @@ impl DesktopApp {
         self.palette_open = !self.palette_open;
         if self.palette_open {
             self.settings_open = false;
+            #[cfg(feature = "nsh-poc")]
+            {
+                self.nsh_page = false;
+            }
             self.palette.update(cx, |state, cx| {
                 state.set_query("", window, cx);
                 state.focus(window, cx);
@@ -355,6 +359,8 @@ impl DesktopApp {
             cx.notify();
         } else if !self.review.open && self.settings_open {
             self.close_settings(window, cx);
+        } else if !self.review.open && self.nsh_page_open() {
+            self.close_nsh_page(window, cx);
         }
     }
 }

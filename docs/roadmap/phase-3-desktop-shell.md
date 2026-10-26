@@ -1,6 +1,6 @@
 # Phase 3：gpui-kit 桌面壳
 
-- 状态：进行中（设计定稿 2026-10-26；实现第 1~5 批：最小窗口、K0/K1、K2 审阅接缝、内核桥接与会话/聊天流、diff 审阅/命令面板/设置与钥匙串已完成 2026-10-27；下一步 NSH PoC 与 C1~C6 验收）
+- 状态：完成 2026-10-27（tag `phase-3.end`；C1~C6 全通过，见 [report.md](../design/phase-3/report.md)）
 - 参考估时：4~8 周
 - 关联：ADR-0002/0009/0012；architecture/01~03；`docs/design/phase-3/`
 
@@ -27,6 +27,8 @@ B 轨插件系统（Phase 4）；多窗口/复杂布局；主题系统（token �
 - [03 NSH 嵌入与签名包 PoC](../design/phase-3/03-nsh-embedding.md)：AppView 隔离层、信任链、热更/回退、C4 证据
 - [04 工具审阅接缝与 diff 审查](../design/phase-3/04-tool-review.md)：执行前审阅、拒绝语义、并发与 CLI 兼容
 - [原型（方向稿）](../design/phase-3/prototype.html)：会话侧栏、工具过程 trace、diff 审阅
+- **NSH PoC**（`nsh-poc` feature）：AppView 隔离层、开发签名根、v1→v2 热更、未签名/篡改/降级/崩溃拒绝；真机证据见 report.md（渲染验收为人工，CI 只跑未签名拒绝单元测试）。
+- **验收**：[report.md](../design/phase-3/report.md)（C1 日常清单、C2 审阅、C3 密钥、C4 NSH、C5 强杀恢复、C6 接缝）。
 - 决策：[ADR-0012](../adr/ADR-0012-tool-review-seam.md)
 
 ## 4. 验收场景
@@ -54,3 +56,5 @@ B 轨插件系统（Phase 4）；多窗口/复杂布局；主题系统（token �
 - trace “查看全文”仍无入口，全文保存在 `TraceEntry.output`。
 - 移除钥匙串条目后配置引用按设计保留（解析报错、需重新配置），未引导“改用环境变量”。
 - 审阅开关只影响后续请求；正在等待的审阅不重放。
+- NSH 渲染/热更为人工截图与文本验收，未进 CI（`nsh-poc` 默认不编译；CI 只跑未签名拒绝）。
+- `target/` 约 39GB 超软上限；`cargo-sweep` 未安装，未做按龄清扫。

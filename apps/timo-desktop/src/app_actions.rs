@@ -123,12 +123,20 @@ impl DesktopApp {
         self.session_title = t!("chat.empty_session").to_string();
         self.chat.update(cx, |chat, _| chat.reset());
         self.sync_scroller(cx);
+        #[cfg(feature = "nsh-poc")]
+        {
+            self.nsh_page = false;
+        }
     }
 
     pub(crate) fn open_session(&mut self, id: String, cx: &mut Context<Self>) {
         if self.chat.read(cx).running {
             self.notice = Some(t!("chat.busy").to_string());
             return;
+        }
+        #[cfg(feature = "nsh-poc")]
+        {
+            self.nsh_page = false;
         }
         let _ = self.commands.send(BridgeCommand::OpenSession(id));
     }

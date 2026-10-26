@@ -59,6 +59,10 @@ pub struct DesktopApp {
     pub(crate) provider_feedback: Option<String>,
     pub(crate) key_provider: Option<String>,
     pub(crate) key_input: Entity<InputState>,
+    #[cfg(feature = "nsh-poc")]
+    pub(crate) nsh_page: bool,
+    #[cfg(feature = "nsh-poc")]
+    pub(crate) nsh_preview: Option<crate::features::nsh_poc::NshPreview>,
     _subscriptions: Vec<Subscription>,
     _events: Task<()>,
 }
@@ -206,6 +210,10 @@ impl DesktopApp {
             provider_feedback: None,
             key_provider: None,
             key_input,
+            #[cfg(feature = "nsh-poc")]
+            nsh_page: false,
+            #[cfg(feature = "nsh-poc")]
+            nsh_preview: None,
             _subscriptions: subscriptions,
             _events: task,
         }
@@ -374,6 +382,36 @@ impl DesktopApp {
                 .into_any_element(),
         )
     }
+
+    /// 中央区域（设置页或对话）；预览页由 `nsh-poc` feature 的包装接入。
+    pub(crate) fn main_panel(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if self.settings_open {
+            self.settings_page(cx)
+        } else {
+            let notice = self.notice_bar(cx);
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .child(self.chat_area(cx))
+                .children(notice)
+                .child(self.composer(cx))
+                .into_any_element()
+        }
+    }
+
+    /// 默认构建没有预览页（供 Esc 关闭分支共用）。
+    #[cfg(not(feature = "nsh-poc"))]
+    pub(crate) fn nsh_page_open(&self) -> bool {
+        false
+    }
+
+    #[cfg(not(feature = "nsh-poc"))]
+    pub(crate) fn close_nsh_page(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for DesktopApp {
@@ -390,18 +428,15 @@ impl Render for DesktopApp {
                 this.open_next_review(window, cx);
             });
         }
-        let notice = self.notice_bar(cx);
-        let center = if self.settings_open {
-            self.settings_page(cx)
-        } else {
-            v_flex()
-                .flex_1()
-                .min_w_0()
-                .h_full()
-                .child(self.chat_area(cx))
-                .children(notice)
-                .child(self.composer(cx))
-                .into_any_element()
+        let center = {
+            #[cfg(feature = "nsh-poc")]
+            {
+                self.center_panel(window, cx)
+            }
+            #[cfg(not(feature = "nsh-poc"))]
+            {
+                self.main_panel(window, cx)
+            }
         };
         let palette = self.command_palette(cx);
         v_flex()
