@@ -1,29 +1,30 @@
-# AGENTS.md —— AI 协作入口
+# AGENTS.md —— AI 协作入口（薄索引）
 
-本项目由 AI 会话协作开发。项目所有者不读代码、只看文档进度，因此**一切知识与决策必须落盘到文档**，任何会话都应能仅凭本仓库文档冷启动。
+> 本文件**只做导航与铁律**，禁止记录状态、进度、阶段指针或任何流水账。
+> AI 的"当前状态"唯一来源：`.agent/CONTEXT.md`（第一站，先读它）。
+> 进度看板唯一在 `docs/roadmap/00-roadmap.md`；进展流水唯一在 `CHANGELOG.md`。
 
-## 开工前必读（按顺序）
+## 文档索引（按需进入）
 
-1. `.agent/CONTEXT.md` —— **第一站**：当前工作上下文交接卡（上一轮留给你的一切）
-2. `docs/README.md` —— 文档地图与状态约定
-3. `docs/roadmap/00-roadmap.md` + **当前阶段**的 phase 文档
-4. `docs/standards/` 全部 8 篇规范
-5. 与当前工作相关的 `docs/architecture/`、`docs/adr/` 文档
+| 你要做什么 | 去哪里 |
+|---|---|
+| 了解项目 / 对外介绍 | [README.md](README.md)（英）/ [README.zh-CN.md](README.zh-CN.md)（中） |
+| 接手工作 / 看当前状态 | [.agent/CONTEXT.md](.agent/CONTEXT.md) → 交接规则见 [.agent/README.md](.agent/README.md) |
+| 看进度 / 阶段规划 | [docs/roadmap/00-roadmap.md](docs/roadmap/00-roadmap.md)（唯一看板）+ 当前 phase 文档 |
+| 查"为什么这么设计" | [docs/adr/](docs/adr/)（编号递增，只增不改） |
+| 查系统设计与约束 | [docs/architecture/](docs/architecture/)（先读 01；接缝必读 03；插件 04；会话格式 05） |
+| 查做事规则 | [docs/standards/](docs/standards/)（8 篇） |
+| 查术语 | [docs/glossary.md](docs/glossary.md) |
+| 新增文档登记 | [docs/README.md](docs/README.md)（文档地图，禁止孤儿文档） |
 
-## 硬规则
+## 铁律（细则见链接，违反即返工）
 
-1. **文档先行**：当前阶段的设计文档状态未达「定稿」前，禁止写实现代码（规范、文档类提交除外）。
-2. **决策留痕**：重大技术决策（选型变更、不可逆设计、放弃某能力）必须新增 ADR 到 `docs/adr/`，编号递增，不得只做不留记录。
-3. **语言**：文档与对用户的沟通一律中文；代码、标识符、commit message 用英文（commit body 可中文）。
-4. **阶段收尾**：每阶段结束必须产出《阶段进度报告》（模板见 `docs/standards/03-documentation.md` 附录），并同步更新 `README.md` 进度看板与 `CHANGELOG.md`。
-5. **PI-Desktop 隔离**：严禁引用 `F:\Warehouse\Github\PI-Desktop` 的任何源码（LGPL-3.0）。只允许参考其公开文档描述的架构思路与设计模式。
-6. **pi 上游**：仅用于理解行为、协议与兼容面，不复制源码文件。pi 的扩展 API 无 semver 承诺，兼容目标以 `docs/architecture/04-plugin-system.md` 的矩阵为准，不承诺逐版本追平。
-7. **安全**：API key、密钥、个人文件路径不得写入仓库；新增依赖须按 `docs/standards/04-coding.md` 的准入流程登记。
-8. **取消与格式不可逆项**：涉及会话格式、公共 API、事件契约的改动，必须先改文档与 ADR，再动代码，并保证向后兼容测试通过。
-9. **交接与沉淀**：每轮会话收尾必做四件事——重写 `.agent/CONTEXT.md`、归档 handoff、沉淀 pitfalls/skills、体量核对（规则与上限见 `.agent/README.md` 与 `docs/standards/08-size-control.md`）。教训必须当轮提取，未提取即交接失败。
+1. **文档先行**：当前阶段设计文档未定稿，禁止写实现代码 —— [standards/03](docs/standards/03-documentation.md)。
+2. **决策留痕**：重大技术决策必须新增 ADR，不得只做不记 —— [standards/03](docs/standards/03-documentation.md)。
+3. **收尾四件事**：重写 CONTEXT 交接卡、归档 handoff、沉淀 pitfalls/skills、体量核对；教训当轮提取 —— [.agent/README.md](.agent/README.md)、[standards/07 §7](docs/standards/07-ai-collaboration.md)。
+4. **安全红线**：密钥、个人路径不入仓库；插件默认无能力、显式授权 —— [standards/06](docs/standards/06-security.md)。
+5. **范围纪律**：只做当前阶段"做"清单内的事，超范围先 backlog 或 ADR —— [standards/07](docs/standards/07-ai-collaboration.md)。
+6. **外部代码**：PI-Desktop（LGPL）源码严禁引用；pi 上游仅可阅读理解行为，不得复制 —— [standards/07 §5](docs/standards/07-ai-collaboration.md)、[research/04](docs/research/04-reference-pi-desktop.md)。
+7. **体量红线**：docs/.agent/代码/依赖的预算见 [standards/08](docs/standards/08-size-control.md)，超标当期处置或登记豁免。
 
-## 当前阶段指针
-
-- **Phase 0 已完成**（2026-10-26）：仓库与全部文档落盘；产品命名 Timo-pi、MIT 开源、Windows 优先（ADR-0010）。
-- **下一阶段 Phase 1（内核 MVP）**：开工前置条件 = `docs/roadmap/phase-1-kernel-mvp.md` 及其引用的设计文档从「草稿」转「定稿」。
-- 阶段完成后，更新本指针。
+> 语言约定：文档与对用户的沟通用中文；代码、标识符、commit message 用英文。

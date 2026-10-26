@@ -1,56 +1,42 @@
 # Timo-pi
 
-> **一句话定位**：用 Rust 重写 [pi](https://github.com/earendil-works/pi) 编码代理的内核（不含 TUI），以 gpui-kit + NSH 构建原生桌面端；插件策略为「**兼容编排类扩展 + 自建 GUI 原生插件面**」双轨制。
->
-> 开源，许可证 **MIT**（见 [LICENSE](LICENSE)）；首发平台 **Windows 优先**。
+**A Rust-native coding agent: the kernel capabilities of [pi](https://github.com/earendil-works/pi), rebuilt in Rust — with a native desktop app instead of a terminal UI.**
 
-本项目实行**文档先行**：先定规范与设计，再写代码。项目所有者不读代码，进度只看两处：
+[中文说明](README.zh-CN.md) · License: [MIT](LICENSE)
 
-1. 本页 **进度看板**
-2. [CHANGELOG.md](CHANGELOG.md)（每次进展的流水记录）
+## What is Timo-pi?
 
----
+Timo-pi reimplements the kernel of [pi](https://github.com/earendil-works/pi) — agent loop, LLM provider layer, tools, sessions, and the extension system — in Rust, and replaces the terminal UI with a **native desktop application** built on gpui-kit + NSH. Windows first; macOS and Linux stay build-ready. Open source under the MIT license.
 
-## 进度看板
+## Highlights
 
-| 阶段 | 内容 | 状态 | 参考估时* | 说明 |
-|---|---|---|---|---|
-| Phase 0 | 仓库初始化、规范与设计文档定稿 | ✅ **已完成**（2026-10-26） | — | 全部 `docs/` 文档落盘并初始提交 |
-| Phase 1 | 内核 MVP（2 种协议、agent 循环、核心工具、会话 v1、MCP） | ⬜ 未开始 | 6~10 周 | 开工前需完成 [phase-1 文档](docs/roadmap/phase-1-kernel-mvp.md) 定稿评审 |
-| Phase 2 | 编排类扩展宿主（pi 插件兼容层） | ⬜ 未开始 | 3~6 周 | 依赖 Phase 1 |
-| Phase 3 | gpui-kit 桌面壳（含 NSH 嵌入验证） | ⬜ 未开始 | 4~8 周 | 依赖 Phase 1 |
-| Phase 4 | GUI 原生插件系统（TSX 插件面） | ⬜ 未开始 | 4~8 周 | 依赖 Phase 2 + 3 |
+- **Rust kernel** — streaming LLM providers (MVP: Anthropic Messages & OpenAI-compatible), an agent loop with an event bus, built-in tools (read / write / edit / shell / search), and crash-safe, append-only sessions.
+- **MCP out of the box** — via the official `rmcp` SDK; MCP tools flow through the same pipeline as built-in tools (hooks, permissions, namespacing).
+- **Dual-track plugin system**
+  - *Track A — compatibility*: runs **orchestration-level pi extensions** (custom tools, commands, event hooks, providers) inside an embedded QuickJS sandbox. TUI-specific extension members degrade gracefully to no-ops with per-extension diagnostics.
+  - *Track B — native*: a GUI plugin system authored in **TSX**, executed in a capability-based sandbox and distributed as **signed hot-update packages**, rendered through NSH's GPUI backend.
+- **Docs-first engineering** — design docs, ADRs, standards and a phased roadmap were committed before any code; every phase ships with plain-language acceptance scenarios.
 
-\* 估时为单人全职开发的参考值，仅用于量级感知，不作为承诺。
+## Status
 
----
+Pre-code. Phase 0 (repository, standards & design baseline) is complete; implementation begins with Phase 1 (kernel MVP).
 
-## 给项目所有者的阅读路径
+- **Roadmap & progress board**: [docs/roadmap/00-roadmap.md](docs/roadmap/00-roadmap.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
 
-1. [docs/roadmap/00-roadmap.md](docs/roadmap/00-roadmap.md) —— 总路线图：每个阶段做什么、怎么验收
-2. [docs/adr/](docs/adr/) —— 已定下的重大决策及理由（共 9 篇，每篇 1~2 页）
-3. [docs/glossary.md](docs/glossary.md) —— 术语表（看不懂的词先查这里）
-4. [CHANGELOG.md](CHANGELOG.md) —— 进展流水
+## Documentation
 
-完整文档目录见 [docs/README.md](docs/README.md)。
+Project documentation is maintained in **Chinese** under [`docs/`](docs/README.md) (this README is the bilingual entry point):
 
----
-
-## 已定决策（2026-10-26，详见 [ADR-0010](docs/adr/ADR-0010-identity-open-source-platform.md)）
-
-| 事项 | 决策 |
+| Directory | Contents |
 |---|---|
-| 开源与许可证 | 开源，**MIT**（[LICENSE](LICENSE)） |
-| 产品名 | **Timo-pi**（正式名） |
-| 平台优先级 | **Windows 优先**（macOS/Linux 保证可构建） |
+| [`docs/research/`](docs/research/) | research notes: pi kernel & extension system, gpui-kit + NSH stack, reference project analysis |
+| [`docs/adr/`](docs/adr/) | architecture decision records (why things are the way they are) |
+| [`docs/architecture/`](docs/architecture/) | system design, layering rules, critical seams, plugin system, session format |
+| [`docs/roadmap/`](docs/roadmap/) | phases, scope, acceptance scenarios; `00-roadmap.md` hosts the progress board |
+| [`docs/standards/`](docs/standards/) | repo, git, documentation, coding, testing, security and AI-collaboration rules |
+| [`docs/glossary.md`](docs/glossary.md) | plain-language glossary |
 
-当前无待决策事项；新的待决事项会出现在此处并在 CHANGELOG 提醒。
+## License
 
----
-
-## 仓库原则（摘要）
-
-- **文档先行**：阶段设计文档未定稿，禁止写实现代码（详见 [docs/standards/03-documentation.md](docs/standards/03-documentation.md)）。
-- **重大决策留痕**：一切技术选型与不可逆设计必须写 ADR。
-- **参考不抄码**：参考项目 PI-Desktop 为 LGPL-3.0，只借鉴架构思路，严禁引用其源码；pi 上游仅用于理解行为与协议。
-- **密钥与个人路径不入库**（详见 [docs/standards/06-security.md](docs/standards/06-security.md)）。
+[MIT](LICENSE) © 2026 Timo-pi contributors

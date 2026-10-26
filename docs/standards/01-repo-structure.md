@@ -6,7 +6,7 @@
 ## 1. 目录布局（含 Phase 1 起的预留）
 
 ```
-/                     仓库根：README / AGENTS.md / CHANGELOG.md / LICENSE / .gitignore
+/                     仓库根：README.md（英）+ README.zh-CN.md（中）/ AGENTS.md / CHANGELOG.md / LICENSE / .gitignore
 .agent/               AI 开发知识库与交接中枢（规范见其 README；预算受 standards/08 约束）
 docs/                 全部文档（唯一事实来源；结构见 docs/README.md）
 crates/               Rust 内核库（Phase 1 建立）
@@ -35,5 +35,7 @@ scripts/              构建/检查脚本（CI 用）
 ## 3. 内容纪律
 
 - 仓库内**禁止**出现：密钥/凭证、个人绝对路径（如 `F:\`、`C:\Users\<名>`）——文档引用外部项目用仓库相对描述或 GitHub URL（standards/06 §2）。
-- 根目录只放本规范列出的文件（README、AGENTS.md、CHANGELOG.md、LICENSE、.gitignore、.agent/）；新增根文件须先修订本规范。
+- 根目录只放本规范列出的文件（README.md、README.zh-CN.md、AGENTS.md、CHANGELOG.md、LICENSE、.gitignore、.agent/）；新增根文件须先修订本规范。
+- 根 `README.md`（英）与 `README.zh-CN.md`（中）：**只做项目说明与导航**，两份内容保持一致；禁止放进度看板、状态或流水账（看板唯一在 `docs/roadmap/00-roadmap.md`，流水唯一在 CHANGELOG）。
+- 根 `AGENTS.md`：**薄索引入口**（导航 + 铁律链接），禁止记录状态/进度/阶段指针；AI 的"当前状态"唯一来源是 `.agent/CONTEXT.md`。
 - 空目录不进 git——目录随首批内容建立。

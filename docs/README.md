@@ -8,8 +8,8 @@
 
 | 你是谁 | 读什么 |
 |---|---|
-| 项目所有者（不读代码） | README 进度看板 → `roadmap/00-roadmap.md` → `adr/`（感兴趣时）→ CHANGELOG |
-| 新加入的 AI 会话 | `AGENTS.md` → 本页 → 当前 phase 文档 → `standards/` 全部 → 相关架构文档 |
+| 项目所有者（不读代码） | [README.zh-CN.md](../README.zh-CN.md) → `roadmap/00-roadmap.md`（看板）→ CHANGELOG → `adr/`（感兴趣时） |
+| 新加入的 AI 会话 | `.agent/CONTEXT.md` → [AGENTS.md](../AGENTS.md) → 本页 → 当前 phase 文档 → `standards/` 全部 → 相关架构文档 |
 | 未来的人类协作者 | 同 AI 会话路径 |
 
 ## 目录结构
