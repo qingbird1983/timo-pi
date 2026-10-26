@@ -6,6 +6,24 @@
 
 ---
 
+## [0.1.20] - 2026-10-26
+
+### 里程碑：Phase 3 设计定稿（实现未开始）
+
+- **桌面壳方案定稿**：单窗口、会话侧栏 + 聊天流 + 审阅 sheet；消息逐字流式、工具卡片状态机、diff 接受/拒绝、命令面板、中英设置页；Windows 优先，macOS/Linux 保证可构建。
+- **工具审阅接缝（ADR-0012）**：`write`/`edit` 在写入前展示 diff 并等待决定，`bash`/`powershell` 执行前确认；拒绝返回错误结果且无副作用。CLI 不注入审阅器，行为与 Phase 1/2 保持一致。
+- **密钥方案**：新增 `keychain:<service>/<account>` 引用；桌面设置页写入系统钥匙串，配置只存引用，Debug/日志脱敏；无钥匙串平台明确报错，不回退明文。
+- **NSH PoC 方案**：AppView 作为普通 GPUI view 嵌入；签名包先验证、健康后接受，支持 v1→v2 热更与失败回退；未签名/篡改/降级包拒绝。`nsh-poc` feature 门控，不进内核。
+- **版本边界实测**：仓外编译探针通过——`gpui-kit 0.8.0` 家族 + `gpui-fast 0.1.10` + `nsh-platform-gpui 0.3.0` 共存，临时 crate 同时实例化 `AppView::new` 与 `Button`。失败路径已记录：0.8.1 / 0.1.12 下 NSH 0.2/0.3 均报 `chrome.rs` E0716；因此锁 0.8.0 家族 + 0.1.10。
+- **发现内核多轮缺陷**：`Kernel::run` 取走 history 后只保存新消息，第二次 run 会丢上下文（`kernel.rs:235` + `run/mod.rs:183`）；列为 Phase 3 前置 K0，设计与回归测试先定稿。
+- 新增设计 5 篇 + 方向原型 + ADR-0012；依赖准入表登记 gpui-kit/gpui-fast/NSH/keyring/similar/rust-i18n。
+
+### 当前状态
+
+- **Phase 3 进行中**：设计定稿（tag `phase-3.start`）；下一步按提交序列做依赖/窗口探针与 K0/K1 内核修复。
+
+---
+
 ## [0.1.19] - 2026-10-26
 
 ### 里程碑：Phase 2 完成（扩展宿主全链路 + 真机验收）

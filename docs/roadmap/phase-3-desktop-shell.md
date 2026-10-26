@@ -1,8 +1,8 @@
 # Phase 3：gpui-kit 桌面壳
 
-- 状态：未开始（依赖 Phase 1；可与 Phase 2 并行）
+- 状态：进行中（设计定稿 2026-10-26；tag `phase-3.start`；实现未开始）
 - 参考估时：4~8 周
-- 关联：ADR-0002/0009；architecture/01
+- 关联：ADR-0002/0009/0012；architecture/01~03；`docs/design/phase-3/`
 
 ## 1. 目标（一句话）
 
@@ -21,7 +21,13 @@ B 轨插件系统（Phase 4）；多窗口/复杂布局；主题系统（token �
 
 ## 3. 文档交付物
 
-- `docs/design/phase-3/`：界面信息架构与状态流（GUI 订阅哪些事件、每个界面元素的数据来源）、钥匙串存取设计、NSH 嵌入隔离层接口
+- [00 总览与跨层决策](../design/phase-3/00-overview.md)：版本边界、模块布局、内核前置改动 K0~K3、提交序列
+- [01 界面信息架构与状态流](../design/phase-3/01-ui-architecture.md)：窗口骨架、事件映射、工具卡片、diff 审阅、键盘与状态
+- [02 凭证、钥匙串与桌面设置](../design/phase-3/02-credentials-and-settings.md)：引用语法、平台后端、脱敏与 C3 验收
+- [03 NSH 嵌入与签名包 PoC](../design/phase-3/03-nsh-embedding.md)：AppView 隔离层、信任链、热更/回退、C4 证据
+- [04 工具审阅接缝与 diff 审查](../design/phase-3/04-tool-review.md)：执行前审阅、拒绝语义、并发与 CLI 兼容
+- [原型（方向稿）](../design/phase-3/prototype.html)：三栏布局、工具卡片、diff 审阅
+- 决策：[ADR-0012](../adr/ADR-0012-tool-review-seam.md)
 
 ## 4. 验收场景
 
@@ -36,5 +42,5 @@ B 轨插件系统（Phase 4）；多窗口/复杂布局；主题系统（token �
 
 ## 5. 风险与对策
 
-- gpui-kit/NSH 任一上游破坏性变更 → 双依赖均版本锁定；隔离层（仅 Phase 3/4 代码触达）控制升级面。**开工前先核对 gpui-kit 与 gpui-component（pi-flash 所用 0.2.x）的版本谱系与 API 延续性**（research/05 §2.2）。
+- gpui-kit/NSH 任一上游破坏性变更 → 双依赖均版本锁定；隔离层（仅 Phase 3/4 代码触达）控制升级面。**版本谱系已核对（2026-10-26）**：gpui-kit 0.8.1 与 gpui-component 0.8.1 同源；NSH 0.2/0.3 在 gpui-fast 0.1.12 下均编译失败（E0716），锁 gpui-fast 0.1.10 后解析到 0.8.0 家族，编译探针已通过；pi-flash 的 0.2.x 补丁不适用。
 - 平台差异（钥匙串/路径/终端）→ 平台抽象点在 design 文档中先列出。

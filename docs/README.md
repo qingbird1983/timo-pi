@@ -37,7 +37,7 @@ docs/
 | research/03-stack-nsh-gpui-kit.md | 定稿 | 桌面技术栈（gpui-kit + NSH）评估结论 |
 | research/04-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的做法与教训 |
 | research/05-reference-pi-flash.md | 定稿 | 参考项目 pi-flash（GPUI 桌面壳/插件系统）的做法与教训 |
-| adr/ADR-0001 ~ 0011 | 定稿 | 11 项重大决策（见各文件） |
+| adr/ADR-0001 ~ 0012 | 定稿 | 12 项重大决策（见各文件） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
 | architecture/02-kernel.md | 定稿 | 内核模块划分与关键设计 |
 | architecture/03-critical-seams.md | 定稿 | MVP 必须预留的接缝清单（防返工核心） |
@@ -59,6 +59,13 @@ docs/
 | design/phase-2/03-permissions.md | 定稿 | 权限能力清单 v1、双闸授予/失效、强制点与硬拒路径 |
 | design/phase-2/04-hook-semantics.md | 定稿 | 钩子派发、30s 预算、快照隔离、abort 退休、错误隔离 |
 | design/phase-2/05-shim-events.md | 定稿 | pi 1.4.0 全量事件矩阵（41 项逐项分类与发射点） |
+| design/phase-3/00-overview.md | 定稿 | Phase 3 总览：版本边界、模块布局、内核前置 K0~K3、提交序列 |
+| design/phase-3/01-ui-architecture.md | 定稿 | 窗口信息架构、事件→界面状态、工具卡片、diff 审阅、键盘与测试 |
+| design/phase-3/02-credentials-and-settings.md | 定稿 | 钥匙串引用、桌面设置、脱敏边界与 C3 验收 |
+| design/phase-3/03-nsh-embedding.md | 定稿 | AppView 隔离层、签名包信任链、热更/回退与 C4 证据 |
+| design/phase-3/04-tool-review.md | 定稿 | 执行前审阅接缝、拒绝语义、并发与 CLI 兼容 |
+| design/phase-3/prototype.html | 定稿（方向稿） | 桌面壳布局、工具卡片与 diff 审阅原型 |
+| adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |

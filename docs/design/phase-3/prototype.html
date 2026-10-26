@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timo 桌面壳 · 方案原型</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --sidebar: #eef0f3;
+    --surface-2: #f9fafb;
+    --fg: #1f2328;
+    --muted: #69707a;
+    --faint: #9aa1ab;
+    --border: #e1e4e8;
+    --border-strong: #cfd4da;
+    --accent: #2f6fed;
+    --accent-soft: #e8efff;
+    --danger: #c94343;
+    --danger-soft: #fdecec;
+    --success: #2c7a52;
+    --success-soft: #e8f5ee;
+    --warn: #9a6700;
+    --warn-soft: #fff4d6;
+    --add: #e6f4ea;
+    --del: #fdecec;
+    --mono: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+    --sans: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: #dfe2e7;
+    font-family: var(--sans);
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+  }
+  .caption { font-size: 12px; color: #5b626c; letter-spacing: .02em; }
+  .app {
+    width: min(1440px, 100%);
+    height: min(900px, calc(100vh - 70px));
+    min-width: 1040px;
+    min-height: 640px;
+    background: var(--surface);
+    border: 1px solid #c9ced5;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(20, 25, 35, .18);
+  }
+  /* title bar */
+  .titlebar {
+    height: 44px;
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand-mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--fg); color: #fff;
+    display: grid; place-items: center;
+    font-weight: 700; font-size: 12px;
+  }
+  .titlebar .title { font-size: 13px; font-weight: 600; }
+  .titlebar .crumb { color: var(--faint); font-size: 12px; }
+  .titlebar .spacer { flex: 1; }
+  .win-controls { display: flex; gap: 2px; }
+  .win-controls span {
+    width: 34px; height: 28px; display: grid; place-items: center;
+    color: var(--muted); font-size: 13px; border-radius: 4px;
+  }
+  .win-controls .close:hover { background: var(--danger-soft); color: var(--danger); }
+  /* body */
+  .body { flex: 1; display: flex; min-height: 0; position: relative; }
+  .sidebar {
+    width: 260px; flex: 0 0 260px;
+    background: var(--sidebar);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .sidebar-head { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 10px; }
+  .btn {
+    height: 32px; border-radius: 6px; border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--fg);
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 13px; font-family: inherit; padding: 0 12px; white-space: nowrap;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.danger { background: var(--surface); border-color: #e6b3b3; color: var(--danger); }
+  .btn.small { height: 28px; font-size: 12px; padding: 0 9px; }
+  .new-session { width: 100%; justify-content: flex-start; font-weight: 600; }
+  .new-session .plus { font-size: 15px; line-height: 1; color: var(--muted); }
+  .search {
+    height: 30px; border: 1px solid var(--border); background: var(--surface);
+    border-radius: 6px; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; color: var(--faint); font-size: 12px;
+  }
+  .search .kbd { margin-left: auto; }
+  .kbd {
+    font-family: var(--sans); font-size: 10px; color: var(--muted);
+    border: 1px solid var(--border-strong); border-bottom-width: 2px;
+    border-radius: 4px; padding: 1px 4px; background: var(--surface);
+  }
+  .session-list { flex: 1; overflow: hidden; padding: 6px 8px 10px; }
+  .group-label {
+    font-size: 11px; color: var(--faint); padding: 10px 8px 6px;
+    letter-spacing: .04em;
+  }
+  .session {
+    padding: 8px 9px; border-radius: 6px; display: flex; flex-direction: column; gap: 3px;
+    margin-bottom: 2px; cursor: default;
+  }
+  .session .name { font-size: 13px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session .meta { font-size: 11px; color: var(--faint); display: flex; gap: 8px; }
+  .session.active { background: #fff; border: 1px solid var(--border); box-shadow: 0 1px 1px rgba(0,0,0,.03); }
+  .session.active .name { font-weight: 600; }
+  .sidebar-foot {
+    border-top: 1px solid var(--border); padding: 10px 12px;
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+  }
+  .model-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .sidebar-foot .spacer { flex: 1; }
+  /* main */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .chat-head {
+    height: 52px; flex: 0 0 52px; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; padding: 0 18px;
+  }
+  .chat-head .title { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge {
+    font-size: 11px; border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--border);
+  }
+  .badge.run { background: var(--accent-soft); color: var(--accent); border-color: #c7d7ff; }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); border-color: #f0ddaa; }
+  .badge.ok { background: var(--success-soft); color: var(--success); border-color: #bfe0cd; }
+  .chat-head .spacer { flex: 1; }
+  .messages { flex: 1; overflow: hidden; padding: 18px 28px 8px; display: flex; flex-direction: column; gap: 18px; }
+  .msg { display: flex; gap: 12px; max-width: 880px; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 7px; flex: 0 0 28px;
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+  }
+  .avatar.agent { background: var(--fg); color: #fff; border-color: var(--fg); }
+  .msg .content { min-width: 0; flex: 1; font-size: 13.5px; line-height: 1.65; }
+  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; align-items: center; }
+  .msg.user { align-self: flex-end; max-width: 760px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+  .msg.user .who { margin-bottom: 2px; }
+  .msg.user .content { font-size: 13px; }
+  p { margin: 0 0 8px; }
+  p:last-child { margin-bottom: 0; }
+  code.inline { font-family: var(--mono); font-size: 12px; background: #eceff3; border-radius: 4px; padding: 1px 4px; }
+  .tool-card {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+    margin: 10px 0 4px; overflow: hidden;
+  }
+  .tool-card.review { border-color: #e3c56b; box-shadow: 0 0 0 2px rgba(227,197,107,.18); }
+  .tool-row { display: flex; align-items: center; gap: 8px; padding: 9px 12px; min-height: 40px; }
+  .tool-icon {
+    width: 22px; height: 22px; border-radius: 5px; background: var(--surface-2);
+    border: 1px solid var(--border); display: grid; place-items: center;
+    font-size: 10px; color: var(--muted); font-family: var(--mono);
+  }
+  .tool-name { font-size: 12.5px; font-weight: 600; }
+  .tool-info { min-width: 0; }
+  .tool-summary { font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tool-row .spacer { flex: 1; }
+  .tool-duration { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .tool-body {
+    border-top: 1px solid var(--border); background: var(--surface-2);
+    padding: 8px 12px; font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    display: flex; gap: 12px; align-items: center;
+  }
+  .add { color: var(--success); }
+  .del { color: var(--danger); }
+  .tool-body .btn { margin-left: auto; }
+  .streaming::after {
+    content: ""; display: inline-block; width: 7px; height: 14px;
+    background: var(--fg); margin-left: 3px; vertical-align: -2px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .composer-wrap { padding: 10px 28px 16px; }
+  .composer {
+    border: 1px solid var(--border-strong); background: var(--surface);
+    border-radius: 8px; padding: 10px 10px 8px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  }
+  .composer .placeholder { font-size: 13px; color: var(--faint); min-height: 22px; }
+  .composer .row { display: flex; align-items: center; gap: 8px; }
+  .composer .hint { font-size: 11px; color: var(--faint); }
+  .composer .row .spacer { flex: 1; }
+  .stop { background: var(--surface); border-color: var(--border-strong); color: var(--fg); }
+  .stop .square { width: 8px; height: 8px; background: var(--danger); border-radius: 1px; }
+  /* review sheet */
+  .review {
+    width: 440px; flex: 0 0 440px; background: var(--surface);
+    border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0;
+  }
+  .review-head { padding: 13px 16px 11px; border-bottom: 1px solid var(--border); }
+  .review-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 650; }
+  .review-title .spacer { flex: 1; }
+  .review-sub { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+  .file-head {
+    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2);
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px;
+  }
+  .file-head .stat { margin-left: auto; font-family: var(--sans); }
+  .diff { flex: 1; overflow: hidden; font-family: var(--mono); font-size: 11.5px; line-height: 1.65; background: var(--surface); }
+  .hunk { color: var(--faint); background: var(--surface-2); padding: 4px 14px; border-bottom: 1px solid var(--border); }
+  .line { display: grid; grid-template-columns: 38px 38px 16px 1fr; white-space: pre; }
+  .line .ln { text-align: right; padding-right: 8px; color: var(--faint); font-variant-numeric: tabular-nums; user-select: none; }
+  .line .sign { text-align: center; color: var(--faint); user-select: none; }
+  .line .code { padding-right: 10px; overflow: hidden; text-overflow: ellipsis; }
+  .line.add { background: var(--add); }
+  .line.add .sign { color: var(--success); }
+  .line.del { background: var(--del); }
+  .line.del .sign { color: var(--danger); }
+  .review-foot { border-top: 1px solid var(--border); padding: 11px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .review-foot .why { font-size: 11.5px; color: var(--muted); }
+  .review-foot .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .review-foot .actions .spacer { flex: 1; }
+  .queue { font-size: 11px; color: var(--muted); }
+  @media (max-width: 1200px) {
+    .app { min-width: 960px; }
+    .review {
+      position: absolute; top: 52px; right: 0; bottom: 0;
+      width: min(520px, 56%); z-index: 5;
+      box-shadow: -18px 0 36px rgba(20, 25, 35, .14);
+    }
+  }
+  /* misc */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Timo 桌面应用原型">
+    <div class="titlebar">
+      <div class="brand-mark" aria-hidden="true">T</div>
+      <div class="title">Timo</div>
+      <div class="crumb">/ 重构扩展装载管线</div>
+      <div class="spacer"></div>
+      <div class="win-controls" aria-hidden="true"><span>—</span><span>□</span><span class="close">×</span></div>
+    </div>
+
+    <div class="body">
+      <aside class="sidebar" aria-label="会话">
+        <div class="sidebar-head">
+          <button class="btn new-session"><span class="plus">＋</span>新建会话</button>
+          <div class="search">
+            <span aria-hidden="true">⌕</span><span>搜索会话</span><span class="kbd">Ctrl K</span>
+          </div>
+        </div>
+        <div class="session-list">
+          <div class="group-label">今天</div>
+          <div class="session active">
+            <div class="name">重构扩展装载管线</div>
+            <div class="meta"><span>刚刚</span><span>12 条消息</span></div>
+          </div>
+          <div class="session">
+            <div class="name">修复 Windows 路径解析</div>
+            <div class="meta"><span>2 小时前</span><span>8 条消息</span></div>
+          </div>
+          <div class="session">
+            <div class="name">给会话列表加搜索</div>
+            <div class="meta"><span>4 小时前</span><span>21 条消息</span></div>
+          </div>
+          <div class="group-label">昨天</div>
+          <div class="session">
+            <div class="name">审查权限双闸实现</div>
+            <div class="meta"><span>昨天 18:40</span><span>34 条消息</span></div>
+          </div>
+          <div class="session">
+            <div class="name">整理 Phase 2 验收记录</div>
+            <div class="meta"><span>昨天 09:12</span><span>16 条消息</span></div>
+          </div>
+        </div>
+        <div class="sidebar-foot">
+          <span class="model-dot" aria-hidden="true"></span>
+          <span>deepseek-flash</span>
+          <span class="spacer"></span>
+          <button class="btn ghost small">设置</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="chat-head">
+          <div class="title">重构扩展装载管线</div>
+          <span class="badge run">运行中</span>
+          <span class="badge">deepseek-flash</span>
+          <div class="spacer"></div>
+          <button class="btn small stop"><span class="square" aria-hidden="true"></span>停止</button>
+        </div>
+
+        <div class="messages">
+          <div class="msg user">
+            <div class="content">
+              <div class="who">你</div>
+              把扩展装载的错误归属整理一下：钩子超时和处理器抛错都要算到对应扩展头上，运行结束时统一汇总。顺便补一条多轮上下文不丢的回归测试。
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="avatar agent" aria-hidden="true">T</div>
+            <div class="content">
+              <div class="who">Timo <span class="badge">工具审阅开启</span></div>
+              <p>先确认事件归属路径，再改装载收尾逻辑。已定位到两处：钩子派发只记录通用错误、运行结束没有按扩展归并。准备先读 <code class="inline">extensions/mod.rs</code> 与 <code class="inline">host/runner.rs</code>。</p>
+
+              <div class="tool-card">
+                <div class="tool-row">
+                  <div class="tool-icon">R</div>
+                  <div class="tool-info">
+                    <div class="tool-name">读取文件</div>
+                    <div class="tool-summary">crates/timo-kernel/src/extensions/mod.rs</div>
+                  </div>
+                  <div class="spacer"></div>
+                  <span class="badge ok">完成</span>
+                  <span class="tool-duration">0.03s</span>
+                </div>
+              </div>
+
+              <div class="tool-card">
+                <div class="tool-row">
+                  <div class="tool-icon">$</div>
+                  <div class="tool-info">
+                    <div class="tool-name">执行命令</div>
+                    <div class="tool-summary">cargo test -p timo-kernel --test extensions</div>
+                  </div>
+                  <div class="spacer"></div>
+                  <span class="badge ok">完成</span>
+                  <span class="tool-duration">1.24s</span>
+                </div>
+                <div class="tool-body">2 passed; 0 failed; finished in 0.02s</div>
+              </div>
+
+              <div class="tool-card review">
+                <div class="tool-row">
+                  <div class="tool-icon">E</div>
+                  <div class="tool-info">
+                    <div class="tool-name">编辑文件</div>
+                    <div class="tool-summary">crates/timo-kernel/src/kernel.rs</div>
+                  </div>
+                  <div class="spacer"></div>
+                  <span class="badge warn">待确认</span>
+                  <button class="btn small">审阅改动</button>
+                </div>
+                <div class="tool-body">
+                  <span class="add">+7</span><span class="del">−1</span>
+                  <span>保留完整上下文，供下一轮复用</span>
+                  <span class="queue">待审 1 / 2</span>
+                </div>
+              </div>
+
+              <p class="streaming">同时补一条回归测试：连续两次 run 应把第一轮消息带入第二轮请求。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer" aria-label="输入任务">
+            <div class="placeholder">等待审阅完成后可继续输入…</div>
+            <div class="row">
+              <span class="hint">Enter 发送 · Shift+Enter 换行 · Ctrl K 命令</span>
+              <span class="spacer"></span>
+              <button class="btn ghost small">附件</button>
+              <button class="btn primary small" disabled style="opacity:.45">发送</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="review" aria-label="审阅文件改动">
+        <div class="review-head">
+          <div class="review-title">
+            <span>审阅文件改动</span>
+            <span class="badge warn">1 / 2</span>
+            <span class="spacer"></span>
+            <button class="btn ghost small" aria-label="关闭审阅">×</button>
+          </div>
+          <div class="review-sub">工具在写入前暂停，等待你的决定。拒绝不会产生任何文件改动。</div>
+        </div>
+
+        <div class="file-head">
+          <span>crates/timo-kernel/src/kernel.rs</span>
+          <span class="stat"><span class="add">+7</span> <span class="del">−1</span></span>
+        </div>
+
+        <div class="diff" aria-label="统一 diff">
+          <div class="hunk">@@ -231,7 +231,15 @@ impl Kernel</div>
+          <div class="line"><span class="ln">231</span><span class="ln">231</span><span class="sign"> </span><span class="code">        self.ensure_ready().await;</span></div>
+          <div class="line"><span class="ln">232</span><span class="ln">232</span><span class="sign"> </span><span class="code">        if self.session.is_none() {</span></div>
+          <div class="line"><span class="ln">233</span><span class="ln">233</span><span class="sign"> </span><span class="code">            self.open_new_session()?;</span></div>
+          <div class="line"><span class="ln">234</span><span class="ln">234</span><span class="sign"> </span><span class="code">        }</span></div>
+          <div class="line del"><span class="ln">235</span><span class="ln"></span><span class="sign">−</span><span class="code">        let history = self.history.take().unwrap_or_default();</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">235</span><span class="sign">+</span><span class="code">        let mut history = self.history.take().unwrap_or_default();</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">236</span><span class="sign">+</span><span class="code">        let carried = history.clone();</span></div>
+          <div class="line"><span class="ln">236</span><span class="ln">237</span><span class="sign"> </span><span class="code">        self.ext_abort.store(false, Ordering::SeqCst);</span></div>
+          <div class="line"><span class="ln">237</span><span class="ln">238</span><span class="sign"> </span><span class="code">        self.ext_running.store(true, Ordering::SeqCst);</span></div>
+          <div class="line"><span class="ln">238</span><span class="ln">239</span><span class="sign"> </span><span class="code">        let session = self.session.clone();</span></div>
+          <div class="line"><span class="ln">239</span><span class="ln">240</span><span class="sign"> </span><span class="code">        let Some(agent) = self.agent.as_ref() else {</span></div>
+          <div class="line"><span class="ln">240</span><span class="ln">241</span><span class="sign"> </span><span class="code">            return Err(KernelError::Agent(</span></div>
+          <div class="line"><span class="ln">241</span><span class="ln">242</span><span class="sign"> </span><span class="code">                timo_agent::AgentError::Setup("agent not assembled".into()),</span></div>
+          <div class="line"><span class="ln">242</span><span class="ln">243</span><span class="sign"> </span><span class="code">            ));</span></div>
+          <div class="line"><span class="ln">243</span><span class="ln">244</span><span class="sign"> </span><span class="code">        };</span></div>
+          <div class="line"><span class="ln">244</span><span class="ln">245</span><span class="sign"> </span><span class="code">        let out = agent.run(prompt.to_string(), history, session).await;</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">246</span><span class="sign">+</span><span class="code">        if let Ok(new_messages) = &amp;out {</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">247</span><span class="sign">+</span><span class="code">            let mut next = carried;</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">248</span><span class="sign">+</span><span class="code">            next.extend(new_messages.iter().cloned());</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">249</span><span class="sign">+</span><span class="code">            self.history = Some(next);</span></div>
+          <div class="line add"><span class="ln"></span><span class="ln">250</span><span class="sign">+</span><span class="code">        }</span></div>
+          <div class="line"><span class="ln">245</span><span class="ln">251</span><span class="sign"> </span><span class="code">        if let Some(runtime) = &amp;mut self.ext {</span></div>
+          <div class="line"><span class="ln">246</span><span class="ln">252</span><span class="sign"> </span><span class="code">            runtime.absorb_runtime_errors();</span></div>
+          <div class="line"><span class="ln">247</span><span class="ln">253</span><span class="sign"> </span><span class="code">        }</span></div>
+        </div>
+
+        <div class="review-foot">
+          <div class="why">影响：<span style="font-family:var(--mono)">kernel.rs</span> · 拒绝后模型会收到错误结果，文件保持原样。</div>
+          <div class="actions">
+            <button class="btn ghost small">在编辑器中打开</button>
+            <span class="spacer"></span>
+            <button class="btn danger small">拒绝</button>
+            <button class="btn primary small">接受改动</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <div class="caption">方案原型（方向稿）· 布局、层级与审阅流程；颜色/间距以主题 token 为准，不作为最终视觉。</div>
+</body>
+</html>

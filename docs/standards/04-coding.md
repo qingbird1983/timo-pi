@@ -74,6 +74,13 @@
 | sha2 | 0.10 | sha256 | MCP 工具名防撞哈希（设计 03 §1，pi 同构） | RustCrypto | 无 |
 | rolldown | 1.2.x | 安装期 JS/TS 打包 | ADR-0006 既定；内置 oxc 0.155 完成 TS 转换与依赖内联 | rolldown 团队 | 自写打包器：模块图/重导出/依赖内联正确性成本高，弃 |
 | rquickjs | 0.14.x | QuickJS 宿主绑定 | ADR-0006 既定；支持 ES2020、异步与中断处理 | DelSkayn（活跃） | deno_core：ADR-0006 备选，体积/复杂度高，暂不采用 |
+| gpui-kit | 0.8.x | 桌面 UI 门面（组件/主题/测试） | ADR-0002；Phase 3 唯一 UI 依赖 | longbridge | 自研组件库：重造；egui：与调研结论冲突，弃 |
+| gpui-fast | 0.1.x | `gpui-kit/gpui-fast` 后端 | NSH 0.3 嵌入要求同一 GPUI 后端 | longbridge | 标准 GPUI：NSH 0.2 实测不兼容，弃 |
+| nsh-platform-gpui / nsh-engine / nsh-package | 0.3.x | AppView 嵌入、签名包验证 | ADR-0002/0004；Phase 3 PoC | longbridge/nsh | 自研 TSX 运行时：范围过大，弃 |
+| nsh-cli | 0.3.x（仅开发期） | 生成/签名/校验 NSH 包 | PoC 打包，不进运行时 | longbridge/nsh | 自研打包器：重复上游工具链，弃 |
+| keyring | 3.6.x | 系统钥匙串读写 | standards/06 §3 Phase 3 起统一 | hwchen/keyring-rs | 手写三平台 API：成本与风险高，弃 |
+| similar | 2.x | unified diff 生成 | gpui-kit `Diff` 的输入 | mitsuhiko | 手写 diff：算法正确性成本高，弃 |
+| rust-i18n | 4.x | 中英界面文案 | GUI 全量可切（所有者要求） | longbridge | 手写文案表：无法覆盖组件内建文案，弃 |
 
 - 每 crate 直接依赖数 ≤ 15（standards/08 §4 软上限达标；workspace 共享依赖去重后不重复计入）。
 - 新增行格式照抄本表；升级在同一行更新版本线并在 CHANGELOG 记一笔。
