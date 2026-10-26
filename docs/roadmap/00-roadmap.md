@@ -37,6 +37,8 @@ graph LR
 
 ## 3. Backlog（Phase 5+ 候选，立项须先写 ADR）
 
+> 本节同时是**创新提案的唯一通道**（ADR-0011）：内核复刻期（Phase 1~2）一切"更好的做法"只记录于此、不实施；解禁条件见 ADR-0011 §6。
+
 - 更多协议适配：openai-responses、google-generative-ai、bedrock（SigV4）
 - 供应商 OAuth 与自定义 provider 完整面（`streamSimple` 等价物）
 - 会话树/分叉/navigate 的用户功能面、compaction（`session.compaction` entry 已在格式中预留）
