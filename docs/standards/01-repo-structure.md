@@ -6,7 +6,8 @@
 ## 1. 目录布局（含 Phase 1 起的预留）
 
 ```
-/                     仓库根：README / AGENTS.md / CHANGELOG.md / .gitignore
+/                     仓库根：README / AGENTS.md / CHANGELOG.md / LICENSE / .gitignore
+.agent/               AI 开发知识库与交接中枢（规范见其 README；预算受 standards/08 约束）
 docs/                 全部文档（唯一事实来源；结构见 docs/README.md）
 crates/               Rust 内核库（Phase 1 建立）
   timo-ai / timo-agent / timo-tools / timo-session / timo-mcp
@@ -34,5 +35,5 @@ scripts/              构建/检查脚本（CI 用）
 ## 3. 内容纪律
 
 - 仓库内**禁止**出现：密钥/凭证、个人绝对路径（如 `F:\`、`C:\Users\<名>`）——文档引用外部项目用仓库相对描述或 GitHub URL（standards/06 §2）。
-- 根目录只放本规范列出的文件；新增根文件须先修订本规范。
+- 根目录只放本规范列出的文件（README、AGENTS.md、CHANGELOG.md、LICENSE、.gitignore、.agent/）；新增根文件须先修订本规范。
 - 空目录不进 git——目录随首批内容建立。

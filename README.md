@@ -1,6 +1,8 @@
-# Timo（仓库名：timo-pi）
+# Timo-pi
 
 > **一句话定位**：用 Rust 重写 [pi](https://github.com/earendil-works/pi) 编码代理的内核（不含 TUI），以 gpui-kit + NSH 构建原生桌面端；插件策略为「**兼容编排类扩展 + 自建 GUI 原生插件面**」双轨制。
+>
+> 开源，许可证 **MIT**（见 [LICENSE](LICENSE)）；首发平台 **Windows 优先**。
 
 本项目实行**文档先行**：先定规范与设计，再写代码。项目所有者不读代码，进度只看两处：
 
@@ -34,13 +36,15 @@
 
 ---
 
-## 待所有者决策的事项
+## 已定决策（2026-10-26，详见 [ADR-0010](docs/adr/ADR-0010-identity-open-source-platform.md)）
 
-| 事项 | 说明 | 是否阻塞 |
-|---|---|---|
-| **开源许可证** | 是否开源、选哪种（MIT / Apache-2.0 / AGPL…） | 不阻塞 Phase 1，阻塞对外发布 |
-| **正式产品名** | 当前代号 "Timo"，仅为工作名 | 不阻塞 |
-| **目标平台优先级** | Windows / macOS / Linux 的先后顺序 | 影响 Phase 3 细节排期 |
+| 事项 | 决策 |
+|---|---|
+| 开源与许可证 | 开源，**MIT**（[LICENSE](LICENSE)） |
+| 产品名 | **Timo-pi**（正式名） |
+| 平台优先级 | **Windows 优先**（macOS/Linux 保证可构建） |
+
+当前无待决策事项；新的待决事项会出现在此处并在 CHANGELOG 提醒。
 
 ---
 

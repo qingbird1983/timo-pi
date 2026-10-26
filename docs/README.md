@@ -15,6 +15,7 @@
 ## 目录结构
 
 ```
+.agent/                AI 知识库与交接中枢（仓库根；规范见其 README 与 standards/08）
 docs/
 ├── README.md            本页：文档地图
 ├── glossary.md          术语表（面向非技术读者）
@@ -22,8 +23,9 @@ docs/
 ├── adr/                 决策记录（为什么这么做，编号递增，只增不改）
 ├── architecture/        架构设计（系统是什么样、关键约束）
 ├── roadmap/             路线图（什么时候做什么、怎么验收）
-├── standards/           仓库规范（怎么做事的规则，7 篇）
-└── design/              （Phase 1 起使用）各阶段详细设计稿
+├── standards/           仓库规范（怎么做事的规则，8 篇）
+├── design/              （Phase 1 起使用）各阶段详细设计稿
+└── （各阶段进度报告也存于 design/phase-N/report.md）
 ```
 
 ## 文档清单与状态
@@ -43,6 +45,7 @@ docs/
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
+| standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agent/代码/依赖的预算与清理机制） |
 | glossary.md | 定稿 | 术语表 |
 
 > 规则：上表新增文档必须同步登记；改状态必须同步本表与 CHANGELOG。

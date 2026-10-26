@@ -4,10 +4,11 @@
 
 ## 开工前必读（按顺序）
 
-1. `docs/README.md` —— 文档地图与状态约定
-2. `docs/roadmap/00-roadmap.md` + **当前阶段**的 phase 文档
-3. `docs/standards/` 全部 7 篇规范
-4. 与当前工作相关的 `docs/architecture/`、`docs/adr/` 文档
+1. `.agent/CONTEXT.md` —— **第一站**：当前工作上下文交接卡（上一轮留给你的一切）
+2. `docs/README.md` —— 文档地图与状态约定
+3. `docs/roadmap/00-roadmap.md` + **当前阶段**的 phase 文档
+4. `docs/standards/` 全部 8 篇规范
+5. 与当前工作相关的 `docs/architecture/`、`docs/adr/` 文档
 
 ## 硬规则
 
@@ -19,9 +20,10 @@
 6. **pi 上游**：仅用于理解行为、协议与兼容面，不复制源码文件。pi 的扩展 API 无 semver 承诺，兼容目标以 `docs/architecture/04-plugin-system.md` 的矩阵为准，不承诺逐版本追平。
 7. **安全**：API key、密钥、个人文件路径不得写入仓库；新增依赖须按 `docs/standards/04-coding.md` 的准入流程登记。
 8. **取消与格式不可逆项**：涉及会话格式、公共 API、事件契约的改动，必须先改文档与 ADR，再动代码，并保证向后兼容测试通过。
+9. **交接与沉淀**：每轮会话收尾必做四件事——重写 `.agent/CONTEXT.md`、归档 handoff、沉淀 pitfalls/skills、体量核对（规则与上限见 `.agent/README.md` 与 `docs/standards/08-size-control.md`）。教训必须当轮提取，未提取即交接失败。
 
 ## 当前阶段指针
 
-- **Phase 0 已完成**（2026-10-26）：仓库与全部文档落盘。
+- **Phase 0 已完成**（2026-10-26）：仓库与全部文档落盘；产品命名 Timo-pi、MIT 开源、Windows 优先（ADR-0010）。
 - **下一阶段 Phase 1（内核 MVP）**：开工前置条件 = `docs/roadmap/phase-1-kernel-mvp.md` 及其引用的设计文档从「草稿」转「定稿」。
 - 阶段完成后，更新本指针。
