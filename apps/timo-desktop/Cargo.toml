@@ -16,8 +16,12 @@ nsh-poc = ["dep:nsh-platform-gpui"]
 
 [dependencies]
 timo-kernel = { workspace = true }
+timo-config = { workspace = true }
 tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+similar = { workspace = true }
 # 版本边界见 docs/design/phase-3/00-overview.md §3；升级任一依赖前重跑 NSH 编译探针。
 gpui-kit = { version = "=0.8.0", features = ["gpui-fast"] }
 # 直接钉版本，确保 gpui-kit 与 NSH 共用同一 GPUI 后端（不 import）。

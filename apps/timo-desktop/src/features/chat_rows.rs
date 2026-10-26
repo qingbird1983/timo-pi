@@ -138,6 +138,11 @@ fn trace_entry(entry: &TraceEntry, cx: &App) -> impl IntoElement {
             cx.theme().muted_foreground,
             t!("chat.tool_queued").to_string(),
         ),
+        TraceStatus::Review => (
+            IconName::Eye,
+            cx.theme().warning,
+            t!("chat.tool_review").to_string(),
+        ),
         TraceStatus::Running => (
             IconName::Loader,
             cx.theme().primary,
@@ -152,6 +157,11 @@ fn trace_entry(entry: &TraceEntry, cx: &App) -> impl IntoElement {
             IconName::CircleX,
             cx.theme().danger,
             t!("chat.tool_failed").to_string(),
+        ),
+        TraceStatus::Blocked => (
+            IconName::Ban,
+            cx.theme().danger,
+            t!("chat.tool_blocked").to_string(),
         ),
         TraceStatus::Interrupted => (
             IconName::CircleAlert,

@@ -8,6 +8,10 @@ sidebar:
   title: Sessions
   empty: No sessions yet
   new: New session
+  just_now: just now
+  minutes_ago: "%{n} min ago"
+  hours_ago: "%{n} h ago"
+  days_ago: "%{n} d ago"
 
 chat:
   empty_session: New session
@@ -56,3 +60,79 @@ tool:
   powershell: Command
   grep: Grep
   find: Find
+
+review:
+  title_file: Review file changes
+  title_command: Confirm command
+  pending: "%{n} pending"
+  new_file: New file
+  modified: Modified
+  binary: No text diff (binary or non-UTF-8)
+  too_large: Change is too large; showing a summary
+  sizes: "%{before} bytes → %{after} bytes"
+  click_to_diff: No diff available; decide directly.
+  reason: Rejection reason (optional)
+  default_reason: Rejected by user
+  dismissed: Not reviewed
+  always: Always allow this tool in this session
+  accept: Accept
+  reject: Reject
+
+settings:
+  title: Settings
+  close: Back
+  reset: Desktop settings were corrupt and have been reset
+  general: General
+  model: Model
+  credentials: Credentials
+  tools: Tools
+  about: About
+  language: Language
+  theme: Appearance
+  theme_system: Follow system
+  theme_light: Light
+  theme_dark: Dark
+  font_scale: Interface scale
+  current_model: Current model
+  model_hint: Runtime model switching is not part of this phase; edit models.json and settings.json, then restart.
+  available_models: Configured models
+  credentials_hint: Keys are written only to the system keychain; config files keep references.
+  key_for: "Set the API key for %{provider}"
+  key_placeholder: Paste the API key
+  cancel: Cancel
+  save: Save
+  keychain_hint: Nothing is echoed after saving; removing the entry makes the provider unavailable until configured again.
+  cred_keychain: "System keychain: %{service}/%{account}"
+  cred_env: "Environment variable $%{name}"
+  cred_command: From a command reference
+  cred_literal: Plaintext in config
+  cred_builtin: Built-in provider (environment)
+  cred_none: Not configured
+  set_key: Set
+  unavailable: Read-only
+  remove: Remove
+  remove_key_title: "Remove the API key for %{provider}?"
+  remove_key_body: The keychain entry will be deleted. Sessions using this provider cannot run until it is configured again.
+  key_saved: "Saved %{provider}'s key to the system keychain"
+  key_removed: "Removed the keychain entry for %{provider}"
+  review: Review
+  review_files: Ask before file changes
+  review_commands: Ask before running commands
+  session_allow: "%{n} allowed in this session"
+  clear_allow: Clear session allowances
+
+palette:
+  placeholder: Type a command…
+  sessions: Sessions
+  new_session: New session
+  delete_session: Delete current session
+  run: Run
+  stop: Cancel current task
+  resend: Resend last message
+  focus: Focus the composer
+  ui: Interface
+  settings: Open settings
+  toggle_locale: Toggle language
+  toggle_theme: Toggle theme
+  model: Model
+  choose_model: Choose a model…

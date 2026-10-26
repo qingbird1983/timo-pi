@@ -33,4 +33,14 @@ pub enum ConfigError {
     /// 选中的模型所在供应商没有可用凭证。
     #[error("no credential for provider: {0}")]
     NoCredential(String),
+    /// 系统钥匙串读取/写入失败（只含服务名/账号，不含密钥值）。
+    #[error("keychain {service}/{account}: {reason}")]
+    Keychain {
+        /// 钥匙串服务名。
+        service: String,
+        /// 钥匙串账号。
+        account: String,
+        /// 后端给出的原因。
+        reason: String,
+    },
 }

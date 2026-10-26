@@ -2,7 +2,7 @@
 
 - 状态：定稿
 - 日期：2026-10-26
-- 关联：ADR-0001~0009；README 进度看板（阶段状态以 README 为准）
+- 关联：ADR-0001~0013；README 进度看板（阶段状态以 README 为准）
 
 ## 1. 阶段总览与看板（本表是**唯一进度看板**）
 
@@ -14,7 +14,8 @@ graph LR
     P1 --> P2["Phase 2<br/>编排扩展宿主"]
     P1 --> P3["Phase 3<br/>桌面壳"]
     P2 --> P4["Phase 4<br/>GUI 插件系统"]
-    P3 --> P4
+    P3 --> P35["Phase 3.5<br/>内核深化（已立项）"]
+    P35 --> P4
     P4 -.-> B["Backlog<br/>Phase 5+ 候选"]
 ```
 
@@ -23,10 +24,13 @@ graph LR
 | Phase 0 | 仓库初始化、规范与设计定稿、文档先行落盘 | — | ✅ 完成（2026-10-26） |
 | Phase 1 | 无界面的最小可用内核：2 种协议 + 循环 + 工具 + 会话 + MCP | 6~10 周 | ✅ 完成（2026-10-26，tag `phase-1.end`） |
 | Phase 2 | pi 编排类扩展可装载生效（A 轨） | 3~6 周 | ✅ 完成（2026-10-26，tag `phase-2.end`；报告 `docs/design/phase-2/report.md`） |
-| Phase 3 | gpui-kit 桌面壳日常可用 + NSH 嵌入 PoC | 4~8 周 | 进行中（设计定稿 2026-10-26；最小窗口、K0/K1、K2、内核桥接与会话/聊天流已完成 2026-10-27；下一步 diff 审阅/命令面板/设置） |
+| Phase 3 | gpui-kit 桌面壳日常可用 + NSH 嵌入 PoC | 4~8 周 | 进行中（设计定稿 2026-10-26；最小窗口、K0/K1、K2、内核桥接与会话/聊天流、diff 审阅/命令面板/设置与钥匙串已完成 2026-10-27；下一步 NSH PoC 与 C1~C6 验收） |
+| [Phase 3.5](phase-3.5-kernel-depth.md) | 内核深化：补齐 pi 灵魂件（项目上下文/提示词工程/skills/compaction/缓存/无头模式），交互逻辑对齐 | 3~6 周 | 已立项（草案，ADR-0013；前置 Phase 3 验收通过，设计定稿后开工） |
 | Phase 4 | GUI 原生插件系统闭环（B 轨） | 4~8 周 | 未开始 |
 
 \* 单人全职参考值，仅量级感知。Phase 2 与 Phase 3 可并行。
+
+> **桌面壳视觉精修（产品级 UI）**：Phase 3 功能批次完工后启动，与 Phase 3.5 并行（3.5 动内核、视觉动桌面壳，零冲突）。流程：参考清单 [research/07](../research/07-ui-references.md) 定稿 → 视觉设计稿（gpui-kit-design-guides 合规）→ 桌面壳实现批次。
 
 ## 2. 每阶段通用流程（硬流程，详见 standards/07）
 
@@ -38,12 +42,14 @@ graph LR
 ## 3. Backlog（Phase 5+ 候选，立项须先写 ADR）
 
 > 本节同时是**创新提案的唯一通道**（ADR-0011）：内核复刻期（Phase 1~2）一切"更好的做法"只记录于此、不实施；解禁条件见 ADR-0011 §6。
+> 2026-10-27 升格（ADR-0013）：compaction、codemode、print/json/headless 模式已从本清单升格至 [Phase 3.5](phase-3.5-kernel-depth.md)。
 
 - 更多协议适配：openai-responses、google-generative-ai、bedrock（SigV4）
 - 供应商 OAuth 与自定义 provider 完整面（`streamSimple` 等价物）
-- 会话树/分叉/navigate 的用户功能面、compaction（`session.compaction` entry 已在格式中预留）
-- codemode（模型写脚本调工具，QuickJS 已就位）、tool-search（deferred 工具按需加载）
-- print/json/headless 批处理模式（timo-cli 扩展）
+- 跨会话记忆系统（pi 无内置记忆，属创新提案：知识持久化优先走 AGENTS.md/skills，记忆按扩展/内核级另议）
+- 审批档位与权限模式（pi 内核零审批、策略靠扩展：security.md 明言"不在每次工具调用前请求批准"，安全边界靠容器/账户隔离；本项目桌面端保留审阅安全垫，但需补档位——单次/会话/永久允许 + 模式三档"每次询问/自动审批/完全访问"（完全访问即现接缝 `tool_review=None`，pi 等价）；待 Phase 3 完工后由桌面壳批次或 Phase 3.5 承接，审批策略蓝本：pi 示例 permission-gate/confirm-destructive/protected-paths）
+- 会话树/分叉/navigate 的用户功能面（GUI 轨）
+- tool-search（deferred 工具按需加载）
 - A 轨 v2 成员逐个转正；B 轨 slot 扩展
 - pi 会话导入工具；插件 marketplace；遥测（opt-in）
 - ADR-0008 所列外围能力（chord/durable/env）——默认不做

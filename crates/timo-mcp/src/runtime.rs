@@ -123,12 +123,19 @@ impl McpRuntime {
                 let mut cmd = tokio::process::Command::new(command);
                 cmd.args(args);
                 for (k, v) in env {
-                    let resolved = ValueRef::parse(v).resolve().await.map_err(|e| {
-                        McpError::ConnectFailed {
+                    let value_ref =
+                        ValueRef::parse(v).map_err(|reason| McpError::ServerInvalid {
                             server: server.to_string(),
-                            detail: format!("env {k}: {e}"),
-                        }
-                    })?;
+                            reason: format!("env {k}: {reason}"),
+                        })?;
+                    let resolved =
+                        value_ref
+                            .resolve()
+                            .await
+                            .map_err(|e| McpError::ConnectFailed {
+                                server: server.to_string(),
+                                detail: format!("env {k}: {e}"),
+                            })?;
                     cmd.env(k, resolved);
                 }
                 if let Some(dir) = cwd {

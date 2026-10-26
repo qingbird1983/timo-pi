@@ -9,10 +9,14 @@ use timo_kernel::{AssistantMessage, AssistantStreamEvent, Content, KernelEvent, 
 pub enum TraceStatus {
     /// 已请求、尚未开始。
     Queued,
+    /// 等待用户审阅。
+    Review,
     /// 执行中。
     Running,
     /// 成功完成。
     Done,
+    /// 审阅被拒绝（无副作用）。
+    Blocked,
     /// 失败（工具结果 is_error）。
     Failed,
     /// 恢复会话时缺少配对结果。
@@ -157,6 +161,15 @@ impl ChatState {
         }
     }
 
+    /// 最近一条用户消息（命令面板“重发”用）。
+    #[must_use]
+    pub fn last_user_text(&self) -> Option<String> {
+        self.rows.iter().rev().find_map(|row| match &row.kind {
+            RowKind::User(text) => Some(text.clone()),
+            RowKind::Assistant(_) => None,
+        })
+    }
+
     /// 追加用户消息。
     pub fn push_user(&mut self, text: &str) {
         self.push_row(RowKind::User(text.to_string()));
@@ -287,15 +300,21 @@ impl ChatState {
                     .and_then(|row| row.trace.iter_mut().find(|e| e.call_id == *tool_call_id))
                 {
                     let failed = matches!(result.as_ref(), Message::ToolResult(r) if r.is_error);
-                    entry.status = if failed {
+                    let text = match result.as_ref() {
+                        Message::ToolResult(r) => Some(text_of(&r.content)),
+                        _ => None,
+                    };
+                    let blocked = text
+                        .as_deref()
+                        .is_some_and(|text| text.trim_start().starts_with("Rejected by user:"));
+                    entry.status = if blocked {
+                        TraceStatus::Blocked
+                    } else if failed {
                         TraceStatus::Failed
                     } else {
                         TraceStatus::Done
                     };
-                    entry.output = match result.as_ref() {
-                        Message::ToolResult(r) => Some(text_of(&r.content)),
-                        _ => None,
-                    };
+                    entry.output = text;
                     entry.duration_ms = *duration_ms;
                 }
             }
@@ -361,6 +380,37 @@ impl ChatState {
         if !row.text.is_empty() {
             row.streaming = true;
         }
+    }
+
+    /// 审阅请求到达：把对应 trace 行标成待确认。
+    pub fn mark_review(&mut self, call_id: &str) {
+        if let Some(entry) = self.trace_entry_mut(call_id) {
+            entry.status = TraceStatus::Review;
+        }
+    }
+
+    /// 审阅结束：允许回到等待执行，拒绝标成已拒绝。
+    pub fn resolve_review(&mut self, call_id: &str, allowed: bool) {
+        if let Some(entry) = self.trace_entry_mut(call_id) {
+            entry.status = if allowed {
+                TraceStatus::Queued
+            } else {
+                TraceStatus::Blocked
+            };
+        }
+    }
+
+    fn trace_entry_mut(&mut self, call_id: &str) -> Option<&mut TraceEntry> {
+        self.rows
+            .iter_mut()
+            .rev()
+            .find_map(|row| match &mut row.kind {
+                RowKind::Assistant(assistant) => assistant
+                    .trace
+                    .iter_mut()
+                    .find(|entry| entry.call_id == call_id),
+                RowKind::User(_) => None,
+            })
     }
 
     /// 展开/收起某一行的 trace。

@@ -155,6 +155,59 @@ pub fn load_custom_providers(path: &Path) -> Result<Vec<CustomProvider>> {
     Ok(out)
 }
 
+/// 原子改写某供应商的 `api_key` 引用（保留其余字段与未知字段）。
+///
+/// # Errors
+/// 文件缺失/非法、供应商不存在或写入失败时返回错误；失败不留下半写文件。
+pub fn set_provider_api_key(path: &Path, provider: &str, value: &crate::ValueRef) -> Result<()> {
+    let raw = std::fs::read_to_string(path).map_err(|error| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    })?;
+    let mut root: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| ConfigError::Invalid {
+            path: path.to_path_buf(),
+            reason: error.to_string(),
+        })?;
+    let Some(providers) = root
+        .get_mut("providers")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return Err(ConfigError::Invalid {
+            path: path.to_path_buf(),
+            reason: "providers object is missing".into(),
+        });
+    };
+    let Some(entry) = providers
+        .get_mut(provider)
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return Err(ConfigError::Invalid {
+            path: path.to_path_buf(),
+            reason: format!("provider not found: {provider}"),
+        });
+    };
+    let serialized = serde_json::to_value(value).map_err(|error| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    })?;
+    entry.insert("api_key".into(), serialized);
+
+    let body = serde_json::to_string_pretty(&root).map_err(|error| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    })?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, body).map_err(|error| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    })?;
+    std::fs::rename(&tmp, path).map_err(|error| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        reason: error.to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +232,31 @@ mod tests {
         let ps = load_custom_providers(&path).expect("parse");
         assert_eq!(ps.len(), 1);
         assert_eq!(ps[0].models[0].cost.input, 1.0);
+    }
+
+    #[test]
+    fn set_provider_api_key_preserves_other_fields() {
+        let dir = std::env::temp_dir().join(format!("timo-models-set-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("models.json");
+        std::fs::write(
+            &path,
+            r#"{"providers":{"deepseek":{"api":"openai-completions","name":"DeepSeek",
+                "models":[{"id":"m1"}],"extra":"keep"}},"top":"keep"}"#,
+        )
+        .expect("write");
+        let value = crate::ValueRef::Keychain {
+            service: "timo-pi".into(),
+            account: "deepseek".into(),
+        };
+        set_provider_api_key(&path, "deepseek", &value).expect("write ref");
+        let raw = std::fs::read_to_string(&path).expect("read");
+        assert!(raw.contains("keychain:timo-pi/deepseek"));
+        assert!(raw.contains("\"extra\": \"keep\""));
+        assert!(raw.contains("\"top\": \"keep\""));
+        let providers = load_custom_providers(&path).expect("parse");
+        assert_eq!(providers[0].api_key, Some(value));
+        assert!(set_provider_api_key(&path, "missing", &crate::ValueRef::Env("X".into())).is_err());
     }
 
     #[test]

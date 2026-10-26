@@ -58,6 +58,8 @@ futures = "0.3"
 tempfile = "3"
 base64 = "0.22"
 sha2 = "0.10"
+similar = "2.7"
+keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 unicode-normalization = "0.1"
 rolldown = "1.2.15"
 rquickjs = { version = "0.14", features = ["full-async"] }

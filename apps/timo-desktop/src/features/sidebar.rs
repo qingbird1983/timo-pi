@@ -84,6 +84,7 @@ impl DesktopApp {
         };
         let delete_id = session.id.clone();
         let delete_title = title.clone();
+        let meta = session_meta(session.modified_ms);
         h_flex()
             .id(format!("session-{}", session.id))
             .px_2()
@@ -111,12 +112,14 @@ impl DesktopApp {
                             })
                             .child(title),
                     )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(format!("{}", session.message_count)),
-                    ),
+                    .when_some(meta, |this, meta| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(meta),
+                        )
+                    }),
             )
             .child(
                 Button::new(format!("delete-session-{}", session.id))
@@ -131,7 +134,7 @@ impl DesktopApp {
             .into_any_element()
     }
 
-    fn confirm_delete(
+    pub(crate) fn confirm_delete(
         &mut self,
         id: String,
         title: String,
@@ -154,4 +157,25 @@ impl DesktopApp {
                 })
         });
     }
+}
+
+/// 会话行的次要信息：相对修改时间（设计 01 §5.2 标题/时间）。
+fn session_meta(modified_ms: i64) -> Option<String> {
+    if modified_ms <= 0 {
+        return None;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_millis() as i64;
+    let seconds = (now - modified_ms).max(0) / 1000;
+    Some(if seconds < 60 {
+        t!("sidebar.just_now").to_string()
+    } else if seconds < 3600 {
+        t!("sidebar.minutes_ago", n = seconds / 60).to_string()
+    } else if seconds < 86_400 {
+        t!("sidebar.hours_ago", n = seconds / 3600).to_string()
+    } else {
+        t!("sidebar.days_ago", n = seconds / 86_400).to_string()
+    })
 }

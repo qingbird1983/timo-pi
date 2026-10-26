@@ -8,6 +8,10 @@ sidebar:
   title: 会话
   empty: 暂无会话
   new: 新建会话
+  just_now: 刚刚
+  minutes_ago: "%{n} 分钟前"
+  hours_ago: "%{n} 小时前"
+  days_ago: "%{n} 天前"
 
 chat:
   empty_session: 新会话
@@ -56,3 +60,79 @@ tool:
   powershell: 命令
   grep: 搜索
   find: 查找
+
+review:
+  title_file: 审阅文件改动
+  title_command: 确认运行命令
+  pending: "待审 %{n}"
+  new_file: 新文件
+  modified: 修改
+  binary: 无法生成文本 diff（二进制或非 UTF-8）
+  too_large: 改动过大，只显示摘要
+  sizes: "原 %{before} 字节 → 新 %{after} 字节"
+  click_to_diff: 无法生成 diff，请直接决定。
+  reason: 拒绝原因（可选）
+  default_reason: 用户拒绝
+  dismissed: 未审阅
+  always: 本会话允许此工具
+  accept: 接受
+  reject: 拒绝
+
+settings:
+  title: 设置
+  close: 返回
+  reset: 桌面设置损坏，已恢复默认值
+  general: 常规
+  model: 模型
+  credentials: 凭证
+  tools: 工具
+  about: 关于
+  language: 语言
+  theme: 外观
+  theme_system: 跟随系统
+  theme_light: 浅色
+  theme_dark: 深色
+  font_scale: 界面字号
+  current_model: 当前模型
+  model_hint: 本阶段不提供运行期切换模型；修改 models.json 与 settings.json 后重启应用。
+  available_models: 已配置模型
+  credentials_hint: 密钥只写入系统钥匙串，配置文件只保留引用。
+  key_for: "设置 %{provider} 的 API key"
+  key_placeholder: 粘贴 API key
+  cancel: 取消
+  save: 保存
+  keychain_hint: 保存后不回显任何字符；移除条目会让该供应商在重新配置前无法运行。
+  cred_keychain: "系统钥匙串：%{service}/%{account}"
+  cred_env: "环境变量 $%{name}"
+  cred_command: 来自命令引用
+  cred_literal: 配置中是明文
+  cred_builtin: 内置供应商（环境变量）
+  cred_none: 未配置
+  set_key: 设置
+  unavailable: 不可改
+  remove: 移除
+  remove_key_title: "移除 %{provider} 的 API key？"
+  remove_key_body: 钥匙串条目将被删除。使用该供应商的会话在重新配置前无法运行。
+  key_saved: "%{provider} 的密钥已保存到系统钥匙串"
+  key_removed: "%{provider} 的钥匙串条目已移除"
+  review: 审阅
+  review_files: 文件改动前审阅
+  review_commands: 执行命令前询问
+  session_allow: "本会话已允许 %{n} 项"
+  clear_allow: 清空本会话允许项
+
+palette:
+  placeholder: 输入命令…
+  sessions: 会话
+  new_session: 新建会话
+  delete_session: 删除当前会话
+  run: 运行
+  stop: 取消当前任务
+  resend: 重发上一条
+  focus: 聚焦输入框
+  ui: 界面
+  settings: 打开设置
+  toggle_locale: 切换语言
+  toggle_theme: 切换主题
+  model: 模型
+  choose_model: 选择模型…

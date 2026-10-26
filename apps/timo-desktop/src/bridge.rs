@@ -1,9 +1,24 @@
 //! 内核桥接：专用 tokio 线程独占 `Kernel`，UI 只收发值类型（设计 01 §4~§5）。
 //!
 //! UI 线程不做阻塞 IO；run 期间只接受取消，会话切换在运行中会被拒绝。
+//! 工具审阅经 [`crate::bridge::ReviewBroker`] 转成事件，等待 UI 的 oneshot 决定。
 
-use timo_kernel::{Kernel, KernelEvent, KernelOptions, Message, SessionInfo};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use timo_config::KEYCHAIN_SERVICE;
+use timo_kernel::{
+    Kernel, KernelEvent, KernelOptions, Message, ReviewDecision, ReviewKind, SessionInfo,
+    ToolReview, ToolReviewRequest,
+};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::oneshot;
+
+use crate::settings::ReviewPrefs;
+
+#[path = "bridge_providers.rs"]
+mod providers;
+use providers::{models_path, provider_infos, save_provider_key};
 
 /// UI 发给内核的命令。
 #[derive(Debug, Clone)]
@@ -20,6 +35,62 @@ pub enum BridgeCommand {
     Run(String),
     /// 取消当前 run。
     Cancel,
+    /// 更新审阅开关（只影响后续工具请求）。
+    SetReviewPrefs {
+        /// 文件改动前审阅。
+        files: bool,
+        /// 命令执行前审阅。
+        commands: bool,
+    },
+    /// 读取已配置供应商与凭证来源。
+    ListProviders,
+    /// 保存某供应商的 API key 到钥匙串并改写引用。
+    SaveProviderKey {
+        /// 供应商 id。
+        provider: String,
+        /// API key 原文（只在内部通道传递，不回显）。
+        secret: String,
+    },
+    /// 删除某供应商的钥匙串条目（配置引用保留）。
+    RemoveProviderKey {
+        /// 供应商 id。
+        provider: String,
+    },
+}
+
+/// 供应商凭证来源（不含值；设计 02 §5）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CredentialInfo {
+    /// 系统钥匙串。
+    Keychain {
+        /// 服务名。
+        service: String,
+        /// 账号。
+        account: String,
+    },
+    /// 环境变量引用。
+    Env(String),
+    /// 命令引用。
+    Command,
+    /// 配置文件中的明文。
+    Literal,
+    /// 内置供应商（环境变量，不在此处改写）。
+    Builtin,
+    /// 未配置。
+    None,
+}
+
+/// 设置页展示的供应商信息。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderInfo {
+    /// 供应商 id。
+    pub id: String,
+    /// 模型 id 列表。
+    pub models: Vec<String>,
+    /// 凭证来源。
+    pub credential: CredentialInfo,
+    /// 是否来自 models.json（可写钥匙串引用）。
+    pub editable: bool,
 }
 
 /// 内核发给 UI 的事件。
@@ -49,6 +120,21 @@ pub enum BridgeEvent {
     Finished,
     /// 内核事件快照。
     Kernel(KernelEvent),
+    /// 工具执行前审阅请求；UI 决定后经 `respond` 回传。
+    Review {
+        /// 待审副作用。
+        request: ToolReviewRequest,
+        /// 决定通道；UI 关闭窗口即 drop → 拒绝。
+        respond: oneshot::Sender<ReviewDecision>,
+    },
+    /// 供应商列表。
+    Providers(Vec<ProviderInfo>),
+    /// 某供应商密钥已保存。
+    ProviderSaved(String),
+    /// 某供应商密钥已移除。
+    ProviderRemoved(String),
+    /// 钥匙串/配置操作失败。
+    ProviderError(String),
     /// 打开会话失败。
     OpenFailed(String),
     /// 删除会话失败。
@@ -72,9 +158,18 @@ pub struct Bridge {
 }
 
 /// 启动专用内核线程；装配失败也会发 [`BridgeEvent::Fatal`]。
-pub fn spawn(options: KernelOptions) -> Bridge {
+pub fn spawn(options: KernelOptions, review: ReviewPrefs) -> Bridge {
     let (command_tx, command_rx) = unbounded_channel();
     let (event_tx, event_rx) = unbounded_channel();
+    let prefs = Arc::new(Mutex::new(review));
+    let data_dir = options.data_dir.clone();
+
+    let mut options = options;
+    options.tool_review = Some(Arc::new(ReviewBroker {
+        events: event_tx.clone(),
+        prefs: prefs.clone(),
+    }));
+
     let thread_events = event_tx.clone();
     let spawned = std::thread::Builder::new()
         .name("timo-kernel".into())
@@ -83,7 +178,13 @@ pub fn spawn(options: KernelOptions) -> Bridge {
                 .enable_all()
                 .build();
             match runtime {
-                Ok(runtime) => runtime.block_on(run(options, command_rx, thread_events.clone())),
+                Ok(runtime) => runtime.block_on(run(
+                    options,
+                    data_dir,
+                    prefs,
+                    command_rx,
+                    thread_events.clone(),
+                )),
                 Err(error) => {
                     let _ = thread_events.send(BridgeEvent::Fatal(format!(
                         "failed to start the kernel runtime: {error}"
@@ -102,8 +203,52 @@ pub fn spawn(options: KernelOptions) -> Bridge {
     }
 }
 
+/// UI 侧审阅器：把请求交给界面并等待 `oneshot` 决定。
+struct ReviewBroker {
+    events: UnboundedSender<BridgeEvent>,
+    prefs: Arc<Mutex<ReviewPrefs>>,
+}
+
+#[async_trait::async_trait]
+impl ToolReview for ReviewBroker {
+    async fn review(&self, request: ToolReviewRequest) -> ReviewDecision {
+        let enabled = {
+            let Ok(prefs) = self.prefs.lock() else {
+                return ReviewDecision::Reject {
+                    reason: "review unavailable".into(),
+                };
+            };
+            match &request.kind {
+                ReviewKind::FileChange { .. } => prefs.files,
+                ReviewKind::Command { .. } => prefs.commands,
+            }
+        };
+        if !enabled {
+            return ReviewDecision::Allow;
+        }
+        let (respond, decision) = oneshot::channel();
+        if self
+            .events
+            .send(BridgeEvent::Review { request, respond })
+            .is_err()
+        {
+            return ReviewDecision::Reject {
+                reason: "review unavailable".into(),
+            };
+        }
+        match decision.await {
+            Ok(decision) => decision,
+            Err(_) => ReviewDecision::Reject {
+                reason: "run cancelled".into(),
+            },
+        }
+    }
+}
+
 async fn run(
     options: KernelOptions,
+    data_dir: Option<PathBuf>,
+    prefs: Arc<Mutex<ReviewPrefs>>,
     mut commands: UnboundedReceiver<BridgeCommand>,
     event_tx: UnboundedSender<BridgeEvent>,
 ) {
@@ -115,26 +260,7 @@ async fn run(
         }
     };
 
-    let mut kernel_events = kernel.events();
-    let forward_tx = event_tx.clone();
-    tokio::spawn(async move {
-        use tokio::sync::broadcast::error::RecvError;
-        loop {
-            match kernel_events.recv().await {
-                Ok(event) => {
-                    if forward_tx.send(BridgeEvent::Kernel(event)).is_err() {
-                        break;
-                    }
-                }
-                Err(RecvError::Lagged(skipped)) => {
-                    if forward_tx.send(BridgeEvent::Lagged(skipped)).is_err() {
-                        break;
-                    }
-                }
-                Err(RecvError::Closed) => break,
-            }
-        }
-    });
+    forward_events(&kernel, event_tx.clone());
 
     let sessions = kernel.list_sessions();
     let _ = event_tx.send(BridgeEvent::Ready {
@@ -177,8 +303,76 @@ async fn run(
                 run_once(&mut kernel, prompt, &mut commands, &event_tx).await;
             }
             BridgeCommand::Cancel => {}
+            BridgeCommand::SetReviewPrefs { files, commands } => {
+                if let Ok(mut prefs) = prefs.lock() {
+                    prefs.files = files;
+                    prefs.commands = commands;
+                }
+            }
+            BridgeCommand::ListProviders => {
+                let model = kernel.model_label();
+                let list = provider_infos(data_dir.as_deref(), &model);
+                let _ = event_tx.send(BridgeEvent::Providers(list));
+            }
+            BridgeCommand::SaveProviderKey { provider, secret } => {
+                let path = models_path(data_dir.as_deref());
+                match save_provider_key(path, &provider, &secret).await {
+                    Ok(()) => {
+                        let _ = event_tx.send(BridgeEvent::ProviderSaved(provider));
+                        let model = kernel.model_label();
+                        let list = provider_infos(data_dir.as_deref(), &model);
+                        let _ = event_tx.send(BridgeEvent::Providers(list));
+                    }
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::ProviderError(error));
+                    }
+                }
+            }
+            BridgeCommand::RemoveProviderKey { provider } => {
+                let provider_name = provider.clone();
+                let removed = tokio::task::spawn_blocking(move || {
+                    timo_config::keychain_delete(KEYCHAIN_SERVICE, &provider_name)
+                })
+                .await;
+                match removed {
+                    Ok(Ok(())) => {
+                        let _ = event_tx.send(BridgeEvent::ProviderRemoved(provider));
+                        let model = kernel.model_label();
+                        let list = provider_infos(data_dir.as_deref(), &model);
+                        let _ = event_tx.send(BridgeEvent::Providers(list));
+                    }
+                    Ok(Err(error)) => {
+                        let _ = event_tx.send(BridgeEvent::ProviderError(error.to_string()));
+                    }
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::ProviderError(error.to_string()));
+                    }
+                }
+            }
         }
     }
+}
+
+fn forward_events(kernel: &Kernel, event_tx: UnboundedSender<BridgeEvent>) {
+    let mut kernel_events = kernel.events();
+    tokio::spawn(async move {
+        use tokio::sync::broadcast::error::RecvError;
+        loop {
+            match kernel_events.recv().await {
+                Ok(event) => {
+                    if event_tx.send(BridgeEvent::Kernel(event)).is_err() {
+                        break;
+                    }
+                }
+                Err(RecvError::Lagged(skipped)) => {
+                    if event_tx.send(BridgeEvent::Lagged(skipped)).is_err() {
+                        break;
+                    }
+                }
+                Err(RecvError::Closed) => break,
+            }
+        }
+    });
 }
 
 async fn run_once(

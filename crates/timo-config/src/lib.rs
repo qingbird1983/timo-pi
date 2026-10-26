@@ -15,9 +15,13 @@ mod settings;
 mod thinking;
 
 pub use clock::{Clock, FixedClock, SystemClock};
-pub use credentials::ValueRef;
+pub use credentials::{
+    CredentialSource, KEYCHAIN_SERVICE, ValueRef, keychain_delete, keychain_get, keychain_set,
+};
 pub use error::ConfigError;
-pub use models_file::{CostRates, CostTier, CustomModel, CustomProvider, load_custom_providers};
+pub use models_file::{
+    CostRates, CostTier, CustomModel, CustomProvider, load_custom_providers, set_provider_api_key,
+};
 pub use paths::{
     agent_dir, mcp_path, models_path, project_settings_path, sessions_dir, settings_path,
 };

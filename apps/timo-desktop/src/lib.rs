@@ -10,6 +10,7 @@ pub mod app;
 mod bridge;
 mod features;
 pub mod i18n;
+pub mod settings;
 pub mod theme;
 
 use gpui_kit::component::TitleBar;
@@ -22,12 +23,18 @@ pub fn run() {
         .run(|cx| {
             gpui_kit::init(cx);
             i18n::init();
+            let (settings, _) = settings::DesktopSettings::load();
+            i18n::set(&settings.locale);
+            theme::apply(settings.theme, settings.font_scale, None, cx);
 
             let mut options = TitleBar::window_options();
             if let Some(titlebar) = options.titlebar.as_mut() {
                 titlebar.title = Some(t!("app.title").to_string().into());
             }
-            options.window_bounds = Some(WindowBounds::centered(size(px(1280.), px(800.)), cx));
+            options.window_bounds = Some(WindowBounds::centered(
+                size(px(settings.window.width), px(settings.window.height)),
+                cx,
+            ));
             options.window_min_size = Some(size(px(960.), px(600.)));
 
             if let Err(error) = gpui_kit::open_window(options, cx, |window, cx| {

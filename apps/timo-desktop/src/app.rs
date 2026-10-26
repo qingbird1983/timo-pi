@@ -1,18 +1,28 @@
 //! 主窗口视图：标题栏、会话侧栏、聊天区、状态栏与内核桥接（设计 01 §4~§5）。
 
+use std::sync::{Arc, Mutex};
+
 use gpui_kit::component::TitleBar;
-use gpui_kit::component::input::{InputEvent, TextareaState};
+use gpui_kit::component::command::CommandState;
+use gpui_kit::component::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::component::status_bar::StatusBar;
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt as _, h_flex, v_flex,
+    ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::*;
 use timo_kernel::{KernelEvent, KernelOptions, SessionInfo};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::bridge::{BridgeCommand, BridgeEvent};
-use crate::features::chat::{self, ChatState};
+use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo};
+use crate::features::chat::ChatState;
+use crate::features::palette::{
+    AcceptReviewAction, CloseOverlayAction, NewSessionAction, OpenSettingsAction,
+    RejectReviewAction, StopAction, TogglePalette,
+};
+use crate::features::review::ReviewState;
+use crate::features::settings_view::SettingsTab;
+use crate::settings::{DesktopSettings, ThemePref};
 use crate::theme;
 
 /// 侧栏默认宽度（设计 01 §2：240~360，默认 248）。
@@ -33,6 +43,22 @@ pub struct DesktopApp {
     pub(crate) fatal: Option<String>,
     pub(crate) notice: Option<String>,
     pub(crate) rows: usize,
+    pub(crate) settings: Arc<Mutex<DesktopSettings>>,
+    pub(crate) persist_settings: bool,
+    pub(crate) theme_pref: ThemePref,
+    pub(crate) font_scale: f32,
+    pub(crate) settings_reset: bool,
+    pub(crate) review: ReviewState,
+    pub(crate) palette: Entity<CommandState>,
+    pub(crate) palette_open: bool,
+    pub(crate) settings_open: bool,
+    pub(crate) settings_tab: SettingsTab,
+    pub(crate) settings_focus: FocusHandle,
+    pub(crate) providers: Vec<ProviderInfo>,
+    pub(crate) provider_error: Option<String>,
+    pub(crate) provider_feedback: Option<String>,
+    pub(crate) key_provider: Option<String>,
+    pub(crate) key_input: Entity<InputState>,
     _subscriptions: Vec<Subscription>,
     _events: Task<()>,
 }
@@ -40,21 +66,52 @@ pub struct DesktopApp {
 impl DesktopApp {
     /// 创建根视图并启动真实内核桥接。
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let bridge = crate::bridge::spawn(KernelOptions::default());
-        Self::with_bridge(bridge.commands, bridge.events, window, cx)
+        let (settings, reset) = DesktopSettings::load();
+        crate::i18n::set(&settings.locale);
+        theme::apply(settings.theme, settings.font_scale, Some(window), cx);
+        let bridge = crate::bridge::spawn(KernelOptions::default(), settings.review);
+        Self::build(
+            bridge.commands,
+            bridge.events,
+            settings,
+            reset,
+            true,
+            window,
+            cx,
+        )
     }
 
-    /// 用给定桥接两端创建视图（测试可注入假内核）。
+    /// 用给定桥接两端创建视图（测试可注入假内核；不读写真实桌设）。
     pub fn with_bridge(
         commands: UnboundedSender<BridgeCommand>,
         events: UnboundedReceiver<BridgeEvent>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::build(
+            commands,
+            events,
+            DesktopSettings::default(),
+            false,
+            false,
+            window,
+            cx,
+        )
+    }
+
+    fn build(
+        commands: UnboundedSender<BridgeCommand>,
+        events: UnboundedReceiver<BridgeEvent>,
+        settings: DesktopSettings,
+        settings_reset: bool,
+        persist_settings: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let input = cx.new(|cx| {
             TextareaState::new(window, cx).placeholder(t!("chat.placeholder").to_string())
         });
-        let subscriptions = vec![cx.subscribe_in(
+        let mut subscriptions = vec![cx.subscribe_in(
             &input,
             window,
             |this, _state, event: &InputEvent, window, cx| {
@@ -69,6 +126,27 @@ impl DesktopApp {
                 }
             },
         )];
+        subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
+            if this.theme_pref == ThemePref::System {
+                theme::apply(ThemePref::System, this.font_scale, Some(window), cx);
+                this.dark = theme::is_dark(cx);
+            }
+        }));
+        let shared = Arc::new(Mutex::new(settings.clone()));
+        let quit_settings = shared.clone();
+        let persist = persist_settings;
+        subscriptions.push(cx.on_app_quit(move |_, _| {
+            let settings = if persist {
+                quit_settings.lock().ok().map(|settings| settings.clone())
+            } else {
+                None
+            };
+            async move {
+                if let Some(settings) = settings {
+                    let _ = settings.save();
+                }
+            }
+        }));
         let task = cx.spawn(async move |this, cx| {
             let mut events = events;
             while let Some(event) = events.recv().await {
@@ -83,6 +161,21 @@ impl DesktopApp {
                 }
             }
         });
+        let key_input = cx.new(|cx| InputState::new(window, cx));
+        key_input.update(cx, |input, cx| input.set_masked(true, window, cx));
+        cx.bind_keys([
+            KeyBinding::new("secondary-k", TogglePalette, None),
+            KeyBinding::new("secondary-n", NewSessionAction, None),
+            KeyBinding::new("secondary-,", OpenSettingsAction, None),
+            KeyBinding::new("secondary-.", StopAction, None),
+            KeyBinding::new("secondary-enter", AcceptReviewAction, Some("ReviewSheet")),
+            KeyBinding::new(
+                "secondary-backspace",
+                RejectReviewAction,
+                Some("ReviewSheet"),
+            ),
+            KeyBinding::new("escape", CloseOverlayAction, None),
+        ]);
         Self {
             dark: theme::is_dark(cx),
             commands,
@@ -97,27 +190,28 @@ impl DesktopApp {
             fatal: None,
             notice: None,
             rows: 0,
+            settings: shared,
+            persist_settings,
+            theme_pref: settings.theme,
+            font_scale: settings.font_scale,
+            settings_reset,
+            review: ReviewState::new(window, cx),
+            palette: cx.new(|cx| CommandState::new(window, cx)),
+            palette_open: false,
+            settings_open: false,
+            settings_tab: SettingsTab::General,
+            settings_focus: cx.focus_handle(),
+            providers: vec![],
+            provider_error: None,
+            provider_feedback: None,
+            key_provider: None,
+            key_input,
             _subscriptions: subscriptions,
             _events: task,
         }
     }
 
     /// 当前是否为深色外观（测试与后续设置页读取）。
-    pub fn is_dark(&self) -> bool {
-        self.dark
-    }
-
-    /// 把焦点交给输入框。
-    pub fn focus_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
-        self.input.update(cx, |input, cx| input.focus(window, cx));
-    }
-
-    pub(crate) fn toggle_theme(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
-        self.dark = !self.dark;
-        theme::set_dark(self.dark, None, cx);
-        cx.notify();
-    }
-
     fn handle_bridge(&mut self, event: BridgeEvent, cx: &mut Context<Self>) {
         match event {
             BridgeEvent::Ready { model, sessions } => {
@@ -148,6 +242,7 @@ impl DesktopApp {
             }
             BridgeEvent::Finished => {
                 self.chat.update(cx, |chat, _| chat.running = false);
+                self.cancel_pending_reviews(cx);
                 self.refresh_title(cx);
             }
             BridgeEvent::Kernel(event) => {
@@ -160,6 +255,28 @@ impl DesktopApp {
                 if matches!(event, KernelEvent::AgentFinished { .. }) {
                     self.refresh_title(cx);
                 }
+            }
+            BridgeEvent::Review { request, respond } => {
+                self.handle_review_request(request, respond, cx);
+            }
+            BridgeEvent::Providers(providers) => {
+                self.providers = providers;
+                self.provider_error = None;
+            }
+            BridgeEvent::ProviderSaved(provider) => {
+                self.provider_error = None;
+                self.provider_feedback =
+                    Some(t!("settings.key_saved", provider = provider).to_string());
+                self.notice = Some(t!("settings.key_saved", provider = provider).to_string());
+            }
+            BridgeEvent::ProviderRemoved(provider) => {
+                self.provider_feedback =
+                    Some(t!("settings.key_removed", provider = provider).to_string());
+                self.notice = Some(t!("settings.key_removed", provider = provider).to_string());
+            }
+            BridgeEvent::ProviderError(message) => {
+                self.provider_error = Some(message);
+                self.provider_feedback = None;
             }
             BridgeEvent::Fatal(message) => {
                 self.ready = false;
@@ -183,85 +300,7 @@ impl DesktopApp {
         }
     }
 
-    fn sync_scroller(&mut self, cx: &mut Context<Self>) {
-        self.rows = self.chat.read(cx).rows.len();
-        let rows = self.rows;
-        self.scroller
-            .update(cx, |scroller, cx| scroller.reset(rows, cx));
-    }
-
-    fn refresh_title(&mut self, cx: &mut Context<Self>) {
-        let id = self.session_id.clone();
-        self.session_title = id
-            .as_ref()
-            .and_then(|id| {
-                self.sessions
-                    .iter()
-                    .find(|session| &session.id == id)
-                    .map(|session| session.first_message.clone())
-            })
-            .filter(|title| !title.trim().is_empty())
-            .unwrap_or_else(|| t!("chat.empty_session").to_string());
-        if let Some(last) = self
-            .chat
-            .read(cx)
-            .rows
-            .iter()
-            .find_map(|row| match &row.kind {
-                chat::RowKind::User(text) => Some(text.clone()),
-                _ => None,
-            })
-            && self.session_id.is_none()
-        {
-            self.session_title = last;
-        }
-    }
-
-    pub(crate) fn new_session(&mut self, cx: &mut Context<Self>) {
-        if self.chat.read(cx).running {
-            self.notice = Some(t!("chat.busy").to_string());
-            return;
-        }
-        let _ = self.commands.send(BridgeCommand::NewSession);
-        self.session_id = None;
-        self.session_title = t!("chat.empty_session").to_string();
-        self.chat.update(cx, |chat, _| chat.reset());
-        self.sync_scroller(cx);
-    }
-
-    pub(crate) fn open_session(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.chat.read(cx).running {
-            self.notice = Some(t!("chat.busy").to_string());
-            return;
-        }
-        let _ = self.commands.send(BridgeCommand::OpenSession(id));
-    }
-
-    pub(crate) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.ready || self.chat.read(cx).running {
-            return;
-        }
-        let text = self.input.read(cx).value().to_string();
-        let text = text.trim().to_string();
-        if text.is_empty() {
-            return;
-        }
-        self.chat.update(cx, |chat, _| {
-            chat.push_user(&text);
-            chat.running = true;
-        });
-        let _ = self.commands.send(BridgeCommand::Run(text));
-        self.input
-            .update(cx, |input, cx| input.set_value("", window, cx));
-        self.notice = None;
-        self.sync_scroller(cx);
-    }
-
-    pub(crate) fn stop(&mut self, cx: &mut Context<Self>) {
-        let _ = self.commands.send(BridgeCommand::Cancel);
-        cx.notify();
-    }
-
+    /// 运行结束/取消时丢弃未决审阅：回传通道 drop → 工具收到取消，不执行副作用。
     fn title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         TitleBar::new().child(
             h_flex()
@@ -338,155 +377,69 @@ impl DesktopApp {
 }
 
 impl Render for DesktopApp {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.remember_window(window);
+        if self.review.queue.is_empty() && self.review.open {
+            self.review.open = false;
+            if window.has_active_sheet(cx) {
+                cx.defer_in(window, |_, window, cx| window.close_sheet(cx));
+            }
+        }
+        if !self.review.queue.is_empty() && !self.review.open {
+            cx.defer_in(window, |this, window, cx| {
+                this.open_next_review(window, cx);
+            });
+        }
         let notice = self.notice_bar(cx);
+        let center = if self.settings_open {
+            self.settings_page(cx)
+        } else {
+            v_flex()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .child(self.chat_area(cx))
+                .children(notice)
+                .child(self.composer(cx))
+                .into_any_element()
+        };
+        let palette = self.command_palette(cx);
         v_flex()
+            .relative()
             .size_full()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             .child(self.title_bar(cx))
             .child(
-                h_flex().flex_1().min_h_0().child(self.sidebar(cx)).child(
-                    v_flex()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .child(self.chat_area(cx))
-                        .children(notice)
-                        .child(self.composer(cx)),
-                ),
+                h_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .items_stretch()
+                    .child(self.sidebar(cx))
+                    .child(center),
             )
             .child(self.status_bar(cx))
+            .on_action(cx.listener(Self::on_toggle_palette))
+            .on_action(cx.listener(Self::on_new_session))
+            .on_action(cx.listener(Self::on_delete_current))
+            .on_action(cx.listener(Self::on_stop))
+            .on_action(cx.listener(Self::on_resend))
+            .on_action(cx.listener(Self::on_focus_composer))
+            .on_action(cx.listener(Self::on_open_settings))
+            .on_action(cx.listener(Self::on_open_model))
+            .on_action(cx.listener(Self::on_toggle_locale))
+            .on_action(cx.listener(Self::on_toggle_theme))
+            .on_action(cx.listener(Self::on_open_session))
+            .on_action(cx.listener(Self::on_accept_review))
+            .on_action(cx.listener(Self::on_reject_review))
+            .on_action(cx.listener(Self::on_close_overlay))
+            .child(palette)
     }
 }
+
+#[path = "app_actions.rs"]
+mod actions;
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod tests {
-    use super::{DesktopApp, chat};
-    use gpui_kit::test::TestWindowExt as _;
-    use gpui_kit::{
-        AnyWindowHandle, AppContext as _, Bounds, Entity, TestAppContext, WindowBounds,
-        WindowOptions, px, size,
-    };
-    use std::sync::Arc;
-    use timo_kernel::{
-        AssistantMessage, AssistantStreamEvent, Content, KernelEvent, Message, UserMessage,
-    };
-    use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-
-    use crate::bridge::{BridgeCommand, BridgeEvent};
-
-    #[allow(clippy::type_complexity)]
-    fn open(
-        cx: &mut TestAppContext,
-    ) -> (
-        AnyWindowHandle,
-        Entity<DesktopApp>,
-        UnboundedSender<BridgeEvent>,
-        UnboundedReceiver<BridgeCommand>,
-    ) {
-        let (commands, command_rx) = unbounded_channel::<BridgeCommand>();
-        let (events_tx, events) = unbounded_channel();
-        let (handle, app) = cx.update(|cx| {
-            gpui_kit::open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(Bounds::new(
-                        Default::default(),
-                        size(px(1280.), px(800.)),
-                    ))),
-                    ..Default::default()
-                },
-                cx,
-                |window, cx| cx.new(|cx| DesktopApp::with_bridge(commands, events, window, cx)),
-            )
-            .expect("open test window")
-        });
-        (handle, app, events_tx, command_rx)
-    }
-
-    fn assistant_text(chat: &chat::ChatState) -> String {
-        chat.rows
-            .iter()
-            .filter_map(|row| match &row.kind {
-                chat::RowKind::Assistant(row) => Some(row.text.clone()),
-                chat::RowKind::User(_) => None,
-            })
-            .collect()
-    }
-
-    #[gpui_kit::test]
-    fn bridge_events_drive_chat_and_sessions(cx: &mut TestAppContext) {
-        cx.update(gpui_kit::init);
-        crate::i18n::init();
-        let (handle, app, events_tx, _commands) = open(cx);
-
-        events_tx
-            .send(BridgeEvent::Ready {
-                model: "deepseek-chat".into(),
-                sessions: vec![],
-            })
-            .unwrap();
-        cx.run_until_parked();
-        assert!(app.read_with(cx, |app, _| app.ready));
-
-        events_tx.send(BridgeEvent::Running).unwrap();
-        events_tx
-            .send(BridgeEvent::Kernel(KernelEvent::AgentStarted))
-            .unwrap();
-        events_tx
-            .send(BridgeEvent::Kernel(KernelEvent::TurnStarted))
-            .unwrap();
-        let mut partial = AssistantMessage::pending("openai", "deepseek", "m", 0);
-        partial.content = vec![Content::Text {
-            text: "hello from kernel".into(),
-        }];
-        events_tx
-            .send(BridgeEvent::Kernel(KernelEvent::StreamEvent {
-                event: Arc::new(AssistantStreamEvent::Start { partial }),
-            }))
-            .unwrap();
-        cx.run_until_parked();
-        app.read_with(cx, |app, cx| {
-            let chat = app.chat.read(cx);
-            assert_eq!(chat.rows.len(), 1);
-            assert_eq!(assistant_text(chat), "hello from kernel");
-            assert!(chat.running);
-        });
-
-        events_tx.send(BridgeEvent::Finished).unwrap();
-        events_tx
-            .send(BridgeEvent::Kernel(KernelEvent::AgentFinished {
-                messages: Arc::new(vec![]),
-            }))
-            .unwrap();
-        cx.run_until_parked();
-        assert!(!app.read_with(cx, |app, cx| app.chat.read(cx).running));
-
-        events_tx
-            .send(BridgeEvent::Opened {
-                id: Some("s1".into()),
-                history: vec![Message::User(UserMessage {
-                    content: vec![Content::Text {
-                        text: "restored".into(),
-                    }],
-                    timestamp: 0,
-                })],
-            })
-            .unwrap();
-        cx.run_until_parked();
-        app.read_with(cx, |app, cx| {
-            assert_eq!(app.session_id.as_deref(), Some("s1"));
-            assert_eq!(app.chat.read(cx).rows.len(), 1);
-            assert!(matches!(
-                app.chat.read(cx).rows[0].kind,
-                chat::RowKind::User(ref text) if text == "restored"
-            ));
-        });
-
-        cx.update_window(handle, |_, window, cx| {
-            window.render_frame(cx);
-        })
-        .unwrap();
-    }
-}
+#[path = "app_tests.rs"]
+mod tests;

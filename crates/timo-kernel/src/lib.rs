@@ -40,6 +40,7 @@ pub use timo_ai::{
 };
 pub use timo_config::ThinkingLevel;
 pub use timo_session::SessionInfo;
+pub use timo_tools::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
 
 /// 结果别名：本 crate 一律以 [`KernelError`] 报错。
 pub type Result<T> = std::result::Result<T, KernelError>;
