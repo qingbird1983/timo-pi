@@ -73,7 +73,8 @@ impl McpRuntime {
         }
     }
 
-    /// 取连接；无则建立（stdio 子进程 / streamable HTTP）。
+    /// 取连接；无则建立（stdio 子进程 / streamable HTTP）。失败记入 `Failed`
+    /// 状态，下次调用重试。
     ///
     /// # Errors
     /// 子进程启动 / HTTP 握手失败 → [`McpError::ConnectFailed`]。
@@ -84,6 +85,27 @@ impl McpRuntime {
                 return Ok(c.clone());
             }
         }
+        let opened = self.open(server).await;
+        match &opened {
+            Ok(client) => {
+                self.conns
+                    .lock()
+                    .await
+                    .insert(server.to_string(), client.clone());
+                self.failed.lock().await.remove(server);
+            }
+            Err(e) => {
+                self.failed
+                    .lock()
+                    .await
+                    .insert(server.to_string(), e.to_string());
+            }
+        }
+        opened
+    }
+
+    /// 建立新连接（不读写缓存；失败记录由 [`McpRuntime::connect`] 负责）。
+    async fn open(&self, server: &str) -> Result<Client> {
         let entry = self
             .entries
             .get(server)
@@ -148,11 +170,6 @@ impl McpRuntime {
                 )
             }
         };
-        self.conns
-            .lock()
-            .await
-            .insert(server.to_string(), client.clone());
-        self.failed.lock().await.remove(server);
         Ok(client)
     }
 
