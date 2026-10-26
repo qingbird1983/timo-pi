@@ -11,12 +11,13 @@ mod error;
 mod events;
 mod queue;
 mod run;
+mod tool_calls;
 
-pub use agent::AgentHandle;
+pub use agent::{AbortHandle, AgentHandle};
 pub use error::AgentError;
 pub use events::{EventBus, KernelEvent};
 pub use queue::PendingMessageQueue;
-pub use run::{LoopConfig, RunChannels, ToolExecutionMode, run_agent_loop};
+pub use run::{LoopConfig, RunChannels, SessionSink, ToolExecutionMode, run_agent_loop};
 
 /// 结果别名：本 crate 一律以 [`AgentError`] 报错。
 pub type Result<T> = std::result::Result<T, AgentError>;

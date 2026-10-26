@@ -36,10 +36,8 @@ pub enum KernelEvent {
     },
     /// 工具调用请求（Phase 1 仅通告；veto 接口 Phase 2）。
     ToolCallRequested {
-        /// 工具名。
-        tool_name: String,
-        /// 调用 id。
-        tool_call_id: String,
+        /// 工具调用内容快照（含工具名、参数与解析错误）。
+        call: Arc<timo_ai::Content>,
     },
     /// 工具执行开始。
     ToolCallStarted {
@@ -47,6 +45,8 @@ pub enum KernelEvent {
         tool_call_id: String,
         /// 工具名。
         tool_name: String,
+        /// 参数快照（参数 JSON 非法时保留解析器给出的原值）。
+        args: Arc<serde_json::Value>,
     },
     /// 工具部分结果（on_update 通道；settle 后不再产出）。
     ToolCallUpdate {

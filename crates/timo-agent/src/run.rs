@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::events::{EventBus, KernelEvent};
 use crate::queue::PendingMessageQueue;
+use crate::tool_calls::{error_result_message, tool_args, tool_id, tool_name};
 
 /// 工具批执行模式（pi toolExecution）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -48,6 +49,8 @@ pub struct LoopConfig {
     pub system_prompt: String,
     /// 时钟（standards/05 §3：时间注入）。
     pub clock: std::sync::Arc<dyn Clock>,
+    /// 单次 run 的模型请求轮数上限（None = 不限）。
+    pub max_turns: Option<usize>,
 }
 
 /// 会话写入口（MessageAdded 落盘挂点；None = 无会话）。
@@ -90,12 +93,19 @@ pub async fn run_agent_loop(
         ctx.push_message(m).await;
     }
     let mut pending = channels.steering.drain();
+    let mut turns: usize = 0;
     'outer: loop {
         // 内层：轮次循环
         loop {
             if ctx.cancel.is_cancelled() && pending.is_empty() {
                 break;
             }
+            if let Some(max) = config.max_turns
+                && turns >= max
+            {
+                break 'outer;
+            }
+            turns += 1;
             ctx.bus.emit(KernelEvent::TurnStarted);
             for m in std::mem::take(&mut pending) {
                 ctx.push_message(m).await;
@@ -346,14 +356,18 @@ impl<'a> Ctx<'a> {
         )
     }
 
-    /// 单工具全流程：Started → 执行 → Finished；Err 转错误 result（is_error）。
+    /// 单工具全流程：Requested → Started → 执行 → Finished；Err 转错误 result（is_error）。
     async fn run_one(&self, call: &Content) -> (Message, bool) {
         let started = std::time::Instant::now();
         let name = tool_name(call);
         let id = tool_id(call);
+        self.bus.emit(KernelEvent::ToolCallRequested {
+            call: Arc::new(call.clone()),
+        });
         self.bus.emit(KernelEvent::ToolCallStarted {
             tool_call_id: id.clone(),
             tool_name: name.clone(),
+            args: tool_args(call),
         });
         let result = self.execute_validated(call).await;
         let duration = started.elapsed().as_millis() as u64;
@@ -439,9 +453,13 @@ impl<'a> Ctx<'a> {
     async fn fail_tool_call(&self, call: &Content, reason: &str) -> Message {
         let name = tool_name(call);
         let id = tool_id(call);
+        self.bus.emit(KernelEvent::ToolCallRequested {
+            call: Arc::new(call.clone()),
+        });
         self.bus.emit(KernelEvent::ToolCallStarted {
             tool_call_id: id.clone(),
             tool_name: name.clone(),
+            args: tool_args(call),
         });
         let message = error_result_message(&id, &name, reason, None, self.now_ms());
         self.bus.emit(KernelEvent::ToolCallFinished {
@@ -452,40 +470,4 @@ impl<'a> Ctx<'a> {
         });
         message
     }
-}
-
-/// 工具名（防御式：非 ToolCall 为空串）。
-fn tool_name(call: &Content) -> String {
-    match call {
-        Content::ToolCall { name, .. } => name.clone(),
-        _ => String::new(),
-    }
-}
-
-/// 调用 id（防御式：非 ToolCall 为空串）。
-fn tool_id(call: &Content) -> String {
-    match call {
-        Content::ToolCall { id, .. } => id.clone(),
-        _ => String::new(),
-    }
-}
-
-fn error_result_message(
-    id: &str,
-    name: &str,
-    reason: &str,
-    duration_ms: Option<u64>,
-    ts: i64,
-) -> Message {
-    Message::ToolResult(ToolResultMessage {
-        tool_call_id: id.to_string(),
-        tool_name: name.to_string(),
-        content: vec![Content::Text {
-            text: reason.to_string(),
-        }],
-        is_error: true,
-        usage: None,
-        duration_ms,
-        timestamp: ts,
-    })
 }

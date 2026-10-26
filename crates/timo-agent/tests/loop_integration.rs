@@ -134,6 +134,7 @@ fn handle(api: Arc<dyn ProviderApi>) -> AgentHandle {
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "test".into(),
         clock: Arc::new(FixedClock::new(1_000)),
+        max_turns: None,
     })
 }
 

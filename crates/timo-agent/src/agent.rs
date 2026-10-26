@@ -10,6 +10,26 @@ use crate::events::EventBus;
 use crate::queue::PendingMessageQueue;
 use crate::run::{LoopConfig, SessionSink, run_agent_loop};
 
+/// 可从任意任务调用的中止句柄（薄壳在 run 进行中拦截 Ctrl+C 用）。
+#[derive(Clone)]
+pub struct AbortHandle {
+    slot: Arc<std::sync::Mutex<Option<CancellationToken>>>,
+}
+
+impl AbortHandle {
+    /// 中止当前 run（无 run 则无操作）。
+    pub fn abort(&self) {
+        if let Some(c) = self
+            .slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
+            c.cancel();
+        }
+    }
+}
+
 /// 单会话 agent 句柄：装配一次，可多次 run/续跑。
 pub struct AgentHandle {
     config: Arc<LoopConfig>,
@@ -17,20 +37,44 @@ pub struct AgentHandle {
     steering: Arc<PendingMessageQueue>,
     follow_up: Arc<PendingMessageQueue>,
     active: tokio::sync::Mutex<()>,
-    cancel_slot: std::sync::Mutex<Option<CancellationToken>>,
+    cancel_slot: Arc<std::sync::Mutex<Option<CancellationToken>>>,
 }
 
 impl AgentHandle {
     /// 装配（配置在 run 之间共享；模型切换经新句柄/新 run）。
     #[must_use]
     pub fn new(config: LoopConfig) -> Self {
+        Self::with_parts(
+            config,
+            EventBus::new(),
+            Arc::new(PendingMessageQueue::new()),
+            Arc::new(PendingMessageQueue::new()),
+        )
+    }
+
+    /// 用外部总线与队列装配（门面层：先订阅、后装配，保证首事件不丢）。
+    #[must_use]
+    pub fn with_parts(
+        config: LoopConfig,
+        bus: EventBus,
+        steering: Arc<PendingMessageQueue>,
+        follow_up: Arc<PendingMessageQueue>,
+    ) -> Self {
         Self {
             config: Arc::new(config),
-            bus: EventBus::new(),
-            steering: Arc::new(PendingMessageQueue::new()),
-            follow_up: Arc::new(PendingMessageQueue::new()),
+            bus,
+            steering,
+            follow_up,
             active: tokio::sync::Mutex::new(()),
-            cancel_slot: std::sync::Mutex::new(None),
+            cancel_slot: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
+    /// 中止句柄（克隆后可在 run 借出期间从其他任务调用）。
+    #[must_use]
+    pub fn abort_handle(&self) -> AbortHandle {
+        AbortHandle {
+            slot: Arc::clone(&self.cancel_slot),
         }
     }
 
@@ -110,9 +154,25 @@ impl AgentHandle {
         }
     }
 
+    /// 等待当前 run 结束（无 run 时立即返回）。
+    pub async fn wait_idle(&self) {
+        let _guard = self.active.lock().await;
+    }
+
     /// 是否有排队消息（steering 优先语义的 peek，pi 同构）。
     #[must_use]
     pub fn has_queued(&self) -> bool {
         self.steering.has_queued() || self.follow_up.has_queued()
+    }
+
+    /// 对模型声明的工具名清单（门面诊断用）。
+    #[must_use]
+    pub fn declared_tools(&self) -> Vec<String> {
+        self.config
+            .tools
+            .declared()
+            .into_iter()
+            .map(|d| d.name.clone())
+            .collect()
     }
 }
