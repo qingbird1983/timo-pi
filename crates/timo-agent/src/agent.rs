@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AgentError;
 use crate::events::EventBus;
 use crate::queue::PendingMessageQueue;
-use crate::run::{LoopConfig, SessionSink, run_agent_loop};
+use crate::run::{LoopConfig, RunOutcome, SessionSink, run_agent_loop};
 
 /// 可从任意任务调用的中止句柄（薄壳在 run 进行中拦截 Ctrl+C 用）。
 #[derive(Clone)]
@@ -98,6 +98,9 @@ impl AgentHandle {
 
     /// 运行一次：prompt → 循环至自然停止/取消/错误。
     ///
+    /// 只返回本次新增消息；需要保留多轮上下文的宿主用
+    /// [`AgentHandle::run_with_context`]。
+    ///
     /// # Errors
     /// 已有 run 进行中（[`AgentError::RunActive`]）；空 prompt 且队列空（
     /// [`AgentError::EmptyPrompt`]）。
@@ -107,6 +110,20 @@ impl AgentHandle {
         history: Vec<timo_ai::Message>,
         session: SessionSink,
     ) -> Result<Vec<timo_ai::Message>, AgentError> {
+        let outcome = self.run_with_context(prompt, history, session).await?;
+        Ok(outcome.new_messages)
+    }
+
+    /// 运行一次并返回新增消息 + 完整上下文（多轮宿主保留 history 用）。
+    ///
+    /// # Errors
+    /// 同 [`AgentHandle::run`]。
+    pub async fn run_with_context(
+        &self,
+        prompt: String,
+        history: Vec<timo_ai::Message>,
+        session: SessionSink,
+    ) -> Result<RunOutcome, AgentError> {
         let _guard = self.active.try_lock().map_err(|_| AgentError::RunActive)?;
         if prompt.trim().is_empty() && !self.has_queued() {
             return Err(AgentError::EmptyPrompt);

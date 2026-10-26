@@ -22,7 +22,9 @@ pub use hooks::{
     ToolOutputPatch,
 };
 pub use queue::PendingMessageQueue;
-pub use run::{LoopConfig, RunChannels, SessionSink, ToolExecutionMode, run_agent_loop};
+pub use run::{
+    LoopConfig, RunChannels, RunOutcome, SessionSink, ToolExecutionMode, run_agent_loop,
+};
 
 /// 结果别名：本 crate 一律以 [`AgentError`] 报错。
 pub type Result<T> = std::result::Result<T, AgentError>;

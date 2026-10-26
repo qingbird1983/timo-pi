@@ -58,9 +58,6 @@ pub struct LoopConfig {
 /// 会话写入口（MessageAdded 落盘挂点；None = 无会话）。
 pub type SessionSink = Option<Arc<tokio::sync::Mutex<SessionWriter>>>;
 
-/// 运行一轮完整 agent run；返回本次 run 产生的全部新消息。
-///
-/// 契约：`AgentStarted` 恒为首事件、`AgentFinished` 恒为末事件（含错误/取消路径）。
 /// run 的通道组（事件 + 注入队列）。
 pub struct RunChannels<'a> {
     /// 事件总线。
@@ -71,7 +68,19 @@ pub struct RunChannels<'a> {
     pub follow_up: &'a PendingMessageQueue,
 }
 
-/// 运行一轮完整 agent run；返回本次 run 产生的全部新消息。
+/// 一次 run 的产出：本次新增消息与 run 结束时的完整上下文。
+///
+/// `new_messages` 与 [`crate::AgentHandle::run`] 的返回值一致；`context`
+/// 是含 run 前历史的完整投影，宿主可原样带回下一次 run（Kernel 的 history）。
+#[derive(Debug, Clone)]
+pub struct RunOutcome {
+    /// 本次 run 新增的消息（用户 prompt、assistant、工具结果、注入消息）。
+    pub new_messages: Vec<Message>,
+    /// run 结束时的完整上下文（含 run 前的历史）。
+    pub context: Vec<Message>,
+}
+
+/// 运行一轮完整 agent run；返回新增消息与完整上下文。
 ///
 /// 契约：`AgentStarted` 恒为首事件、`AgentFinished` 恒为末事件（含错误/取消路径）。
 pub async fn run_agent_loop(
@@ -81,7 +90,7 @@ pub async fn run_agent_loop(
     prompt: Vec<Message>,
     session: SessionSink,
     cancel: CancellationToken,
-) -> Vec<Message> {
+) -> RunOutcome {
     let mut system_prompt = config.system_prompt.clone();
     if let Some(hooks) = &config.hooks
         && let Some(replaced) = hooks
@@ -184,7 +193,10 @@ pub async fn run_agent_loop(
     ctx.bus.emit(KernelEvent::AgentFinished {
         messages: Arc::new(new_messages.clone()),
     });
-    new_messages
+    RunOutcome {
+        new_messages,
+        context: std::mem::take(&mut ctx.messages),
+    }
 }
 
 /// 循环内部状态。

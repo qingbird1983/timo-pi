@@ -178,6 +178,35 @@ async fn full_loop_text_then_tool_then_stop() {
 }
 
 #[tokio::test]
+async fn run_with_context_carries_history_into_the_next_turn() {
+    let api = Arc::new(ScriptedApi::new(vec![
+        text_done("first reply"),
+        text_done("second reply"),
+    ]));
+    let agent = handle(api);
+    let first = agent
+        .run_with_context("one".into(), vec![], None)
+        .await
+        .expect("first run");
+    assert_eq!(first.new_messages.len(), 2);
+    assert_eq!(first.context.len(), 2);
+
+    let second = agent
+        .run_with_context("two".into(), first.context, None)
+        .await
+        .expect("second run");
+    // 只返回本轮新增，但上下文保留两轮（K0）
+    assert_eq!(second.new_messages.len(), 2);
+    assert_eq!(second.context.len(), 4);
+    assert!(
+        matches!(&second.context[0], Message::User(u) if matches!(&u.content[0], Content::Text { text } if text == "one"))
+    );
+    assert!(
+        matches!(&second.context[2], Message::User(u) if matches!(&u.content[0], Content::Text { text } if text == "two"))
+    );
+}
+
+#[tokio::test]
 async fn error_terminal_hard_exit_no_tool_execution() {
     let mut m = AssistantMessage::pending("mock", "mock", "m", 0);
     m.stop_reason = StopReason::Error;

@@ -11,7 +11,9 @@ use timo_agent::{
     AgentHandle, EventBus, KernelEvent, PendingMessageQueue, SessionSink, ToolExecutionMode,
 };
 use timo_config::Clock;
-use timo_session::{SessionInfo, SessionWriter, list_sessions, project_context, read_entries};
+use timo_session::{
+    SessionError, SessionInfo, SessionWriter, list_sessions, project_context, read_entries,
+};
 use timo_tools::{ToolDefinition, ToolRegistry};
 
 use crate::Result;
@@ -232,20 +234,29 @@ impl Kernel {
         }
         self.ext_abort.store(false, Ordering::SeqCst);
         self.ext_running.store(true, Ordering::SeqCst);
-        let history = self.history.take().unwrap_or_default();
+        // 克隆而不是 take：run 前置失败（空 prompt / 已有 run）时不能丢掉已恢复的历史。
+        let history = self.history.clone().unwrap_or_default();
         let session = self.session.clone();
         let Some(agent) = self.agent.as_ref() else {
             return Err(KernelError::Agent(timo_agent::AgentError::Setup(
                 "agent not assembled".into(),
             )));
         };
-        let out = agent.run(prompt.to_string(), history, session).await;
+        let out = agent
+            .run_with_context(prompt.to_string(), history, session)
+            .await;
         if let Some(runtime) = &mut self.ext {
             runtime.absorb_runtime_errors();
         }
         self.ext_running.store(false, Ordering::SeqCst);
         self.ext_abort.store(false, Ordering::SeqCst);
-        Ok(out?)
+        Ok(self.commit_outcome(out?))
+    }
+
+    /// 把一次 run 的完整上下文写回 history，返回本次新增消息。
+    fn commit_outcome(&mut self, outcome: timo_agent::RunOutcome) -> Vec<timo_ai::Message> {
+        self.history = Some(outcome.context);
+        outcome.new_messages
     }
 
     /// 恢复会话（投影历史；后续 run 追加到该文件）。
@@ -266,6 +277,51 @@ impl Kernel {
         self.session = Some(Arc::new(tokio::sync::Mutex::new(writer)));
         if let Some(host) = self.ext.as_ref().and_then(|runtime| runtime.host.as_ref()) {
             host.notify_event("session_start", serde_json::json!({ "reason": "resume" }));
+        }
+        Ok(())
+    }
+
+    /// 开始一个未落盘的会话草稿；首次 [`Kernel::run`] 才创建会话文件。
+    ///
+    /// 调用后当前会话 id 与历史都被清空（GUI“新建会话”）。
+    pub fn new_session(&mut self) {
+        self.session = None;
+        self.session_id = None;
+        self.history = None;
+    }
+
+    /// 当前会话的投影上下文；草稿或尚无历史时为 `None`。
+    #[must_use]
+    pub fn history(&self) -> Option<&[timo_ai::Message]> {
+        self.history.as_deref()
+    }
+
+    /// 删除一个已落盘的会话文件；删除当前会话时回到草稿态。
+    ///
+    /// id 只接受会话 id 字符（ASCII 字母数字、`-`、`_`），防止路径穿越。
+    ///
+    /// # Errors
+    /// id 非法、文件不存在或删除失败 → [`KernelError::Session`]。
+    pub fn delete_session(&mut self, id: &str) -> Result<()> {
+        let valid = !id.is_empty()
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if !valid {
+            return Err(KernelError::Session(SessionError::NotFound(id.to_string())));
+        }
+        let path = self.sessions_dir.join(format!("{id}.jsonl"));
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                return Err(KernelError::Session(SessionError::NotFound(id.to_string())));
+            }
+            Err(source) => {
+                return Err(KernelError::Session(SessionError::Io { path, source }));
+            }
+        }
+        if self.session_id.as_deref() == Some(id) {
+            self.new_session();
         }
         Ok(())
     }
@@ -490,5 +546,42 @@ impl Kernel {
     #[must_use]
     pub fn retry_settings(&self) -> &timo_config::RetrySettings {
         &self.retry
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn commit_outcome_keeps_the_full_context() {
+        let data = std::env::temp_dir().join(format!("timo-kernel-k0-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let work = data.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let mut kernel = Kernel::new(KernelOptions {
+            data_dir: Some(data.clone()),
+            work_dir: Some(work),
+            model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+            api_key: Some("test-key".into()),
+            ..Default::default()
+        })
+        .await
+        .expect("assemble");
+
+        let outcome = timo_agent::RunOutcome {
+            new_messages: vec![timo_ai::user_text("second", 2)],
+            context: vec![
+                timo_ai::user_text("first", 1),
+                timo_ai::user_text("first reply", 1),
+                timo_ai::user_text("second", 2),
+            ],
+        };
+        let new_messages = kernel.commit_outcome(outcome);
+        assert_eq!(new_messages.len(), 1);
+        // K0：第二次 run 能从完整上下文继续，而不是只剩新消息
+        assert_eq!(kernel.history().unwrap().len(), 3);
+        let _ = std::fs::remove_dir_all(&data);
     }
 }

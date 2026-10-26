@@ -5,7 +5,7 @@
 ## 当前阶段与状态
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）。
-- **Phase 3 进行中**：设计定稿（tag `phase-3.start`）；实现第 1 批完成——`apps/timo-desktop` 最小窗口可运行。
+- **Phase 3 进行中**：设计定稿（tag `phase-3.start`）；实现第 1~2 批完成——桌面壳最小窗口可运行，内核 K0/K1 已修。
 - 设计：`docs/design/phase-3/00-overview.md` ~ `04-tool-review.md` + `prototype.html`；决策 ADR-0012。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
@@ -16,16 +16,16 @@
 - **最小窗口**：自绘标题栏（窗口标题 `Timo`）、248 侧栏、聊天空态、底部状态栏；1280×800，最小 960×600；明暗切换走主题 token。
 - **文案**：`locales/zh-CN.yml`、`en.yml`，默认中文；代码不写死中文。
 - **UI 冒烟**：`tests/ui.rs` 无头渲染、侧栏宽度 248、明暗往返回位、中英文案切换；全套 186 tests 绿。
+- **K0/K1**：`run_agent_loop` 返回 `RunOutcome`（新增 + 完整上下文），`AgentHandle::run` 返回值不变；Kernel 用 clone 保留历史并在成功后回填。新增 `new_session()` 草稿、`history()`、`delete_session(id)`（防路径穿越，删当前会话回到草稿）；K0/K1 各有回归测试。
 - **真机核对**：1280×800 明/暗两态截图；修正窗口标题显示 exe 路径、状态栏中置的问题。
 - **坑**：P-007（测试文件 glob 导入导致 `#[gpui_kit::test]` 自递归）。
 
 ## 下一步（按优先级）
 
-1. **K0/K1**：`run_agent_loop` 返回完整上下文；`AgentHandle::run` 公共返回值不变；Kernel 保存完整上下文。公开 `new_session()`（草稿不落盘）、`history()`、`delete_session(id)`。既有测试一字不改全绿。
-2. **K2**：审阅接缝 + CLI `None` 等价性测试（ADR-0012）。
-3. 内核桥接 + 会话侧栏/聊天流/工具 trace/输入取消（设计 00 §8 第 4 步）。
-4. diff 审阅面板 + 命令面板 + 设置/钥匙串。
-5. NSH PoC（`nsh-poc` feature）+ C1~C6 验收 → `report.md` → tag `phase-3.end`。
+1. **K2**：审阅接缝 + CLI `None` 等价性测试（ADR-0012）。
+2. 内核桥接 + 会话侧栏/聊天流/工具 trace/输入取消（设计 00 §8 第 4 步）。
+3. diff 审阅面板 + 命令面板 + 设置/钥匙串。
+4. NSH PoC（`nsh-poc` feature）+ C1~C6 验收 → `report.md` → tag `phase-3.end`。
 
 > 施工顺序唯一来源：`docs/design/phase-3/00-overview.md` §8。设计错误先改文档再写码。
 

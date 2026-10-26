@@ -3,7 +3,11 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::sync::Arc;
+
+use timo_config::FixedClock;
 use timo_kernel::{Kernel, KernelOptions};
+use timo_session::{IdGen, SessionWriter};
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("timo-kernel-{name}-{}", std::process::id()));
@@ -118,6 +122,55 @@ async fn mcp_is_lazy_and_failure_does_not_block() {
         event,
         timo_agent::KernelEvent::Error { ref context } if context.contains("bad")
     ));
+}
+
+#[tokio::test]
+async fn session_draft_history_and_delete_api() {
+    let data = temp_dir("sessions-api");
+    let work = temp_dir("sessions-api-work");
+    let dir = Kernel::sessions_dir(Some(&data)).unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let mut kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data.clone()),
+        work_dir: Some(work),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("k".into()),
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+
+    assert!(kernel.session_id().is_none());
+    assert!(kernel.history().is_none());
+    kernel.new_session();
+    assert!(kernel.session_id().is_none());
+
+    // 当前会话删除后回到草稿态
+    let writer = SessionWriter::create(
+        &dir,
+        "D:/x",
+        None,
+        Arc::new(FixedClock::new(1)),
+        Arc::new(IdGen::new()),
+    )
+    .unwrap();
+    let id = writer.session_id().to_string();
+    drop(writer);
+    kernel.resume(&id).await.expect("resume");
+    assert_eq!(kernel.session_id(), Some(id.as_str()));
+    assert!(kernel.history().is_some());
+    kernel.delete_session(&id).expect("delete current");
+    assert!(kernel.session_id().is_none());
+    assert!(kernel.history().is_none());
+    assert!(!dir.join(format!("{id}.jsonl")).exists());
+
+    // 不存在的会话 / 路径穿越都被拒绝
+    assert!(kernel.delete_session(&id).is_err());
+    let outside = data.join("outside.jsonl");
+    std::fs::write(&outside, "x").unwrap();
+    assert!(kernel.delete_session("../outside").is_err());
+    assert!(outside.exists());
 }
 
 /// 测试专用：直接引用 timo-session 的错误类型做匹配（避免门面重导出膨胀）。
