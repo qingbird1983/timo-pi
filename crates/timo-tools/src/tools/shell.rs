@@ -342,17 +342,25 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_errors() {
-        let cmd = if cfg!(windows) && !on_path("bash") {
-            "Start-Sleep -Seconds 30"
-        } else {
-            "sleep 30"
+        let kind = shell_kind();
+        let cmd = match kind {
+            ShellKind::PowerShell => "Start-Sleep -Seconds 30",
+            ShellKind::Bash => "sleep 30",
         };
         let dir = std::env::temp_dir();
-        let res =
-            execute_process(cmd, &dir, ShellKind::Bash, 1500, &CancellationToken::new()).await;
+        let res = execute_process(cmd, &dir, kind, 1500, &CancellationToken::new()).await;
         match res {
             Err(ToolError::Timeout { seconds }) => assert!(seconds >= 1),
             other => panic!("timeout expected, got {other:?}"),
+        }
+    }
+
+    /// 与产品路径同一判定：Windows 上无原生 bash 时用 PowerShell。
+    fn shell_kind() -> ShellKind {
+        if cfg!(windows) && !windows_bash_usable() {
+            ShellKind::PowerShell
+        } else {
+            ShellKind::Bash
         }
     }
 
@@ -360,7 +368,7 @@ mod tests {
         let out = execute_process(
             cmd,
             &std::env::temp_dir(),
-            ShellKind::Bash,
+            shell_kind(),
             30_000,
             &CancellationToken::new(),
         )
