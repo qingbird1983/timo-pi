@@ -3,7 +3,21 @@ name = "timo-agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Timo-pi kernel crate: timo-agent"
+description = "Agent loop, event bus and cancellation (pi agent-loop semantics, zero hardcoded hooks)"
+
+[dependencies]
+timo-ai = { workspace = true }
+timo-config = { workspace = true }
+timo-session = { workspace = true }
+timo-tools = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+async-trait = { workspace = true }
