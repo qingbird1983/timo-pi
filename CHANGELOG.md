@@ -6,7 +6,20 @@
 
 ---
 
-## [0.1.8] - 2026-10-26
+## [0.1.9] - 2026-10-26
+
+### 里程碑：Phase 1 开工（所有者已下达开工通知）
+
+- **Phase 1 实现级详设定稿**（`docs/design/phase-1/`，8 篇）：00 总览与跨 crate 决策（含与 pi 的偏离登记表 D1~D10，逐项挂 ADR-0011 白名单）、01 协议层（消息/流事件/协议 trait/两协议映射/模型目录/认证/两层重试）、02 agent 循环与事件总线、03 工具元模型与内置工具契约、04 会话格式实现设计、05 配置与模型解析、06 MCP/门面/CLI、07 测试与 CI。行为语义全部以 pi 为蓝本，详设内逐篇标注 pi 参照路径。
+- **会话格式定稿**（architecture/05 草稿→定稿）：四个待决问题全部决议——entry id 用 ULID+进程内单调工厂（解决时钟回拨）；单文件不轮转；大 payload 一律内联；数据目录走平台惯例（Windows `%APPDATA%\timo-pi`）。相对草案两处修订：四种消息类 entry 合并为单一 `message` 型（与 pi 同构，防同一事实两处表达）、取消 `system.notice` 型（错误/取消由 assistant 终态消息承载）。
+- **依赖准入表初版**（standards/04 新增附录 A，18 项登记版本线/用途/备选否决理由）。同时修正 §5 笔误：原引用不存在的 `04-dependencies.md`（与既有 04 编号冲突）——standards/09"矛盾即 bug 当轮修"的首例，按笔误级处置。
+- phase-1 §6 开工前置条件全部达成并勾选；本提交打 tag `phase-1.start`。
+
+### 当前状态
+
+- **Phase 1 实现进行中**：按 workspace 骨架 → timo-config → timo-ai → timo-session → timo-tools → timo-mcp → timo-agent → timo-kernel → timo-cli 顺序实现，每 crate 一个提交、含测试；收尾出《阶段进度报告》（含接缝核对、体量核对、规范复查）。
+
+---
 
 ### 新增（所有者要求：给制度装上"制度的制度"）
 

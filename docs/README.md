@@ -37,12 +37,20 @@ docs/
 | research/03-stack-nsh-gpui-kit.md | 定稿 | 桌面技术栈（gpui-kit + NSH）评估结论 |
 | research/04-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的做法与教训 |
 | research/05-reference-pi-flash.md | 定稿 | 参考项目 pi-flash（GPUI 桌面壳/插件系统）的做法与教训 |
-| adr/ADR-0001 ~ 0009 | 定稿 | 9 项重大决策（见各文件） |
+| adr/ADR-0001 ~ 0011 | 定稿 | 11 项重大决策（见各文件） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
 | architecture/02-kernel.md | 定稿 | 内核模块划分与关键设计 |
 | architecture/03-critical-seams.md | 定稿 | MVP 必须预留的接缝清单（防返工核心） |
 | architecture/04-plugin-system.md | 定稿 | 插件系统双轨制设计（编排兼容 + GUI 原生） |
-| architecture/05-session-format.md | **草稿** | 会话磁盘格式（Phase 1 内定稿） |
+| architecture/05-session-format.md | **定稿** | 会话磁盘格式（v1，2026-10-26 定稿） |
+| design/phase-1/00-overview.md | 定稿 | Phase 1 总览：crate 布局、跨 crate 决策、pi 偏离登记 |
+| design/phase-1/01-timo-ai.md | 定稿 | 协议层：消息/流事件/trait/两协议映射/目录/认证/重试 |
+| design/phase-1/02-timo-agent.md | 定稿 | agent 循环、事件总线与取消 |
+| design/phase-1/03-timo-tools.md | 定稿 | 工具元模型与内置工具契约 |
+| design/phase-1/04-timo-session.md | 定稿 | 会话格式实现设计（崩溃安全/恢复投影） |
+| design/phase-1/05-timo-config.md | 定稿 | 数据目录、settings/models.json、模型解析 |
+| design/phase-1/06-timo-mcp-kernel-cli.md | 定稿 | MCP 并入、kernel 门面、CLI 冒烟壳 |
+| design/phase-1/07-testing-ci.md | 定稿 | fixture 计划、接缝自动化、CI 与构建卫生脚本 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
