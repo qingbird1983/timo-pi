@@ -14,6 +14,7 @@
 | 查"为什么这么设计" | [docs/adr/](docs/adr/)（编号递增，只增不改） |
 | 查系统设计与约束 | [docs/architecture/](docs/architecture/)（先读 01；接缝必读 03；插件 04；会话格式 05） |
 | 查做事规则 | [docs/standards/](docs/standards/)（8 篇） |
+| 桌面开发（Phase 3） | [.agents/skills/](.agents/skills/README.md)——gpui-kit 官方技能（框架/设计规范，vendored） |
 | 查术语 | [docs/glossary.md](docs/glossary.md) |
 | 新增文档登记 | [docs/README.md](docs/README.md)（文档地图，禁止孤儿文档） |
 

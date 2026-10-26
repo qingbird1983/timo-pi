@@ -8,6 +8,7 @@
 ```
 /                     仓库根：README.md（英）+ README.zh-CN.md（中）/ AGENTS.md / CHANGELOG.md / LICENSE / .gitignore
 .agent/               AI 开发知识库与交接中枢（规范见其 README；预算受 standards/08 约束）
+.agents/skills/       官方工具技能 vendored（gpui-kit 等；来源/同步规则见其 README，不计 docs 预算）
 docs/                 全部文档（唯一事实来源；结构见 docs/README.md）
 crates/               Rust 内核库（Phase 1 建立）
   timo-ai / timo-agent / timo-tools / timo-session / timo-mcp
