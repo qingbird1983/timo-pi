@@ -16,9 +16,15 @@ pub(super) fn install<'js>(
 ) -> rquickjs::Result<()> {
     let native = Object::new(ctx.clone())?;
     install_registration(ctx, &native, ext_id, Arc::clone(&state))?;
-    install_diagnostics(ctx, &native, Arc::clone(&state))?;
+    install_diagnostics(ctx, &native, ext_id, Arc::clone(&state))?;
     install_user(ctx, &native, Arc::clone(&services))?;
-    install_actions(ctx, &native, Arc::clone(&services), Arc::clone(&state))?;
+    install_actions(
+        ctx,
+        &native,
+        ext_id,
+        Arc::clone(&services),
+        Arc::clone(&state),
+    )?;
     ctx.globals().set("__timo_native", native)?;
     Ok(())
 }
@@ -74,14 +80,18 @@ fn install_registration<'js>(
 fn install_diagnostics<'js>(
     ctx: &Ctx<'js>,
     native: &Object<'js>,
+    ext_id: &str,
     state: Arc<Mutex<HostState>>,
 ) -> rquickjs::Result<()> {
+    let ext_id = ext_id.to_string();
     native.set(
         "diag",
         Function::new(ctx.clone(), move |code: String, message: String| {
             let code = ErrorCode::parse(&code).unwrap_or(ErrorCode::E302);
             if let Ok(mut state) = state.lock() {
-                state.diagnostics.push(DiagnosticEntry::new(code, message));
+                state
+                    .diagnostics
+                    .push((ext_id.clone(), DiagnosticEntry::new(code, message)));
             }
         })?,
     )?;
@@ -136,17 +146,20 @@ fn install_user<'js>(
 fn install_actions<'js>(
     ctx: &Ctx<'js>,
     native: &Object<'js>,
+    ext_id: &str,
     services: Arc<dyn HostServices>,
     state: Arc<Mutex<HostState>>,
 ) -> rquickjs::Result<()> {
+    let ext_id = ext_id.to_string();
     {
         let services = Arc::clone(&services);
         let state = Arc::clone(&state);
+        let ext_id = ext_id.clone();
         native.set(
             "exec",
             Function::new(ctx.clone(), move |request: String| {
                 let value = execute_json(services.as_ref(), &request);
-                record_denial(&state, &value);
+                record_denial(&ext_id, &state, &value);
                 bridge_json(value)
             })?,
         )?;
@@ -154,6 +167,7 @@ fn install_actions<'js>(
     {
         let services = Arc::clone(&services);
         let state = Arc::clone(&state);
+        let ext_id = ext_id.clone();
         native.set(
             "fetch",
             Function::new(ctx.clone(), move |request: String| {
@@ -175,7 +189,7 @@ fn install_actions<'js>(
                     }),
                     Err(error) => json!({"ok": false, "error": error}),
                 };
-                record_denial(&state, &value);
+                record_denial(&ext_id, &state, &value);
                 value.to_string()
             })?,
         )?;
@@ -252,7 +266,7 @@ fn bridge_json(value: JsonValue) -> String {
 }
 
 /// 宿主桥的权限拒绝留痕（消息前缀 `E4xx`）。
-fn record_denial(state: &Arc<Mutex<HostState>>, value: &JsonValue) {
+fn record_denial(ext_id: &str, state: &Arc<Mutex<HostState>>, value: &JsonValue) {
     if value.get("ok").and_then(JsonValue::as_bool) != Some(false) {
         return;
     }
@@ -266,6 +280,8 @@ fn record_denial(state: &Arc<Mutex<HostState>>, value: &JsonValue) {
         return;
     };
     if let Ok(mut state) = state.lock() {
-        state.diagnostics.push(DiagnosticEntry::new(code, message));
+        state
+            .diagnostics
+            .push((ext_id.to_string(), DiagnosticEntry::new(code, message)));
     }
 }

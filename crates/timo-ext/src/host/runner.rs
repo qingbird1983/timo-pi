@@ -11,7 +11,7 @@ use serde_json::{Value as JsonValue, json};
 
 use super::{HostServices, HostState, LoadedExtension, ToolCallResult, native, runtime};
 use crate::Result;
-use crate::diag::ErrorCode;
+use crate::diag::{DiagnosticEntry, ErrorCode};
 use crate::error::ExtError;
 
 const RUNTIME_JS: &str = include_str!("../shim/runtime.js");
@@ -146,6 +146,43 @@ pub(super) fn call_one(
     })
 }
 
+pub(super) fn command_one(
+    contexts: &[(String, Context)],
+    state: &Arc<Mutex<HostState>>,
+    name: &str,
+    args: &JsonValue,
+    deadline: &Rc<Cell<Option<Instant>>>,
+    budget: Duration,
+) -> Result<JsonValue> {
+    let ext = state
+        .lock()
+        .ok()
+        .and_then(|state| {
+            state
+                .commands
+                .iter()
+                .find(|(_, command)| command == name)
+                .map(|(ext, _)| ext.clone())
+        })
+        .ok_or_else(|| runtime(ErrorCode::E303, format!("command not registered: {name}")))?;
+    let (_, context) = contexts
+        .iter()
+        .find(|(id, _)| id == &ext)
+        .ok_or_else(|| runtime(ErrorCode::E305, format!("extension not loaded: {ext}")))?;
+    let args_json =
+        serde_json::to_string(args).map_err(|error| runtime(ErrorCode::E304, error.to_string()))?;
+    context.with(|ctx| -> Result<JsonValue> {
+        let _ = invoke(&ctx, deadline, Some(budget), || {
+            let run: Function = ctx.globals().get("__timo_run_command")?;
+            run.call((name.to_string(), args_json))
+        })?;
+        if let Some(error) = take_string(&ctx, "lastError") {
+            return Err(runtime(ErrorCode::E303, error));
+        }
+        Ok(JsonValue::Null)
+    })
+}
+
 pub(super) fn dispatch_all(
     contexts: &[(String, Context)],
     state: &Arc<Mutex<HostState>>,
@@ -173,7 +210,7 @@ pub(super) fn dispatch_all(
         any = true;
         let payload_json = serde_json::to_string(&current)
             .map_err(|error| runtime(ErrorCode::E304, error.to_string()))?;
-        let result = context.with(|ctx| -> Result<JsonValue> {
+        let result = match context.with(|ctx| -> Result<JsonValue> {
             let _ = invoke(&ctx, deadline, Some(budget), || {
                 let dispatch: Function = ctx.globals().get("__timo_dispatch")?;
                 dispatch.call((event.to_string(), payload_json))
@@ -188,7 +225,21 @@ pub(super) fn dispatch_all(
                     format!("dispatch result is not valid JSON: {error}"),
                 )
             })
-        })?;
+        }) {
+            Ok(value) => value,
+            Err(error) => {
+                if let Ok(mut state) = state.lock() {
+                    state.diagnostics.push((
+                        id.clone(),
+                        DiagnosticEntry::new(
+                            error.code().unwrap_or(ErrorCode::E302),
+                            error.to_string(),
+                        ),
+                    ));
+                }
+                return Err(error);
+            }
+        };
         match event {
             "tool_call" => {
                 if let Some(input) = result.get("input")

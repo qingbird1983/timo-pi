@@ -8,14 +8,31 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 mod error;
+mod extensions;
 mod kernel;
 mod prompt;
 mod resolve;
 
 pub use error::KernelError;
+pub use extensions::{
+    ExtensionOptions, ExtensionRuntime, ExtensionSummary, install_extension, load_extensions,
+    permissions_path, remove_extension, split_command, summarize, trust_extension,
+};
 pub use kernel::{Kernel, KernelOptions};
+pub use timo_ext::{
+    Capabilities, DiagnosticReport, ExtensionHost, GrantState, PermissionStore, Scope, discover,
+};
+
+/// 平台数据目录（扩展与授权文件的默认根）。
+///
+/// # Errors
+/// 平台目录不可得 → [`KernelError::Config`]。
+pub fn data_dir() -> Result<PathBuf> {
+    Ok(timo_config::agent_dir()?)
+}
 // 门面消费用重导出（architecture/01 原则 2：薄壳只依赖本 crate）。
 pub use resolve::ResolvedModel;
+use std::path::PathBuf;
 pub use timo_agent::{AbortHandle, KernelEvent, SessionSink};
 pub use timo_ai::{AssistantStreamEvent, Content, Message, Usage};
 pub use timo_config::ThinkingLevel;

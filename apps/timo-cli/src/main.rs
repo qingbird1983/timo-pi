@@ -7,6 +7,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand};
+
+mod ext_cmd;
 use timo_kernel::{
     AssistantStreamEvent, Content, Kernel, KernelEvent, KernelOptions, Message, ThinkingLevel,
     Usage,
@@ -27,6 +29,8 @@ enum Command {
     Resume(ResumeArgs),
     /// List sessions.
     Sessions(SessionsArgs),
+    /// Manage extensions.
+    Ext(ext_cmd::ExtArgs),
 }
 
 #[derive(Args)]
@@ -49,6 +53,15 @@ struct Common {
     /// Working directory for tools and project settings.
     #[arg(long)]
     cwd: Option<PathBuf>,
+    /// Load an extension from a file or directory (repeatable).
+    #[arg(long = "extension", value_name = "PATH")]
+    extension: Vec<PathBuf>,
+    /// Disable all extensions for this run.
+    #[arg(long = "no-extensions")]
+    no_extensions: bool,
+    /// Extension flag value (`NAME=VALUE`; repeatable).
+    #[arg(long = "ext-flag", value_name = "NAME=VALUE")]
+    ext_flag: Vec<String>,
 }
 
 #[derive(Args)]
@@ -86,6 +99,7 @@ async fn main() {
         Command::Run(args) => run_command(args).await,
         Command::Resume(args) => resume_command(args).await,
         Command::Sessions(args) => sessions_command(args),
+        Command::Ext(args) => ext_cmd::run(args).await,
     };
     std::process::exit(code);
 }
@@ -160,6 +174,32 @@ async fn resume_command(args: ResumeArgs) -> i32 {
                     kernel.abort();
                     continue;
                 }
+                if text == "/ext" {
+                    if let Some(table) = kernel.extension_report_human() {
+                        eprintln!("{table}");
+                    }
+                    continue;
+                }
+                if let Some((raw, args)) = timo_kernel::split_command(text) {
+                    let candidates = kernel.extension_commands();
+                    let name = candidates
+                        .iter()
+                        .find(|name| {
+                            name.as_str() == raw || name.ends_with(&format!("_{raw}"))
+                        })
+                        .cloned();
+                    match name {
+                        Some(name) => {
+                            if let Err(error) = kernel.run_extension_command(&name, args) {
+                                eprintln!("[error] {error}");
+                            }
+                        }
+                        None => {
+                            eprintln!("[error] unknown command `/{raw}` (try `/ext`)");
+                        }
+                    }
+                    continue;
+                }
                 let _ = run_prompt(&mut kernel, text).await;
             }
         }
@@ -203,31 +243,35 @@ async fn run_prompt(kernel: &mut Kernel, prompt: &str) -> i32 {
     // 先装配 agent（幂等），以便在 run 借出 &mut 期间仍能拿中止句柄。
     let _ = kernel.tools().await;
     let abort = kernel.abort_handle();
+    let ext_abort = kernel.abort_flag();
     let mut events = kernel.events();
     let mut printer = Printer::new();
-    let run = kernel.run(prompt);
-    tokio::pin!(run);
-    let mut aborted = false;
-    let outcome = loop {
-        tokio::select! {
-            event = events.recv() => {
-                match event {
-                    Ok(event) => printer.handle(&event),
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {}
+    let outcome = {
+        let run = kernel.run(prompt);
+        tokio::pin!(run);
+        let mut aborted = false;
+        loop {
+            tokio::select! {
+                event = events.recv() => {
+                    match event {
+                        Ok(event) => printer.handle(&event),
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {}
+                    }
                 }
-            }
-            result = &mut run => break result,
-            _ = tokio::signal::ctrl_c() => {
-                if aborted {
-                    eprintln!("[exit] second interrupt");
-                    std::process::exit(130);
+                result = &mut run => break result,
+                _ = tokio::signal::ctrl_c() => {
+                    if aborted {
+                        eprintln!("[exit] second interrupt");
+                        std::process::exit(130);
+                    }
+                    ext_abort.store(true, std::sync::atomic::Ordering::SeqCst);
+                    if let Some(handle) = &abort {
+                        handle.abort();
+                    }
+                    eprintln!("[abort] cancelling current run (Ctrl+C again to exit)");
+                    aborted = true;
                 }
-                if let Some(handle) = &abort {
-                    handle.abort();
-                }
-                eprintln!("[abort] cancelling current run (Ctrl+C again to exit)");
-                aborted = true;
             }
         }
     };
@@ -239,13 +283,22 @@ async fn run_prompt(kernel: &mut Kernel, prompt: &str) -> i32 {
             Err(_) => break,
         }
     }
-    match outcome {
+    let code = match outcome {
         Ok(_) => 0,
         Err(e) => {
             eprintln!("[error] {e}");
             1
         }
+    };
+    if let Some(report) = kernel.extension_report()
+        && report
+            .extensions
+            .iter()
+            .any(|ext| !ext.degraded.is_empty() || !ext.errors.is_empty())
+    {
+        eprint!("{}", report.render_human());
     }
+    code
 }
 
 fn build_options(common: &Common, max_turns: Option<usize>) -> Result<KernelOptions, String> {
@@ -260,6 +313,13 @@ fn build_options(common: &Common, max_turns: Option<usize>) -> Result<KernelOpti
             format!("unknown thinking level `{s}` (off|minimal|low|medium|high|xhigh|max)")
         })?),
     };
+    let mut ext_flags = Vec::new();
+    for flag in &common.ext_flag {
+        let (name, value) = flag
+            .split_once('=')
+            .ok_or_else(|| format!("--ext-flag expects NAME=VALUE, got `{flag}`"))?;
+        ext_flags.push((name.to_string(), value.to_string()));
+    }
     Ok(KernelOptions {
         data_dir: None,
         work_dir: common.cwd.clone(),
@@ -268,6 +328,10 @@ fn build_options(common: &Common, max_turns: Option<usize>) -> Result<KernelOpti
         api_key: common.api_key.clone(),
         session_dir: common.session_dir.clone(),
         max_turns,
+        extension_paths: common.extension.clone(),
+        no_extensions: common.no_extensions,
+        extensions_interactive: None,
+        ext_flags,
     })
 }
 

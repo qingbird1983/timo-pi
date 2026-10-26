@@ -199,21 +199,6 @@ impl Collector {
     }
 
     fn load_dir(&mut self, dir: &Path, scope: Scope) {
-        let entry = match resolve_entry(dir) {
-            Ok(Some(entry)) => entry,
-            Ok(None) => {
-                self.issue(
-                    dir,
-                    ErrorCode::E101,
-                    "no entry (index.ts/index.js or package.json pi.extensions)",
-                );
-                return;
-            }
-            Err(error) => {
-                self.issue(dir, ErrorCode::E101, error.to_string());
-                return;
-            }
-        };
         let (id, manifest) = match Manifest::load(&dir.join("manifest.json")) {
             Ok(Some(manifest)) => (manifest.id.clone(), Some(manifest)),
             Ok(None) => (
@@ -225,9 +210,32 @@ impl Collector {
                 None,
             ),
             Err(error) => {
-                self.issue(dir, ErrorCode::E205, error.to_string());
+                let code = error.code().unwrap_or(ErrorCode::E205);
+                self.issue(dir, code, error.to_string());
                 return;
             }
+        };
+        let installed = manifest
+            .as_ref()
+            .map(|manifest| dir.join(&manifest.entry))
+            .filter(|entry| entry.is_file());
+        let entry = match installed {
+            Some(entry) => entry,
+            None => match resolve_entry(dir) {
+                Ok(Some(entry)) => entry,
+                Ok(None) => {
+                    self.issue(
+                        dir,
+                        ErrorCode::E101,
+                        "no entry (index.ts/index.js or package.json pi.extensions)",
+                    );
+                    return;
+                }
+                Err(error) => {
+                    self.issue(dir, ErrorCode::E101, error.to_string());
+                    return;
+                }
+            },
         };
         self.add(Discovered {
             id,

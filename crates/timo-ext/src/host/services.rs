@@ -19,6 +19,7 @@ pub struct BasicServices {
     thinking: String,
     aborted: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
+    flags: std::collections::BTreeMap<String, String>,
 }
 
 impl BasicServices {
@@ -34,6 +35,7 @@ impl BasicServices {
             thinking: "off".to_string(),
             aborted: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
+            flags: std::collections::BTreeMap::new(),
         }
     }
 
@@ -55,6 +57,27 @@ impl BasicServices {
     #[must_use]
     pub fn abort_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.aborted)
+    }
+
+    /// 注入共享取消标志（内核 run 与所有扩展共用一个 epoch）。
+    #[must_use]
+    pub fn with_abort_flag(mut self, flag: Arc<AtomicBool>) -> Self {
+        self.aborted = flag;
+        self
+    }
+
+    /// 设置 run 是否进行中（`ctx.isIdle`）。
+    #[must_use]
+    pub fn with_running(mut self, running: Arc<AtomicBool>) -> Self {
+        self.running = running;
+        self
+    }
+
+    /// 注入 `--ext-flag NAME=VALUE`（`pi.getFlag`）。
+    #[must_use]
+    pub fn with_flags(mut self, flags: std::collections::BTreeMap<String, String>) -> Self {
+        self.flags = flags;
+        self
     }
 }
 
@@ -211,6 +234,7 @@ impl HostServices for BasicServices {
             "model": self.model,
             "thinkingLevel": self.thinking,
             "systemPrompt": "",
+            "flags": self.flags,
         })
     }
 

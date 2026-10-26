@@ -144,6 +144,33 @@ function __timo_make_tool_ctx(config) {
   return ctx;
 }
 
+globalThis.fetch = async function (url, options) {
+  const raw = globalThis.__timo_native.fetch(
+    JSON.stringify({ url: String(url), options: options || {} }),
+  );
+  const out = __timo_parse(raw, { ok: false, error: "fetch bridge failed" });
+  if (!out.ok) {
+    const error = new Error(out.error || "fetch failed");
+    error.code = String(out.error || "").split(" ")[0];
+    throw error;
+  }
+  const headers = {};
+  for (const pair of out.headers || []) {
+    headers[String(pair[0])] = String(pair[1]);
+  }
+  return {
+    ok: out.status >= 200 && out.status < 300,
+    status: out.status,
+    headers,
+    async text() {
+      return out.body || "";
+    },
+    async json() {
+      return JSON.parse(out.body || "null");
+    },
+  };
+};
+
 globalThis.__timo_make_api = function (config) {
   const native = globalThis.__timo_native;
   const state = globalThis.__timo_state;
@@ -181,8 +208,11 @@ globalThis.__timo_make_api = function (config) {
       native.commandRegistered(full);
     },
     registerFlag() {},
-    getFlag() {
-      return undefined;
+    getFlag(name) {
+      const flags = config.flags || {};
+      return Object.prototype.hasOwnProperty.call(flags, String(name))
+        ? flags[String(name)]
+        : undefined;
     },
     registerShortcut() {},
     registerMessageRenderer() {},
@@ -262,6 +292,21 @@ globalThis.__timo_call_tool = async function (name, argsJson) {
       ctx,
     );
     globalThis.__timo_state.lastResult = JSON.stringify(result ?? null);
+  } catch (error) {
+    globalThis.__timo_state.lastError = __timo_error_text(error);
+  }
+};
+
+globalThis.__timo_run_command = async function (name, argsJson) {
+  globalThis.__timo_reset_error();
+  try {
+    const entry = globalThis.__timo_state.commands[name];
+    if (!entry || typeof entry.handler !== "function") {
+      throw new Error("command not registered: " + name);
+    }
+    const config = globalThis.__timo_config || {};
+    const args = __timo_parse(argsJson, []);
+    await entry.handler(args, __timo_make_ctx(config));
   } catch (error) {
     globalThis.__timo_state.lastError = __timo_error_text(error);
   }

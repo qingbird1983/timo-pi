@@ -43,4 +43,7 @@ pub enum ToolError {
     /// MCP 工具错误（timo-mcp 透传）。
     #[error("MCP: {0}")]
     Mcp(String),
+    /// 扩展工具错误（原始文案）。
+    #[error("{0}")]
+    Execution(String),
 }

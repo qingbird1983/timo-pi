@@ -21,4 +21,7 @@ pub enum KernelError {
     /// MCP 装配错误（单 server 失败不阻断；此处为注册表级错误）。
     #[error("mcp: {0}")]
     Mcp(#[from] timo_mcp::McpError),
+    /// 扩展装载/打包错误（逐扩展诊断为主路径；此处为装配级失败）。
+    #[error("extension: {0}")]
+    Extension(String),
 }

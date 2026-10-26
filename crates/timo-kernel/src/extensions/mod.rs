@@ -1,0 +1,480 @@
+//! 扩展装载（设计 02 §3、03 §4）：发现 → 打包 → 授权 → QuickJS 装载 → 报告。
+//!
+//! 内核只通过本模块得到"工具元数据 + 钩子 + 诊断"，不认识扩展内部结构。
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
+
+use serde_json::{Value as JsonValue, json};
+use timo_config::Clock;
+use timo_ext::{
+    BasicServices, Capabilities, DiagnosticEntry, DiagnosticReport, Discovered, DiscoveryOptions,
+    ErrorCode, ExtHooks, ExtensionDiagnostic, ExtensionHost, Grants, LoadedExtension, Manifest,
+    PackOptions, PermissionStore, Scope, Status, ToolMeta, discover, pack, validate_capabilities,
+};
+
+use crate::KernelEvent;
+
+mod cli;
+
+/// 单 handler 预算（设计 04 §5）。
+pub const HOOK_BUDGET: Duration = Duration::from_secs(30);
+
+/// 装载选项。
+pub struct ExtensionOptions {
+    /// agent 数据目录（`permissions.json` 与用户级扩展的根）。
+    pub data_dir: PathBuf,
+    /// 工作目录。
+    pub work_dir: PathBuf,
+    /// 显式 `--extension` 路径。
+    pub explicit: Vec<PathBuf>,
+    /// 是否交互授权（TTY）。
+    pub interactive: bool,
+    /// 是否扫描 `<cwd>/.pi/extensions/`。
+    pub include_project_pi: bool,
+    /// 共享取消标志（与内核 run 同一个 epoch）。
+    pub abort: Arc<AtomicBool>,
+    /// `ctx.isIdle` 依据。
+    pub running: Arc<AtomicBool>,
+    /// `--ext-flag` 值。
+    pub flags: std::collections::BTreeMap<String, String>,
+}
+
+/// 装载结果。
+pub struct ExtensionRuntime {
+    /// 扩展宿主门面（宿主线程启动失败时为 None）。
+    pub host: Option<Arc<ExtensionHost>>,
+    /// 循环/供应商钩子桥（随宿主一同缺席）。
+    pub hooks: Option<Arc<ExtHooks>>,
+    /// 成功装载的扩展。
+    pub loaded: Vec<LoadedExtension>,
+    /// 诊断报告。
+    pub report: DiagnosticReport,
+    /// 全部已注册命令。
+    pub commands: Vec<String>,
+    grants_path: PathBuf,
+    absorbed: std::collections::HashMap<String, usize>,
+}
+
+impl ExtensionRuntime {
+    /// 把 run 期间新产生的降级诊断并入报告（逐扩展逐成员）。
+    pub fn absorb_runtime_errors(&mut self) {
+        let Some(host) = &self.host else {
+            return;
+        };
+        for extension in &mut self.report.extensions {
+            let entries = host.diagnostics_for(&extension.id);
+            let seen = self.absorbed.entry(extension.id.clone()).or_insert(0);
+            for entry in entries.iter().skip(*seen) {
+                if entry.code == ErrorCode::E302 || entry.code == ErrorCode::E202 {
+                    let member = entry.message.clone();
+                    if !extension.degraded.iter().any(|item| item.member == member) {
+                        extension.degraded.push(timo_ext::DegradedItem {
+                            member,
+                            class: timo_ext::DegradeClass::Unsupported,
+                            reason: "member is a no-op in this phase".into(),
+                        });
+                    }
+                } else if !extension
+                    .errors
+                    .iter()
+                    .any(|item| item.message == entry.message)
+                {
+                    extension.errors.push(entry.clone());
+                }
+            }
+            *seen = entries.len();
+        }
+    }
+
+    /// 持久化诊断报告（`diagnostics.json`）并返回 JSON。
+    pub fn save_report(&self) -> String {
+        let json = self.report.to_json_pretty().unwrap_or_default();
+        if let Some(path) = self.grants_path.parent() {
+            let _ = std::fs::write(path.join("extensions-diagnostics.json"), &json);
+        }
+        json
+    }
+}
+
+/// 装载全部扩展；单个失败不影响其他扩展。
+pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
+    let grants_path = options.data_dir.join("permissions.json");
+    let mut grants = PermissionStore::load(&grants_path).unwrap_or_default();
+    let outcome = discover(&DiscoveryOptions {
+        work_dir: options.work_dir.clone(),
+        data_dir: Some(options.data_dir.clone()),
+        explicit: options.explicit.clone(),
+        include_project_pi: options.include_project_pi,
+    });
+    let mut report = DiagnosticReport::new(now(), env!("CARGO_PKG_VERSION"));
+    for issue in &outcome.issues {
+        report.push(ExtensionDiagnostic {
+            id: issue
+                .path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "?".to_string()),
+            path: issue.path.display().to_string(),
+            status: Status::Failed,
+            source_hash: None,
+            registered: Default::default(),
+            degraded: vec![],
+            errors: vec![
+                DiagnosticEntry::new(issue.code, issue.message.clone())
+                    .with_path(issue.path.display().to_string()),
+            ],
+        });
+    }
+    let base = BasicServices::new(options.work_dir.clone(), Grants::default(), json!({}))
+        .with_abort_flag(Arc::clone(&options.abort))
+        .with_running(Arc::clone(&options.running))
+        .with_flags(options.flags.clone());
+    let budget = std::env::var("TIMO_EXT_BUDGET_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(HOOK_BUDGET);
+    let host = match ExtensionHost::start(Arc::new(base), budget) {
+        Ok(host) => Arc::new(host),
+        Err(error) => {
+            report.push(ExtensionDiagnostic {
+                id: "extensions".to_string(),
+                path: String::new(),
+                status: Status::Failed,
+                source_hash: None,
+                registered: Default::default(),
+                degraded: vec![],
+                errors: vec![DiagnosticEntry::new(ErrorCode::E202, error.to_string())],
+            });
+            return ExtensionRuntime {
+                host: None,
+                hooks: None,
+                loaded: vec![],
+                report,
+                commands: vec![],
+                grants_path,
+                absorbed: std::collections::HashMap::new(),
+            };
+        }
+    };
+    let mut loaded = Vec::new();
+    for discovered in outcome.extensions {
+        let id = discovered.id.clone();
+        let path = discovered.root.display().to_string();
+        let mut diagnostic = ExtensionDiagnostic::new(&id, &path, Status::Loaded);
+        match prepare(&discovered, &options.data_dir).await {
+            Ok((manifest, root)) => {
+                diagnostic.source_hash = Some(manifest.source_hash.clone());
+                if let Err(error) = validate_capabilities(&id, &manifest.capabilities) {
+                    diagnostic.status = Status::Failed;
+                    diagnostic.errors.push(diag_from(&error));
+                    report.push(diagnostic);
+                    continue;
+                }
+                let (capabilities, grant_state) = grants.effective(&id, &manifest.source_hash);
+                let capabilities = if matches!(grant_state, timo_ext::GrantState::Granted) {
+                    capabilities
+                } else {
+                    if matches!(grant_state, timo_ext::GrantState::Stale) {
+                        diagnostic.errors.push(DiagnosticEntry::new(
+                            ErrorCode::E406,
+                            "source changed; previous grants were revoked",
+                        ));
+                    }
+                    let granted = approve(&manifest, options.interactive);
+                    if granted {
+                        grants.grant(&manifest, now());
+                        grants.save(&grants_path).ok();
+                        manifest.capabilities.clone()
+                    } else {
+                        diagnostic.status = Status::Degraded;
+                        diagnostic.errors.push(DiagnosticEntry::new(
+                            ErrorCode::E405,
+                            "capabilities are not granted; extension runs with all capabilities denied",
+                        ));
+                        Capabilities::default()
+                    }
+                };
+                let services = Arc::new(
+                    BasicServices::new(
+                        options.work_dir.clone(),
+                        Grants {
+                            exec: capabilities.exec,
+                            net_domains: capabilities.net.domains.clone(),
+                        },
+                        json!({}),
+                    )
+                    .with_ui(options.interactive)
+                    .with_abort_flag(Arc::clone(&options.abort))
+                    .with_running(Arc::clone(&options.running))
+                    .with_flags(options.flags.clone()),
+                );
+                let bundle = root.join(&manifest.bundle);
+                match host.load_with(&id, &bundle, services) {
+                    Ok(extension) => {
+                        for entry in host.diagnostics_for(&id) {
+                            if entry.code == ErrorCode::E302 || entry.code == ErrorCode::E202 {
+                                if !diagnostic
+                                    .degraded
+                                    .iter()
+                                    .any(|item| item.member == entry.message)
+                                {
+                                    diagnostic.degraded.push(timo_ext::DegradedItem {
+                                        member: entry.message.clone(),
+                                        class: timo_ext::DegradeClass::Unsupported,
+                                        reason: "member is a no-op in this phase".into(),
+                                    });
+                                }
+                            } else {
+                                diagnostic.errors.push(entry);
+                            }
+                        }
+                        diagnostic.registered.tools =
+                            extension.tools.iter().map(|t| t.name.clone()).collect();
+                        diagnostic.registered.commands = extension.commands.clone();
+                        diagnostic.registered.hooks = extension.hooks.clone();
+                        loaded.push(extension);
+                    }
+                    Err(error) => {
+                        diagnostic.status = Status::Failed;
+                        diagnostic.errors.push(diag_from(&error));
+                    }
+                }
+            }
+            Err(error) => {
+                diagnostic.status = Status::Failed;
+                diagnostic
+                    .errors
+                    .push(DiagnosticEntry::new(ErrorCode::E202, error.to_string()));
+            }
+        }
+        report.push(diagnostic);
+    }
+    let commands = host.commands();
+    let hooks =
+        Arc::new(ExtHooks::new(Arc::clone(&host)).with_abort_flag(Arc::clone(&options.abort)));
+    let runtime = ExtensionRuntime {
+        host: Some(host),
+        hooks: Some(hooks),
+        loaded,
+        report,
+        commands,
+        grants_path,
+        absorbed: std::collections::HashMap::new(),
+    };
+    runtime.save_report();
+    runtime
+}
+
+/// 确保存在 `bundle.cjs + manifest.json`；必要时安装期打包。
+async fn prepare(discovered: &Discovered, data_dir: &Path) -> crate::Result<(Manifest, PathBuf)> {
+    if let Some(manifest) = &discovered.manifest
+        && discovered.root.join(&manifest.bundle).is_file()
+        && manifest.verify_source_hash(&discovered.root).is_ok()
+    {
+        return Ok((manifest.clone(), discovered.root.clone()));
+    }
+    let root = if discovered.scope == Scope::Explicit && !discovered.root.join("source").is_dir() {
+        stage_explicit(discovered, data_dir)?
+    } else {
+        discovered.root.clone()
+    };
+    let entry = if root == discovered.root {
+        discovered.entry.clone()
+    } else {
+        root.join("source").join(
+            discovered
+                .entry
+                .file_name()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("index.ts")),
+        )
+    };
+    let out = pack(PackOptions {
+        root: root.clone(),
+        entry,
+        id: discovered.id.clone(),
+        out_dir: root.clone(),
+    })
+    .await
+    .map_err(|error| crate::KernelError::Extension(error.to_string()))?;
+    Ok((out.manifest, root))
+}
+
+/// 显式文件装入缓存目录（`cache/ext/<sha12>/source/<name>`）。
+fn stage_explicit(discovered: &Discovered, data_dir: &Path) -> crate::Result<PathBuf> {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(&discovered.entry).map_err(|error| {
+        crate::KernelError::Extension(format!(
+            "cannot read {}: {error}",
+            discovered.entry.display()
+        ))
+    })?;
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let root = data_dir.join("cache").join("ext").join(&digest[..12]);
+    let source = root.join("source");
+    std::fs::create_dir_all(&source)
+        .map_err(|error| crate::KernelError::Extension(error.to_string()))?;
+    let name = discovered
+        .entry
+        .file_name()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("index.ts"));
+    std::fs::write(source.join(name), bytes)
+        .map_err(|error| crate::KernelError::Extension(error.to_string()))?;
+    Ok(root)
+}
+
+fn approve(manifest: &Manifest, interactive: bool) -> bool {
+    let capabilities = &manifest.capabilities;
+    if !capabilities.exec && capabilities.net.domains.is_empty() {
+        return true;
+    }
+    if !interactive {
+        return false;
+    }
+    eprintln!(
+        "[ext] {} requests:{}",
+        manifest.id,
+        if capabilities.exec { " exec" } else { "" }
+    );
+    if !capabilities.net.domains.is_empty() {
+        eprintln!("      net: {}", capabilities.net.domains.join(", "));
+    }
+    eprint!("grant these capabilities? [y/N] ");
+    let _ = std::io::Write::flush(&mut std::io::stderr());
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line).is_ok()
+        && matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+}
+
+fn diag_from(error: &timo_ext::ExtError) -> DiagnosticEntry {
+    DiagnosticEntry::new(error.code().unwrap_or(ErrorCode::E202), error.to_string())
+}
+
+fn now() -> String {
+    format!("unix:{}", (timo_config::SystemClock).now_ms())
+}
+
+/// 扩展工具元数据 → 注册表定义（执行经宿主线程）。
+#[must_use]
+pub fn tool_definition(meta: &ToolMeta, host: Arc<ExtensionHost>) -> timo_tools::ToolDefinition {
+    let name = meta.name.clone();
+    let call_name = name.clone();
+    timo_tools::ToolDefinition {
+        name,
+        label: meta.label.clone(),
+        description: meta.description.clone(),
+        prompt_snippet: meta.prompt_snippet.clone(),
+        prompt_guidelines: meta.prompt_guidelines.clone(),
+        parameters: meta.parameters.clone(),
+        output_schema: meta.output_schema.clone(),
+        exposure: timo_tools::Exposure::Direct,
+        namespace: None,
+        annotations: timo_tools::Annotations::default(),
+        execution_mode: timo_tools::ExecutionMode::Parallel,
+        execute: Arc::new(move |ctx| {
+            let host = Arc::clone(&host);
+            let name = call_name.clone();
+            Box::pin(async move {
+                let args = ctx.params.clone();
+                let result = tokio::task::spawn_blocking(move || host.call_tool(&name, args))
+                    .await
+                    .map_err(|error| {
+                        timo_tools::ToolError::Execution(format!("extension host join: {error}"))
+                    })?
+                    .map_err(|error| timo_tools::ToolError::Execution(error.to_string()))?;
+                let content = serde_json::from_value::<Vec<timo_ai::Content>>(result.content)
+                    .map_err(|error| {
+                        timo_tools::ToolError::Execution(format!(
+                            "extension tool content is invalid: {error}"
+                        ))
+                    })?;
+                Ok(timo_tools::ToolOutput {
+                    content,
+                    details: result.details,
+                    structured_content: result.structured_content,
+                    is_error: result.is_error,
+                    terminate: result.terminate,
+                })
+            })
+        }),
+    }
+}
+
+/// `KernelEvent` → 扩展通知事件（设计 05 §3；只通知，不回读）。
+#[must_use]
+pub fn event_payload(event: &KernelEvent) -> Option<(&'static str, JsonValue)> {
+    let payload = match event {
+        KernelEvent::AgentStarted => ("agent_start", json!({})),
+        KernelEvent::AgentFinished { messages } => ("agent_end", json!({ "messages": messages })),
+        KernelEvent::TurnStarted => ("turn_start", json!({ "timestamp": now() })),
+        KernelEvent::TurnFinished {
+            message,
+            tool_results,
+        } => (
+            "turn_end",
+            json!({ "message": message, "toolResults": tool_results }),
+        ),
+        KernelEvent::MessageAdded { message } => ("message_end", json!({ "message": message })),
+        KernelEvent::ToolCallStarted {
+            tool_call_id,
+            tool_name,
+            args,
+        } => (
+            "tool_execution_start",
+            json!({ "toolCallId": tool_call_id, "toolName": tool_name, "args": args }),
+        ),
+        KernelEvent::ToolCallFinished {
+            tool_call_id,
+            tool_name,
+            result,
+            duration_ms,
+        } => (
+            "tool_execution_end",
+            json!({
+                "toolCallId": tool_call_id,
+                "toolName": tool_name,
+                "result": result,
+                "durationMs": duration_ms,
+            }),
+        ),
+        _ => return None,
+    };
+    Some(payload)
+}
+
+/// 事件转发任务：订阅总线，通知事件投递给扩展（不阻塞内核）。
+pub fn forward_events(
+    mut events: tokio::sync::broadcast::Receiver<KernelEvent>,
+    host: Arc<ExtensionHost>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        while let Ok(event) = events.recv().await {
+            if let Some((name, payload)) = event_payload(&event) {
+                host.notify_event(name, payload);
+            }
+        }
+    })
+}
+
+/// 命令参数：`/name a b` → `["a","b"]`。
+#[must_use]
+pub fn split_command(line: &str) -> Option<(String, JsonValue)> {
+    let line = line.trim().trim_start_matches('/');
+    let mut parts = line.split_whitespace();
+    let name = parts.next()?.to_string();
+    let args: Vec<&str> = parts.collect();
+    Some((name, json!(args)))
+}
+
+/// 授权文件路径（CLI 复用）。
+#[must_use]
+pub fn permissions_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("permissions.json")
+}
+
+pub use cli::{ExtensionSummary, install_extension, remove_extension, summarize, trust_extension};

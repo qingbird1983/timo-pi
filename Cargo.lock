@@ -4227,10 +4227,13 @@ name = "timo-kernel"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "sha2",
+ "tempfile",
  "thiserror",
  "timo-agent",
  "timo-ai",
  "timo-config",
+ "timo-ext",
  "timo-mcp",
  "timo-session",
  "timo-tools",
