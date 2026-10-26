@@ -9,5 +9,5 @@
   - gpui-kit 两件套：2026-10-26 自用户级 `~/.agents/skills/` 复制（gpui-kit 官方 skill，文档源 gpui-kit.com，对应 gpui-kit crate 生态，Apache-2.0）。
   - ponytail：2026-10-26 自 GitHub `DietrichGebert/ponytail`（commit `09c434a`）复制 `skills/ponytail/SKILL.md` 与 `LICENSE`，逐一比对字节一致；**MIT**。
 - **同步策略**：两者均视同依赖升级（standards/08 §5）——gpui-kit 于 Phase 3 开工前与上游重新同步并核对与所锁 crate 版本的匹配性；ponytail 在各阶段开工前可顺手核对一次上游；升级独立成提交并登记 CHANGELOG。
-- **预算豁免**：本目录属 vendored 外部资产，**不计入** docs/.agent 体量预算（standards/08）；但**禁止**在目录内新增项目自创内容——项目自己的经验沉淀放 `.agent/skills/`（注意两者是不同目录、不同语义）。
+- **预算豁免与命名**：vendored 子目录（`gpui-kit/`、`gpui-kit-design-guides/`、`ponytail/`）属外部资产，**不计入** `.agents/` 体量预算（standards/08）；项目自创经验放同目录的 `S-NNN-*.md`，与上游子目录按命名区分，**禁止**改动 vendored 子目录内容。
 - **关联提醒**：pi-flash 的 gpui 陷阱笔记针对 gpui-component 0.2.x；Phase 3 开工前需按 research/05 §2.2 核对 gpui-kit 与 gpui-component 的谱系，再以本目录技能为准写桌面代码。写码冲突时以 docs/standards/04 为准（见其 §8）。

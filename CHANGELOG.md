@@ -6,6 +6,21 @@
 
 ---
 
+## [0.1.13] - 2026-10-26
+
+### 治理修正：`.agent/` 并入 `.agents/`
+
+- **修正目录命名笔误**：AI 知识库的唯一目录是 `.agents/`。原 `.agent/` 的 CONTEXT、handoff、pitfalls、skills 已用 `git mv` 并入，git 历史可追溯；旧目录与占位 `.gitkeep` 删除。
+- **更新全部活跃引用**（12 个文件）：AGENTS.md、docs/README.md、standards 01/03/07/08/09、roadmap、Phase 1 报告、`.agents/README.md`、`.agents/skills/README.md`、H-001。CHANGELOG 中已发布的历史记录保留原文，不改写。
+- **明确 `skills/` 双重身份**：vendored 上游技能子目录（gpui-kit 等，不计预算）与项目自创 `S-NNN-*.md` 同目录共存；预算口径同步写入 `.agents/README.md` §3 与 standards/08 §3。
+- 纯文档/治理变更，无代码行为变化；`.agents/` 项目自创文件 9 个（上限 40）。
+
+### 当前状态
+
+- **Phase 1 完成**。下一阶段：Phase 2 扩展宿主（未开始，待开工通知）。
+
+---
+
 ## [0.1.12] - 2026-10-26
 
 ### 里程碑：Phase 1 完成（CI 全绿，tag `phase-1.end`）

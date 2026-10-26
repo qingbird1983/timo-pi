@@ -9,13 +9,13 @@
 | 你是谁 | 读什么 |
 |---|---|
 | 项目所有者（不读代码） | [README.zh-CN.md](../README.zh-CN.md) → `roadmap/00-roadmap.md`（看板）→ CHANGELOG → `adr/`（感兴趣时） |
-| 新加入的 AI 会话 | `.agent/CONTEXT.md` → [AGENTS.md](../AGENTS.md) → 本页 → 当前 phase 文档 → `standards/` 全部 → 相关架构文档 |
+| 新加入的 AI 会话 | `.agents/CONTEXT.md` → [AGENTS.md](../AGENTS.md) → 本页 → 当前 phase 文档 → `standards/` 全部 → 相关架构文档 |
 | 未来的人类协作者 | 同 AI 会话路径 |
 
 ## 目录结构
 
 ```
-.agent/                AI 知识库与交接中枢（仓库根；规范见其 README 与 standards/08）
+.agents/                AI 知识库与交接中枢（仓库根；含 vendored 技能；规范见其 README 与 standards/08）
 docs/
 ├── README.md            本页：文档地图
 ├── glossary.md          术语表（面向非技术读者）
@@ -55,7 +55,7 @@ docs/
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | 定稿（各阶段细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
-| standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agent/代码/依赖的预算与清理机制） |
+| standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agents/代码/依赖的预算与清理机制） |
 | standards/09-standards-review.md | 定稿 | 规范自身的复查与进化（漏洞/过严/过松的例行与触发复查、修正分级） |
 | glossary.md | 定稿 | 术语表 |
 

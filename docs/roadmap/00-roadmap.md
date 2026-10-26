@@ -6,7 +6,7 @@
 
 ## 1. 阶段总览与看板（本表是**唯一进度看板**）
 
-> 自 0.1.2 起，README 不再重复看板；阶段状态只在本表维护。状态变更必须同步 CHANGELOG 与 `.agent/CONTEXT.md`。**最近更新：2026-10-26。**
+> 自 0.1.2 起，README 不再重复看板；阶段状态只在本表维护。状态变更必须同步 CHANGELOG 与 `.agents/CONTEXT.md`。**最近更新：2026-10-26。**
 
 ```mermaid
 graph LR

@@ -37,7 +37,7 @@
 ## 体量核对（standards/08）
 
 - docs/：47 篇（软上限 60）；最长设计稿 < 500 行。
-- .agent/：5 个文件（上限 40）；CONTEXT ≤ 150 行。
+- .agents/：5 个文件（上限 40）；CONTEXT ≤ 150 行。
 - 代码：最大源文件 494 行（上限 500）；无豁免项；死代码清零。
 - 依赖：Cargo.lock 327 个包（含传递依赖）；每 crate 直接依赖 ≤ 15。
 - 构建产物：target/ 约 4 GB（软上限 15 GB）。
@@ -77,5 +77,5 @@
 - `docs/design/phase-1/06-timo-mcp-kernel-cli.md`：Kernel 门面签名、CLI 参数与退出码、错误类型表（实现回填）。
 - `docs/design/phase-1/07-testing-ci.md`：回放注入点与夹具落点、A4 本地 server 路径（实现回填）。
 - `CHANGELOG.md`：0.1.10 条目。
-- `.agent/CONTEXT.md`：本轮交接。
+- `.agents/CONTEXT.md`：本轮交接。
 - `docs/README.md`：登记本报告。

@@ -8,7 +8,7 @@
 
 本项目靠制度管理而非人治（所有者不读代码，制度是唯一防线），因此**制度本身也会出 bug**：有漏洞、有过严、有过松、会过时。规范必须自带"复查—修正—进化"的闭环，且复查流程自身受防膨胀约束。
 
-**被复查对象**：standards/01~09 全部、根入口文件（README 两份 / AGENTS.md / CHANGELOG）、`.agent/README.md`。
+**被复查对象**：standards/01~09 全部、根入口文件（README 两份 / AGENTS.md / CHANGELOG）、`.agents/README.md`。
 
 ## 1. 两种复查
 
@@ -42,7 +42,7 @@
 | 规则级 | 预算数字、流程步骤、清单增删 | ADR（可简短）+ 修订 + CHANGELOG；CHANGELOG 用非技术语言写清"改了什么、为什么" |
 | 机制级 | 废除/新设一篇规范或一类机制 | ADR + CHANGELOG 置顶向所有者说明 |
 
-- 修订任何规范时，**同步检查全部引用处**（AGENTS.md、docs/README.md、各篇"关联"行、.agent/CONTEXT.md），防止"改了正文、漏了引用"。
+- 修订任何规范时，**同步检查全部引用处**（AGENTS.md、docs/README.md、各篇"关联"行、.agents/CONTEXT.md），防止"改了正文、漏了引用"。
 - 修订历史不另立流水：CHANGELOG 一条 + 必要时 ADR；规范正文保持覆盖式更新。
 
 ## 5. 防膨胀约束（复查机制管自己）

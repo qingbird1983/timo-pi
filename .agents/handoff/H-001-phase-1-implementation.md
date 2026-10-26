@@ -17,7 +17,7 @@
 
 - A1~A3 人工验收（真实凭证 + 授权）；A4 真实第三方 server；A5 推送后 CI；阶段收尾 tag。
 - MCP 发现失败不自动重试发现（调用层重连）；扩展钩子占位延后 Phase 2。
-- 详见 `.agent/CONTEXT.md`。
+- 详见 `.agents/CONTEXT.md`。
 
 ## 已提取的沉淀
 
