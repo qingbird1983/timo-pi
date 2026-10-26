@@ -1,0 +1,29 @@
+# ===== Rust（Phase 1 起生效）=====
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# ===== Node / JS（扩展兼容 shim、工具链预留）=====
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ===== 环境与密钥（严禁提交）=====
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# ===== 编辑器 / 操作系统 =====
+.idea/
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 本地临时产物 =====
+*.log
+*.tmp
+coverage/
