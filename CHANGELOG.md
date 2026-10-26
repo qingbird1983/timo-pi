@@ -6,6 +6,21 @@
 
 ---
 
+## [0.1.12] - 2026-10-26
+
+### 里程碑：Phase 1 完成（CI 全绿，tag `phase-1.end`）
+
+- **GitHub Actions 全绿**（run 40308144023）：fmt / clippy `-D warnings` / test（122 个）/ check-size 全部成功。
+- **修复首次 CI 暴露的测试辅助函数问题**：shell 测试直接调用 Bash、绕过了产品的原生 bash 探测；GitHub runner 的 `bash.exe` 是空 WSL，导致 `echo`/超时测试失败。测试改为复用同一判定。
+- **验收 A1~A6 全部通过**：真实任务、会话恢复、强杀、MCP 工具调用、CI、七条接缝；进度报告转定稿。
+- 仓库已推送至 `github.com/qingbird1983/timo-pi`（私有）。
+
+### 当前状态
+
+- **Phase 1 完成**。下一阶段：Phase 2 扩展宿主（未开始，待开工通知）。
+
+---
+
 ## [0.1.11] - 2026-10-26
 
 ### 里程碑：真实模型验收通过（DeepSeek），修复两个真实缺陷

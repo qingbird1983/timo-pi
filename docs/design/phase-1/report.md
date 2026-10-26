@@ -1,4 +1,4 @@
-# Phase 1 阶段进度报告（验收完成，CI 待确认）
+# Phase 1 阶段进度报告
 
 - 日期：2026-10-26
 - 本阶段目标（一句话）：做出一个没有界面、但能读文件、改文件、跑命令并把全过程存成可恢复会话的 AI 内核。
@@ -19,7 +19,7 @@
 | A2 | 会话可读、可列出、可恢复 | **通过** | `sessions` 列出 3 个会话；`resume last --once` 续聊成功，entry 9→13、parent 链完整 |
 | A3 | 中途 Ctrl+C / kill -9 | **通过（强杀路径）** | 运行中 `taskkill /F /IM timo.exe` 强杀：会话文件 3 行全为合法 JSON、parent 链完整；Ctrl+C 两段语义为代码级实现，未做信号自动化 |
 | A4 | stdio MCP server 工具可用 | **通过** | 自动化 echo server 集成测试 + 真实模型对话：模型发现并调用 `mcp__echo__echo`，返回 `echo: hello from mcp` |
-| A5 | CI 全绿 | **本地通过，CI 待跑** | `fmt` / `clippy -D warnings` / `test --workspace`（122 个测试）/ `check-size` 全绿；推送到远端后以 Actions 结果为准 |
+| A5 | CI 全绿 | **通过** | GitHub Actions [run 40308144023](https://github.com/qingbird1983/timo-pi/actions/runs/40308144023)：fmt / clippy `-D warnings` / test（122 个）/ check-size 全部成功 |
 | A6 | 接缝核对 | **通过** | 见下节逐条 |
 
 ## 关键接缝核对（architecture/03 七条）
@@ -62,13 +62,13 @@
 - **Ctrl+C 两段语义未做信号自动化**：kill -9 路径已真实验证；Ctrl+C 依赖控制台信号，代码路径已实现，留待人工复核。
 - **MCP 工具发现失败不自动重试**：首个 `run`/`tools` 时失败只通告一次；已发现工具的调用失败会在调用层重连。Phase 2 惰性管理时补"重新发现"。
 - **扩展钩子结构占位未落地**：`LoopConfig` 的七个 Phase 2 钩子字段未加（D10 不实现执行；占位随 Phase 2 一并设计，已入 backlog）。
-- **CI 首次结果未知**：本地门禁全绿，需 push 后确认 windows-latest 环境（A4 测试依赖 Python）一致。
 - 真实第三方 MCP server 的 HTTP 传输尚未人工验证（stdio 已自动化 + 真模型覆盖）。
+- 首次 CI 暴露的 shell 测试辅助函数问题已修复（测试改为复用产品探测；GitHub runner 的 `bash.exe` 是空 WSL）。
 
 ## 对下阶段的影响
 
-- Phase 1 只剩 A5 远端 CI 确认与阶段 tag；真实任务、会话恢复、强杀、MCP 工具调用均已跑通。
-- Phase 2 扩展宿主设计可启动；内核接口已稳定。
+- Phase 1 已完成并打 tag `phase-1.end`；Phase 2 扩展宿主设计可启动。
+- 真实任务、会话恢复、强杀、MCP 工具调用与 CI 均已跑通；内核接口稳定。
 - 本轮修复的 OpenAI 流式事件、`edit` 行重复、WSL bash 三项缺陷都属于真实验收才暴露的问题；Phase 2 的 GUI/扩展订阅方直接受益。
 
 ## 文档更新清单
