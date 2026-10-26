@@ -29,7 +29,8 @@
 
 - **方向纪律（ADR-0011）是最高优先约束之一**：遇到"想换更好的做法"→ 三问（pi 是否这么做 / 是否在白名单 / 是否有 ADR 授权），皆否则记 backlog、照 pi 做。
 - GPL/LGPL 参考项目（PI-Desktop、pi-flash）只读思路禁抄码；pi 上游可读不可抄（AGENTS 铁律 7）。
-- `.agents/skills/`（vendored 官方技能）与 `.agent/skills/`（项目沉淀）勿混。
+- `.agents/skills/`（vendored 外部技能）与 `.agent/skills/`（项目沉淀）勿混。
+- 写码纪律：写代码时遵循 `.agents/skills/ponytail`（MIT）——最小完整改动；它管"怎么写"，ADR-0011 管"做什么"，不冲突（standards/04 §8）。
 - 根入口定位（standards/08 §2）：README 双份=纯说明；AGENTS.md=薄索引；状态唯一来源是本卡。
 - 每阶段收尾：接缝核对（architecture/03）+ 体量核对（standards/08，含 target/）。
 - 本卡下次由 Phase 1 设计会话整体重写（模板 A）。

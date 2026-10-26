@@ -6,6 +6,19 @@
 
 ---
 
+## [0.1.7] - 2026-10-26
+
+### 新增（写码纪律）
+
+- **ponytail 技能 vendored** 至 `.agents/skills/ponytail/`——GitHub `DietrichGebert/ponytail`（176k stars，MIT，commit `09c434a`），字节一致复制 SKILL.md + LICENSE。"最懒资深工程师"纪律：用最少的新代码完整解决问题，优先复用既有结构与依赖，不造没人要的抽象；**绝不削减**边界校验、错误处理、安全与必要测试（与防膨胀规范 standards/08 同向）。
+- 联动：`.agents/skills/README.md`（收录清单/来源与许可/同步策略扩为两类）、AGENTS.md 文档索引新增"写码纪律"入口、standards/04 新增 §8（冲突时以本规范为准；`shortcut:` 标记按 §7 落地为 `TODO`）。
+
+### 当前状态
+
+- **等待所有者审阅文档后下达开工通知**；Phase 1 开工前置条件不变（phase-1 §6）。
+
+---
+
 ## [0.1.6] - 2026-10-26
 
 ### 新增（所有者硬约束）
