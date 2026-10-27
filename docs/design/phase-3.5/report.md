@@ -1,8 +1,8 @@
-# Phase 3.5 P0 阶段进度报告（草稿）
+# Phase 3.5 阶段进度报告（P0 / P1 完成）
 
 - 日期：2026-10-27
-- 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计——装进内核，并让 CLI 与桌面共用同一份能力。
-- 状态：**P0 完成，阶段继续**（P1 compaction/缓存/无头、P2 模板/trust 尚未开工）
+- 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计、compaction、缓存、无头模式——装进内核，并让 CLI 与桌面共用同一份能力。
+- 状态：**P0、P1 完成；D6 标尺与 P2 未开工**
 
 ## 完成了什么
 
@@ -10,6 +10,7 @@
 - **技能**：扫描五个根（用户、`.timo`、`.pi`、向上到仓库根的 `.agents`、设置显式路径），含 `SKILL.md` 的目录即根不再下钻，复用 `ignore` 规则跳过隐藏项与 `node_modules`；提示里只放名字/描述/路径，`/skill:name` 把正文展开进用户消息。
 - **命令面**：内建命令三态（Ready/Planned/Unsupported）+ 技能命令 + 扩展命令合并成一份清单；CLI 分发顺序为扩展 → 内建 → `/skill:` → 普通提示。
 - **用量**：从会话消息现算四项 token 与费用，assistant 按 `provider/response_model` 分桶，工具结果进 `Tools/summaries`；`/session` 与桌面状态栏可查。
+- **P1 会话深度**：会话按 cwd 分区（旧平铺只读兼容）、`/export` 原子导出、compaction 检查点与恢复投影、无头 `-p`/`--mode json`、缓存 miss 统计与预热（详见 `design/phase-3.5/04~07`）。
 - **桌面接线**：命令面板新增"技能"组（只列 Ready），点选把 `/skill:<name> ` 插入输入框；状态栏显示 `tokens · 费用 · 版本`；会话切换后刷新用量。
 
 ## 验收场景执行结果
@@ -18,8 +19,10 @@
 |---|---|---|
 | D1 项目上下文 | **通过（CLI + 桌面）** | 临时项目放 `AGENTS.md`（规则：先输出"暗号：青柚"）。CLI 与桌面都只回了该行，未复述其他内容。 |
 | D2 skills | **通过（CLI + 桌面）** | 临时项目放 `.timo/skills/hello/SKILL.md`（要求三句以"柚"开头）。CLI `/skill:hello` 与桌面面板点选后都触发了技能，并遵循其内容。 |
-| D4 用量与缓存 | **通过（P0 范围）** | 每轮请求的 token 与 `cache_read` 可读；会话累计与分桶可查。桌面状态栏显示累计 tokens 与费用。缓存统计 UI 属 P1。 |
-| D7 CLI 回归 | **通过** | workspace 263 tests 全绿；`phase-3.end..HEAD` 对既有测试文件零改动，唯一变更是新增 `crates/timo-kernel/src/prompt/skills/tests.rs`。四门禁全绿。 |
+| D3 compaction | **通过（自动 + 手动 + 重启）** | 自动：低 reserve 触发后会话文件出现一条 `session.compaction`（结构化摘要含「青柚」）；重启 `resume` 后仍答出代号。手动：`/compact` 读数 `1836 → 279`、保留 2 条，重启后同样答出代号。 |
+| D4 用量与缓存 | **通过（P0 用量 + P1 缓存半场）** | 每轮 token 与 `cache_read` 可读；会话累计与分桶可查；`/session` 新增 `cache:` 行与 `warming:` 状态。 |
+| D5 无头模式 | **通过（text + JSONL + 退出码）** | `-p` 只输出终答；`--mode json` 首行会话头、首/末事件 `agent_start`/`agent_end`，工具调用事件齐全；用法错误退出 2。Ctrl+C 130 未手工触发。 |
+| D7 CLI 回归 | **通过** | workspace 294 tests 全绿；`phase-3.end..HEAD` 对既有测试文件零改动，唯一变更是新增 `crates/timo-kernel/src/prompt/skills/tests.rs`。四门禁全绿。 |
 
 ### D1 真机读数（DeepSeek，临时数据目录）
 
@@ -41,6 +44,26 @@
 - 桌面：技能轮后右上 `1802 tokens`，状态栏累计 `5014 tok · $0.0000`。
 - 费用为 0 的原因：验收夹具的 `models.json` 未配费率卡（`cost` 全缺省 0），不是聚合错误；分桶与加法由 6 条单测覆盖。分桶键是供应商返回的 `response_model`（请求 `deepseek-chat`、上游回 `deepseek-flash`），与 K8 设计一致。
 
+### D3 真机读数（DeepSeek，临时数据目录）
+
+- 自动压缩：`reserve_tokens` 调到必触发后跑两轮，会话文件出现一条 `session.compaction`，摘要六节齐全、含项目代号「青柚」，`keep_recent_messages: 1`。
+- 重启 `resume last --once "项目代号是什么？"` → `青柚`，说明投影从摘要恢复。
+- 手动：两轮约 1800 token 的会话执行 `/compact 只保留项目代号` → `[compact] tokens: 1836 → 279 (kept 2 messages)`；随后 `/session` 为 3 条消息（摘要 + 保留尾部）。
+- 修复：首版 `tokens_after` 沿用压缩前 assistant 的 usage 读数，出现 `1873 → 1873`；改为按新上下文全量估算后恢复 `1836 → 279`，并有单测钉住。
+
+### D5 真机读数（DeepSeek）
+
+- text：`timo -p "只回复两个字：青柚"` → stdout 只有 `青柚`，无 `[tool]`/`[usage]`/流式增量，退出 0。
+- JSON：`--mode json -p "读取 README.md 第一行并原样回答"` 产出 50 行 JSONL——首行 `session_header`（id/cwd/model），第二行 `agent_start`，末行 `agent_end`；逐行 `serde_json` 解析通过；`message_update` 无 `partial`；`toolcall_start` 带 `id`/`tool_name`；工具 `bash` 读到 `TIMO_JSON_SMOKE`。
+- 多条 `-p`：同一会话顺序执行，第二条答案引用了第一条给的暗号。
+- 用法错误：`-p` 配子命令、无参启动均退出 2；Ctrl+C 的 130 语义已实现但未手工触发（Windows 控制台注入成本高，留人工抽检）。
+
+### P1 缓存读数
+
+- DeepSeek 会话 `/session`：`warming: inactive (…)`（模型目录无 `cache_ttl_seconds`），两轮请求均为缓存命中，未出现 miss 行。
+- miss 判定/代价公式与 `cache_warm` 基线条目由 6 条单测覆盖；`usage(cache_warm)` 落盘与"恰好一次刷新"由假适配器集成测试覆盖（1 秒 TTL）。
+- Anthropic 目录 17 个模型补 `cache_ttl_seconds: 300`；OpenAI 兼容目录不补。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。
@@ -49,12 +72,12 @@
 
 ## 体量核对（standards/08）
 
-- docs/：当前 69 篇（软上限 60，超 9）。本阶段新增 `design/phase-3.5/00~03` 四篇（`research/06` 由草稿定稿、`research/07` 为并行视觉工作的修订，均未新增篇数）。阶段设计稿属硬流程交付物，登记豁免；整合评审仍待办（删除面需所有者确认）。
-- .agents/：文件 51（不含 vendored 技能为 17，上限 40）；`CONTEXT.md` 50 行（上限 150）。
-- 代码：最大文件 500 行（`timo-kernel/src/kernel.rs`），无超 500 行文件；最大 crate `timo-ext` 4,843 行（上限 15,000 触发评审）。
-- 依赖：无新增第三方依赖；`timo-kernel` 新增 `ignore` 的 crate edge，该依赖已在 workspace 中。
-- 构建产物：`clean-build` 25.4 → 14.0GiB（释放 11.4GiB）；验收重建后 15.0GiB（incremental 2.6 / deps 11.2），处于软上限。
-- 豁免登记：docs 总数软上限 +9。
+- docs/：当前 76 篇（软上限 60，超 16）。P1 新增 `design/phase-3.5/04~07` 四篇；阶段设计稿与详设属硬流程交付物，登记豁免；整合评审仍待办（删除面需所有者确认）。
+- .agents/：文件 51（不含 vendored 技能为 17，上限 40）；`CONTEXT.md` 57 行（上限 150）。
+- 代码：最大文件 498 行（`timo-desktop/src/app.rs`），无超 500 行文件；最大 crate `timo-desktop` 5,661 行（上限 15,000 触发评审）。
+- 依赖：无新增第三方依赖；`timo-cli` 增 `serde_json` 边、`timo-kernel` 增 `async-trait` dev-dep，均已在 workspace 中。
+- 构建产物：P0 收尾 `clean-build` 到 14.0GiB；P1 开发后 20.5GiB（incremental 4.4 / deps 14.9），阶段收尾需再跑。
+- 豁免登记：docs 总数软上限 +16。
 
 ## 已知问题与风险
 
@@ -62,16 +85,16 @@
 - **工作树嵌套去重留 P2**（D36）：主仓与嵌套 worktree 各有一份 `AGENTS.md` 时可能重复注入。
 - **每轮 usage 行只显示最后一次请求**（Phase 1 既有行为）：一轮里发生工具调用时，`[usage]` 是最后一条 assistant 消息的读数；整轮/会话合计以 `/session` 为准。本阶段未改这一语义。
 - **费用依赖费率配置**：`models.json` 未写 `cost` 时费用恒为 0；不重新计价是设计选择，需在配置里给费率。
-- **缓存命中只在 CLI 文本中体现**，桌面 P0 不展示 cache 字段；P1 缓存统计接入。
-- `target/` 无 sccache 时不做全清；当前 15.0GiB 贴着软限，后续批次会再涨，阶段收尾需再跑 `clean-build`。
+- **缓存统计只在 CLI `/session` 呈现**，桌面暂无 cache 行；桌面状态栏的费用已含缓存计价，不新增面板（设计 05 §3.3）。
+- `target/` 无 sccache 时不做全清；当前 20.5GiB（incremental 4.4），阶段收尾需跑 `clean-build`。
 
 ## 下一步
 
-1. P1 详设与实现：compaction、缓存统计、会话 warmer、会话导出、headless/print 模式（D3/D4 缓存半场/D5）。
-2. P2：prompt 模板、provider composer、codemode、信任门控（D6 标尺）。
+1. D6 标尺：以 pi 官方 subagent 示例为行为蓝本，自研等价扩展（经无头模式跑子进程、.md 代理定义、用量回报）。
+2. P2：prompt 模板、provider composer、codemode、信任门控。
 3. 桌面视觉精修（并行线）：research/07 → 设计稿 → 批次实现；与内核零冲突。
-4. 阶段收尾：D3/D5/D6 验收 → 本报告补全 → tag `phase-3.5.end`。
+4. 阶段收尾：D6 验收 → 本报告补全 → `clean-build` → tag `phase-3.5.end`。
 
 ## 文档更新清单
 
-- 新增 `docs/design/phase-3.5/report.md`（本页，P0 草稿）。
+- `docs/design/phase-3.5/report.md`（本页）：P0 + P1 验收与读数。

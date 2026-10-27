@@ -12,6 +12,7 @@
 
 ## 上一轮完成了什么
 
+- **P1 验收与阶段报告**：D3（自动/手动压缩 + 重启恢复）、D5（text/JSONL/退出码）、D4 缓存半场（`/session` 的 cache/warming 行）写入 `docs/design/phase-3.5/report.md` 与看板；如实登记 Ctrl+C 130 未手工触发、DeepSeek 无 TTL 时预热停用。
 - **Phase 3.5 P1.4（缓存统计与预热）**：统计从会话 entry 现算 miss（噪声地板 1024、压缩/预热重置基线），`/session` 加 `cache:` 行；预热按模型 `cache_ttl_seconds`（Anthropic 300 秒）+ TTL 90% + $0.05 经济阈值，`max_tokens=1` 重放并写 `usage(cache_warm)`；`cache_warming: off|streaming|idle`，streaming 续一次、idle 30 分钟内重复（D50）。真机 DeepSeek `/session` 显示 `warming: inactive`（无 TTL）且无 miss 行；预热任务用假适配器验过"恰好一次 + 落 entry"。
 - **Phase 3.5 P1.3（无头模式）**：`timo -p "<任务>"`（可重复、同会话）与 `--mode json`；text 只出终答，JSONL 首行会话头、首/末事件 `agent_start`/`agent_end`、`message_update` 不带 partial；退出码 0/1/2、Ctrl+C 130。内核只补 `Kernel::start_session()`（D49）。真机：json 模式走完 `bash` 工具调用得到 `TIMO_JSON_SMOKE`，两条 `-p` 保住暗号。
 - **Phase 3.5 P1.2（compaction）**：每轮请求前按「窗口 − reserve」自动压缩；切点只落 user 消息；`session.compaction` entry 只增不删，恢复投影为「摘要 + 保留尾部 + 之后消息」；手动 `/compact [补充要求]` 输出前后 token 与保留条数。真机手动压缩 `1836 → 279`，重启后仍答出「青柚」；修掉 `tokens_after` 沿用压缩前 usage 的读数错误；`/session` 改为按会话文件全部 message entry 累计，压缩后历史用量不再缩水。
@@ -25,7 +26,7 @@
 
 ## 下一步（按优先级）
 
-1. Phase 3.5 收尾：D3（压缩/恢复）、D5（会话分区/导出）、D6（无头/子进程）验收；补 `docs/design/phase-3.5/report.md` 的 P1 部分；跑 `scripts/clean-build` 后复跑四门禁。之后进入 P2（templates/provider-composer/codemode/trust）。
+1. D6 标尺（先补设计：subagent 扩展 = 无头子进程 + .md 代理定义 + 用量回报）与 P2 详设（templates/provider-composer/codemode/trust）；之后 `clean-build` + 最终四门禁 + tag `phase-3.5.end`。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. `target/` 当前 20.5GiB（软 15 / 硬 25）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 总数 69 超软限 60，整合评审待办（删除面需所有者确认）。
 
