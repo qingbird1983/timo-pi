@@ -47,7 +47,7 @@
 - docs/：新增 1 篇（本报告）；总数 65（软上限 60，已超 5 篇；阶段报告是硬流程，整合评审登记为 Phase 3.5 开工前必做）。
 - .agents/：文件 53（含 vendored 技能；不计技能 19，上限 40）；`CONTEXT.md` 60 行（上限 150）。
 - 代码：最大文件 499 行（`timo-kernel/src/kernel.rs`），本批无 >500 行文件；无新增依赖。
-- 构建产物：`target/` 约 38GiB（`check-size` 口径；字节折算 40.6 GB，其中 `debug/incremental` 12.7 GB、`debug/deps` 26.3 GB）。`cargo-sweep 0.8.0` 已安装并运行 `scripts/clean-stale`（`-t 30`），清理 0——全部产物新于 30 天。软上限仍超；无 sccache 时不做全清，留给 Phase 3.5 或安装 sccache 后处理。
+- 构建产物：Phase 3 收尾后按新版 §7 执行 `scripts/clean-build`：**40.6GiB → 14.0GiB（释放 26.6GiB）**；incremental 12.7 → 0GiB，deps 26.3 → 13.3GiB。此前 `cargo sweep -t 30` 清理 0，证明按龄策略在 AI 连续构建下失效；新策略改为按容量分层，见 standards/08 §7。
 - 豁免登记：docs 软上限 +5（阶段报告与既有设计稿）；target 软上限（NSH 构建面）。
 
 ## 规范复查（standards/09 四问，逐篇结论）
@@ -67,7 +67,7 @@
 - 模型页仍只读，运行期切换模型需重建内核（后续批次）。
 - 设置缺“扩展”页；会话搜索框、超大 diff 外部编辑器、trace 全文入口未做（详见 roadmap phase-3 §6）。
 - NSH 渲染/热更证据为人工截图与文本，未进 CI（NSH 默认不编译，符合设计 03 §8）。
-- `target/` 约 38GiB 超软上限；`cargo-sweep 0.8.0` 已装，30 天按龄清扫 0 释放（产物均新于 30 天）；需 sccache + `cargo clean` 才能降到 15GB 以下。
+- `target/` 已按新 §7 清到 14.0GiB（软 15 / 硬 25）；无 sccache，未做全清；后续每阶段收尾跑 `scripts/clean-build`。
 - 移除钥匙串条目后配置引用保留，需重新配置（设计 02 §8 语义）。
 
 ## 对下阶段的影响

@@ -2,7 +2,7 @@
 # 体量核对（docs/standards/08 §4/§7）
 # 1) 单源文件 >500 行 → fail（行内含 SIZE-EXEMPT(<理由>) 注释可豁免，须在进度报告登记）
 # 2) #[allow(dead_code)] 无归属注释（同行或上一行含 TODO( 或 dead-code:）→ fail
-# 3) target/ 体积对照 15GB 软上限 → 超 warn
+# 3) target/ 对照 15GB 软限（warn）/ 25GB 硬限（fail）；incremental >4GB 提醒
 set -uo pipefail
 cd "$(dirname "$0")/.."
 fail=0
@@ -28,12 +28,21 @@ while IFS= read -r f; do
 done < <(find crates apps -name "*.rs" -type f 2>/dev/null)
 
 if [ -d target ]; then
-    kb=$(du -sk target 2>/dev/null | cut -f1)
-    gb=$((kb / 1024 / 1024))
-    if [ "$gb" -ge 15 ]; then
-        echo "WARN  target/ 约 ${gb}GB ≥ 15GB 软上限（标准 08 §7）——运行 scripts/clean-stale"
+    read -r total incremental deps < <(bash scripts/target-size)
+    gb() { awk -v b="$1" 'BEGIN { printf "%.1f", b / 1073741824 }'; }
+    soft=$((15 * 1024 * 1024 * 1024))
+    hard=$((25 * 1024 * 1024 * 1024))
+    if [ "$total" -ge "$hard" ]; then
+        echo "FAIL  target/ $(gb "$total")GiB ≥ 25GiB 硬上限（标准 08 §7）——运行 scripts/clean-build"
+        fail=1
+    elif [ "$total" -ge "$soft" ]; then
+        echo "WARN  target/ $(gb "$total")GiB ≥ 15GiB 软上限（标准 08 §7）——收尾前运行 scripts/clean-build"
     else
-        echo "OK    target/ 约 ${gb}GB（软上限 15GB）"
+        echo "OK    target/ $(gb "$total")GiB（软上限 15GiB）"
+    fi
+    echo "      分类：incremental $(gb "$incremental")GiB / deps $(gb "$deps")GiB"
+    if [ "$incremental" -ge $((4 * 1024 * 1024 * 1024)) ] && [ "$total" -lt "$hard" ]; then
+        echo "WARN  incremental $(gb "$incremental")GiB ≥ 4GiB（标准 08 §7）——scripts/clean-build 会先删它"
     fi
 fi
 

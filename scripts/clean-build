@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# 按容量清扫 target/（standards/08 §7）。
+#
+# 默认预算：软 15GiB / 硬 25GiB / incremental 4GiB；可用
+# TIMO_SOFT_GIB / TIMO_HARD_GIB / TIMO_INCREMENTAL_GIB 覆盖。
+# 顺序：删 incremental → cargo sweep --maxsize 软限 → 仍超硬限时
+# 仅在 sccache 在位时全清，否则停下报错。
+#
+# 用法：scripts/clean-build [--dry-run|--full]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+SOFT_GIB="${TIMO_SOFT_GIB:-15}"
+HARD_GIB="${TIMO_HARD_GIB:-25}"
+INCR_GIB="${TIMO_INCREMENTAL_GIB:-4}"
+DRY_RUN=0
+FULL=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run) DRY_RUN=1 ;;
+        --full) FULL=1 ;;
+        *)
+            echo "用法：scripts/clean-build [--dry-run|--full]" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+if [ "$FULL" -eq 1 ]; then
+    if [ "${RUSTC_WRAPPER:-}" != "sccache" ]; then
+        echo "拒绝全清：未检测到 RUSTC_WRAPPER=sccache（标准 08 §7）。"
+        exit 1
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "would cargo clean（sccache 在位）"
+        exit 0
+    fi
+    cargo clean
+    echo "target/ 已全清（sccache 缓存保留）。"
+    exit 0
+fi
+
+if [ ! -d target ]; then
+    echo "target/ 不存在，无需清扫。"
+    exit 0
+fi
+
+read_sizes() {
+    read -r total incremental deps < <(bash scripts/target-size)
+}
+
+gb() {
+    awk -v b="$1" 'BEGIN { printf "%.1f", b / 1073741824 }'
+}
+
+limit() {
+    echo $(($1 * 1024 * 1024 * 1024))
+}
+
+read_sizes
+before=$total
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "preview before: total $(gb "$total")GiB（incremental $(gb "$incremental")GiB / deps $(gb "$deps")GiB）"
+else
+    echo "before: total $(gb "$total")GiB（incremental $(gb "$incremental")GiB / deps $(gb "$deps")GiB）"
+fi
+
+if [ "$incremental" -gt "$(limit "$INCR_GIB")" ]; then
+    echo "incremental $(gb "$incremental")GiB > ${INCR_GIB}GiB，先删增量缓存"
+    for dir in target/debug/incremental target/release/incremental; do
+        [ -d "$dir" ] || continue
+        if [ "$DRY_RUN" -eq 1 ]; then
+            echo "would remove $dir"
+        else
+            rm -rf "$dir"
+            echo "removed $dir"
+        fi
+    done
+    [ "$DRY_RUN" -eq 0 ] && read_sizes
+fi
+
+if [ "$total" -gt "$(limit "$SOFT_GIB")" ]; then
+    if ! command -v cargo-sweep >/dev/null 2>&1; then
+        echo "FAIL target/ 超软限但未安装 cargo-sweep；安装后重跑（标准 08 §7）。" >&2
+        exit 1
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+        cargo sweep --maxsize "$((SOFT_GIB - 1))GiB" --dry-run
+    else
+        # 留 1GiB 余量：cargo-sweep 不计 target 根目录的元数据，正好卡线会略超。
+        cargo sweep --maxsize "$((SOFT_GIB - 1))GiB"
+        read_sizes
+    fi
+fi
+
+if [ "$total" -gt "$(limit "$HARD_GIB")" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+        echo "dry-run：清扫后仍可能超 ${HARD_GIB}GiB 硬限"
+    elif [ "${RUSTC_WRAPPER:-}" = "sccache" ]; then
+        echo "仍超 ${HARD_GIB}GiB 硬限，cargo clean（sccache 在位）"
+        cargo clean
+        read_sizes
+    else
+        echo "FAIL target/ 仍超 ${HARD_GIB}GiB 硬限且 sccache 未启用；拒绝自动全清。" >&2
+        exit 1
+    fi
+fi
+
+freed=$((before - total))
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "preview after: total $(gb "$total")GiB（dry-run 未删除）"
+else
+    echo "after: total $(gb "$total")GiB（incremental $(gb "$incremental")GiB / deps $(gb "$deps")GiB），释放 $(gb "$freed")GiB"
+fi

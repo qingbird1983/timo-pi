@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# 输出 target/ 体积（字节）：total incremental deps（standards/08 §7 的单一读数口径）。
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -d target ]; then
+    echo "0 0 0"
+    exit 0
+fi
+
+if command -v powershell >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
+    powershell -NoProfile -Command "\$root=(Resolve-Path 'target').Path; function B(\$p){ if(Test-Path \$p){ \$s=(Get-ChildItem -LiteralPath \$p -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum; if(\$s){[int64]\$s}else{0} } else {0} }; \$inc=(B (Join-Path (Join-Path \$root 'debug') 'incremental'))+(B (Join-Path (Join-Path \$root 'release') 'incremental')); '{0} {1} {2}' -f (B \$root), \$inc, (B (Join-Path (Join-Path \$root 'debug') 'deps'))" | tr -d '\r'
+    exit 0
+fi
+
+total=$(du -sb target | cut -f1)
+incremental=0
+for dir in target/debug/incremental target/release/incremental; do
+    if [ -d "$dir" ]; then
+        incremental=$((incremental + $(du -sb "$dir" | cut -f1)))
+    fi
+done
+deps=$(du -sb target/debug/deps 2>/dev/null | cut -f1 || echo 0)
+printf '%s %s %s\n' "$total" "$incremental" "$deps"

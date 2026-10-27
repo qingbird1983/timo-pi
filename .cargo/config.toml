@@ -1,5 +1,5 @@
 # 构建产物治理（docs/standards/08 §7 原文落地）
-# 全仓库唯一 cargo workspace、唯一 target/；清扫一律走 scripts/clean-stale（按龄，不全清）。
+# 全仓库唯一 cargo workspace、唯一 target/；清扫走 scripts/clean-build（按容量，先 incremental）。
 
 [profile.dev]
 # 保留回溯行号，砍掉大部分调试信息体积（经验值 60~80%）

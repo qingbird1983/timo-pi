@@ -6,6 +6,18 @@
 
 ---
 
+## [0.1.30] - 2026-10-27
+
+### 治理：构建缓存从“按龄”改为“按容量分层”
+
+- **问题**：AI 连续构建会刷新所有产物 mtime，`cargo sweep -t 30` 永远清理 0；实测 40.6GiB 的 `target/` 一点没降。
+- **新规则**（standards/08 §7）：15GiB 软限 / 25GiB 硬限；incremental 上限 4GiB；deps 由容量淘汰控制；sccache 到位后硬限收紧到 15GiB。超硬限 `check-size` 直接 FAIL。
+- **新脚本**：`scripts/clean-build`（先删 incremental，再 `cargo sweep --maxsize`，仍超硬限时仅 sccache 在位才全清；支持 `--dry-run`）；`scripts/target-size` 统一输出 total/incremental/deps 读数。`clean-stale` 更名。
+- **实测**：40.6GiB（incremental 12.7 / deps 26.3）→ 14.0GiB（incremental 0 / deps 13.3），释放 26.6GiB；`check-size` 通过。
+- 未改 Rust 代码；未重跑 workspace 测试（清扫后缓存已降，重跑需重编）。
+
+---
+
 ## [0.1.29] - 2026-10-27
 
 ### 维护：安装 cargo-sweep 0.8.0，30 天按龄清扫 0 释放

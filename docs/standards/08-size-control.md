@@ -68,7 +68,7 @@
 - .agents/：文件数 X（上限 40）；CONTEXT 行数：
 - 代码：新增 >500 行文件：无 / 有（附豁免）；crate 最大行数：
 - 依赖：新增 X 个（准入表已更新：是/否）
-- 构建产物：target/ 大小 X GB（软上限 15，超限处置：）：
+- 构建产物：target/ 大小 X GiB（软 15 / 硬 25；clean-build 前 → 后：）；分类：incremental X / deps X：
 - 豁免登记：
 ```
 
@@ -81,8 +81,19 @@
 **红线与预算**
 
 - 全仓库**只允许一个 cargo workspace、一个 target/**；禁止嵌套 workspace（pi-flash `crates/gpui` 独立 workspace 为反例）。
-- target/ 软上限 **15 GB**：纳入阶段收尾"体量核对"；超限必须清扫或书面说明。
-- 清扫**按龄不全清**：优先 `cargo sweep -t 30`（清 30 天未用产物）；仅在配置了 sccache 时才允许 `cargo clean` 全清（重编代价可控）。
+- **按容量，不按年龄**：AI 会话会持续刷新产物 mtime，`cargo sweep -t 30` 通常清理 0，不能作为主策略。预算单位统一为 GiB（1024 进制）。
+
+| 项 | 上限 | 处置 |
+|---|---:|---|
+| target/ 总量（软） | 15 GiB | `check-size` WARN；阶段收尾前必须 `scripts/clean-build` 清到线下 |
+| target/ 总量（硬） | 25 GiB | `check-size` FAIL，阻断收尾/tag |
+| `*/incremental` | 4 GiB | `clean-build` 第一步直接删（再生成最便宜） |
+| `debug/deps` + fingerprint | 12 GiB | 由 `clean-build` 的容量淘汰控制 |
+| sccache | 20 GiB | 独立 LRU；sccache 到位后 target 硬限收紧到 15 GiB |
+
+- **清理阶梯**（`scripts/clean-build`）：① 删超过 4 GiB 的 incremental；② `cargo sweep --maxsize <软限>` 按容量淘汰；③ 仍超硬限且 sccache 在位 → `cargo clean`；无 sccache 就停下报错，不自动全清。
+- **触发点**：工作中超过 20 GiB 只提醒；每阶段收尾必须跑一次 `clean-build` 并在报告里记“前 → 后”；超过 25 GiB 由 `check-size` 直接 FAIL。
+- 门禁/CI 的构建建议 `CARGO_INCREMENTAL=0`，避免每轮再加一份增量缓存；本地交互式迭代可保留。
 - 禁止把 `CARGO_TARGET_DIR` 设为多项目共享单目录（锁竞争 + 单点巨大）；如需给项目文件夹减负，可在 `.cargo/config.toml` 用 `[build] target-dir` 指向本机专用目录，并纳入同一清扫策略（默认不启用）。
 - git 内禁止任何构建产物；超过 1MB 的二进制资产须先写 ADR（fixture 纪律见 standards/05）。
 
@@ -98,7 +109,7 @@ strip = "debuginfo"
 lto = "thin"
 ```
 
-- 本机启用 `RUSTC_WRAPPER=sccache`（缓存目录设上限 ~20 GB，LRU 自动淘汰）——清扫后重编近乎免费。
+- 本机启用 `RUSTC_WRAPPER=sccache`（缓存目录设上限 ~20 GiB，LRU 自动淘汰）——清扫后重编近乎免费；**未启用 sccache 时不得 `cargo clean`**。
 - cargo ≥ 1.78 自带 `~/.cargo` registry 自动 GC（默认 10G 上限），无需额外工具。
-- `scripts/` 提供：`clean-stale`（封装按龄清扫）与 `check-size` 扩展项（报告 target/ 大小对照软上限）。
+- `scripts/` 提供：`target-size`（分类读数，单一口径）、`clean-build`（按容量清扫，支持 `--dry-run` / `--full`）、`check-size`（15/25 GiB 软硬限）。按龄的 `cargo sweep -t 30` 仅用于清理长期未用的工具链产物，不再是主策略。
 

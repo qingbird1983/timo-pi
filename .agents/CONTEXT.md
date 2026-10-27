@@ -23,7 +23,7 @@
 
 1. Phase 3.5 设计定稿（research/06 完成 → 00~0N 设计稿），然后按批次实现；施工顺序以 3.5 设计文档为准。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
-3. 空闲时处理 `target/` 约 38GiB（`cargo-sweep 0.8.0` 已装，30 天按龄清扫 0 释放——产物均新于 30 天；需 sccache 后 `cargo clean`）；docs 总数 65 超软限 60，Phase 3.5 开工前做整合评审。
+3. `target/` 已按新版 §7 清到 14GiB；后续每阶段收尾跑 `scripts/clean-build`（40.6 → 14.0，释放 26.6GiB）。sccache 到位后再把硬限收紧到 15GiB。docs 总数 65 超软限 60，Phase 3.5 开工前做整合评审。
 
 > 施工顺序唯一来源：当前阶段设计文档；设计错误先改文档再写码。
 
@@ -31,7 +31,7 @@
 
 - NSH 渲染/热更仍为人工验收（设计 03 §8 允许），CI 只跑“未签名拒绝”。
 - 生产签名密钥分发策略未定，留 Phase 4 ADR。
-- `target/` 约 38GiB（字节折算 40.6GB；incremental 12.7GB / deps 26.3GB）；`cargo-sweep 0.8.0` 已装，30 天清扫 0 释放。
+- `target/` 已清到 14GiB（软 15 / 硬 25）；无 sccache，未做全清；分类读数与清扫统一用 `scripts/target-size` / `clean-build`。
 - 桌面壳遗留：模型热切换、设置·扩展页、会话搜索、超大 diff 外部编辑器、trace 全文入口、审阅开关不重放（roadmap phase-3 §6）。
 
 ## 关键提醒
@@ -46,7 +46,8 @@
 - **覆盖层快捷键**：Sheet/Dialog 的焦点陷阱会让 App 根级 action 失效；焦点与 action 必须在覆盖层子树内（P-009）。
 - **UI 测试禁用 `use gpui_kit::*`**（P-007）；子模块里的普通 `#[test]` 也不要让 glob 带进 `test` 宏（P-010）。
 - **真机冒烟配置**：临时目录放 `desktop.json` + `models.json`（顶层 `{"providers": {...}}`，`base_url` 下划线命名），`api_key` 用 `$DEEPSEEK_API_KEY`，启动时 `TIMO_AGENT_DIR` 指过去；不写个人路径入库。
-- **门禁四连**：fmt / clippy / `cargo test --workspace` / `check-size`；NSH 改动另跑 `--features nsh-poc` 的 clippy 与测试；全量测试慢，用 `CARGO_BUILD_JOBS=1`。
+- **门禁四连**：fmt / clippy / `CARGO_INCREMENTAL=0 cargo test --workspace` / `check-size`；NSH 改动另跑 `--features nsh-poc` 的 clippy 与测试；全量测试慢，用 `CARGO_BUILD_JOBS=1`。
+- **构建缓存按容量治理**：`target/` 15GiB 软 / 25GiB 硬；incremental >4GiB 先删；阶段收尾跑 `scripts/clean-build`，`check-size` 超硬限直接 FAIL；无 sccache 不全清。
 - **写中文文件后扫隐形字符**：`grep -nP '[\x{3040}-\x{30ff}\x{200b}-\x{200f}\x{feff}]'`。
 - **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对。
 - 踩坑索引：P-001 流事件静默回归；P-002 编辑重复行；P-003 Windows bash 是 WSL；P-004 上游摘要当合同；P-005 模块格式与运行时不符；P-006 依赖解析成功 ≠ API 兼容；P-007 gpui-kit 测试 glob 导入；P-008 `impl IntoElement` 生命周期捕获；P-009 sheet 焦点陷阱；P-010 gpui glob 遮蔽 `#[test]`。
