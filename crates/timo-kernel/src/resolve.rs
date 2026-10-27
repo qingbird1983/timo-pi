@@ -1,5 +1,8 @@
 //! 模型解析（设计 05 §5 优先级：显式 > 设置默认 > 首个有凭证的内置供应商）。
 
+use std::sync::{Arc, Mutex};
+
+use timo_agent::ModelDispatch;
 use timo_ai::{ApiKind, AuthResolver, Catalog, Compat, Model, RateCard};
 use timo_config::{CustomProvider, Settings, ThinkingLevel};
 
@@ -116,21 +119,16 @@ pub async fn resolve_model(
                 .ok_or_else(|| KernelError::ModelNotFound(format!("{provider}/{id}")))?
                 .clone()
         };
-        return Ok(finish(
-            catalog,
-            reject_virtual(model)?,
-            settings,
-            explicit_key,
-            custom,
-        ));
+        return Ok(finish(catalog, model, settings, explicit_key, custom));
     }
     // 2. settings 默认（凭证可用才采纳）
     if let (Some(dp), Some(dm)) = (&settings.default_provider, &settings.default_model)
         && let Some(m) = catalog.get(dp, dm)
     {
-        let model = reject_virtual(m.clone())?;
+        let model = m.clone();
         let auth = build_auth(catalog, &model, explicit_key, custom);
-        if auth.resolve().await.is_ok() {
+        // 虚拟条目不需要自身凭证：路由会挑一个有凭证的物理模型（设计 10 §4.2）。
+        if model.is_virtual() || auth.resolve().await.is_ok() {
             return Ok(finish_with(model, settings, auth));
         }
     }
@@ -174,17 +172,6 @@ fn finish_with(
     }
 }
 
-/// 显式选中的虚拟条目在路由实装前一律拒绝（设计 10 §4.2；文案对齐蓝本）。
-fn reject_virtual(model: Model) -> Result<Model> {
-    if model.is_virtual() {
-        return Err(KernelError::ModelMustBeRouted(format!(
-            "{}/{}",
-            model.provider, model.id
-        )));
-    }
-    Ok(model)
-}
-
 /// 自动兜底只从物理模型里挑：虚拟模型必须先路由，不能被自动选中。
 fn first_physical(catalog: &Catalog, provider: &str) -> Option<Model> {
     catalog
@@ -206,7 +193,7 @@ fn builtin_provider_order(custom: &[CustomProvider]) -> Vec<String> {
 }
 
 /// 供应商认证解析器：显式 > provider api_key（自定义）> 内置 env 表（设计 05 §4）。
-fn build_auth(
+pub(crate) fn build_auth(
     catalog: &Catalog,
     model: &Model,
     explicit_key: Option<&str>,
@@ -226,6 +213,56 @@ fn build_auth(
         provider_ref,
         env_names,
     })
+}
+
+/// 请求期模型装配：目录 + 凭证 + 适配器缓存（设计 10 §4.2）。
+pub(crate) struct CatalogDispatch {
+    catalog: Catalog,
+    custom: Vec<CustomProvider>,
+    explicit: Option<String>,
+    apis: Mutex<Vec<(ApiKind, Arc<dyn timo_ai::ProviderApi>)>>,
+}
+
+impl CatalogDispatch {
+    /// 由装配期目录与凭证来源构造。
+    pub(crate) fn new(
+        catalog: Catalog,
+        custom: Vec<CustomProvider>,
+        explicit: Option<String>,
+    ) -> Self {
+        Self {
+            catalog,
+            custom,
+            explicit,
+            apis: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl ModelDispatch for CatalogDispatch {
+    fn resolve(&self, provider: &str, id: &str) -> Option<Model> {
+        self.catalog
+            .get(provider, id)
+            .filter(|model| !model.is_virtual())
+            .cloned()
+    }
+
+    fn api(&self, model: &Model) -> Arc<dyn timo_ai::ProviderApi> {
+        let mut cache = self
+            .apis
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((_, api)) = cache.iter().find(|(kind, _)| *kind == model.api) {
+            return Arc::clone(api);
+        }
+        let api = timo_ai::api_for(model.api);
+        cache.push((model.api, Arc::clone(&api)));
+        api
+    }
+
+    fn auth(&self, model: &Model) -> Arc<AuthResolver> {
+        build_auth(&self.catalog, model, self.explicit.as_deref(), &self.custom)
+    }
 }
 
 #[cfg(test)]
@@ -267,13 +304,17 @@ mod tests {
         assert!(!model.compat.send_auth_header);
     }
 
-    #[tokio::test]
-    async fn a_virtual_entry_is_listed_but_rejects_direct_requests() {
-        let providers = vec![custom(serde_json::json!({
+    fn virtual_providers() -> Vec<CustomProvider> {
+        vec![custom(serde_json::json!({
             "name": "router",
             "api": "pi-virtual",
             "models": [{ "id": "auto", "name": "Auto" }]
-        }))];
+        }))]
+    }
+
+    #[tokio::test]
+    async fn a_virtual_entry_is_listed_and_selectable_but_never_a_route_target() {
+        let providers = virtual_providers();
         let catalog = load_catalog(&providers).expect("catalog");
         let entry = catalog.get("router", "auto").expect("virtual entry");
         assert!(entry.is_virtual());
@@ -285,7 +326,7 @@ mod tests {
         );
         assert!(entry.base_url.is_empty());
 
-        let err = resolve_model(
+        let resolved = resolve_model(
             &catalog,
             &Settings::default(),
             Some(&("router".to_string(), "auto".to_string())),
@@ -293,11 +334,35 @@ mod tests {
             &providers,
         )
         .await
-        .err()
-        .expect("virtual model must be rejected");
+        .expect("virtual selection is allowed; the adapter rejects unrouted requests");
+        assert!(resolved.model.is_virtual());
+
+        let dispatch = CatalogDispatch::new(catalog, providers, Some("k".to_string()));
+        assert!(
+            dispatch.resolve("router", "auto").is_none(),
+            "虚拟条目不能成为路由目标"
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatch_resolves_physical_models_and_caches_one_adapter_per_kind() {
+        let providers = virtual_providers();
+        let mut catalog = load_catalog(&providers).expect("catalog");
+        catalog.upsert(Model::descriptor(
+            "mock",
+            "small",
+            ApiKind::AnthropicMessages,
+        ));
+        let dispatch = CatalogDispatch::new(catalog, providers, Some("k".to_string()));
+        let small = dispatch.resolve("mock", "small").expect("physical model");
+        assert!(!small.is_virtual());
+        assert!(dispatch.resolve("mock", "missing").is_none());
+        let first = dispatch.api(&small);
+        let second = dispatch.api(&small);
+        assert!(Arc::ptr_eq(&first, &second), "同协议适配器应复用");
         assert_eq!(
-            err.to_string(),
-            "Virtual model router/auto must be routed before streaming"
+            dispatch.auth(&small).resolve().await.expect("explicit key"),
+            "k"
         );
     }
 

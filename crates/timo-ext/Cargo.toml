@@ -20,6 +20,7 @@ reqwest = { workspace = true }
 async-trait = { workspace = true }
 timo-ai = { workspace = true }
 timo-agent = { workspace = true }
+timo-config = { workspace = true }
 rolldown = { workspace = true, optional = true }
 
 [dev-dependencies]

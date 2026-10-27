@@ -20,13 +20,13 @@ pub use compaction::{CompactInput, CompactionError, CompactionOutcome};
 pub use error::AgentError;
 pub use events::{CompactionReason, EventBus, KernelEvent};
 pub use hooks::{
-    BeforeAgentStart, BeforeToolCall, LoopHooks, RouteChoice, RouteRequest, ToolOutcome,
-    ToolOutputPatch,
+    BeforeAgentStart, BeforeToolCall, LoopHooks, RouteChoice, RouteReason, RouteRequest,
+    ToolOutcome, ToolOutputPatch,
 };
 pub use queue::PendingMessageQueue;
 pub use run::{
-    LoopConfig, RunChannels, RunOutcome, SessionSink, ToolExecutionMode, WarmRequest,
-    run_agent_loop,
+    LoopConfig, ModelDispatch, RunChannels, RunOutcome, SessionSink, ToolExecutionMode,
+    WarmRequest, run_agent_loop,
 };
 
 /// 结果别名：本 crate 一律以 [`AgentError`] 报错。

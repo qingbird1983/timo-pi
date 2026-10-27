@@ -3,6 +3,7 @@ globalThis.__timo_state = {
   tools: Object.create(null),
   handlers: Object.create(null),
   commands: Object.create(null),
+  virtualModels: Object.create(null),
   lastError: undefined,
   lastResult: undefined,
   diagOnce: new Set(),
@@ -103,15 +104,23 @@ function __timo_make_ctx(config) {
         },
       },
     ),
-    modelRegistry: new Proxy(
-      {},
-      {
-        get: () => () => {
-          __timo_diag_once("ctx.modelRegistry", "E202", "ctx.modelRegistry is not implemented");
-          throw new Error("modelRegistry is not implemented");
-        },
+    modelRegistry: {
+      find(provider, id) {
+        const list = config.models || [];
+        return list.find(
+          (model) => model.provider === String(provider) && model.id === String(id),
+        );
       },
-    ),
+      getModels(provider) {
+        const list = config.models || [];
+        return provider === undefined
+          ? list.slice()
+          : list.filter((model) => model.provider === String(provider));
+      },
+      getAllModels() {
+        return (config.models || []).slice();
+      },
+    },
     ui: null,
   };
   const uiBase = {
@@ -300,8 +309,50 @@ globalThis.__timo_make_api = function (config) {
     registerMcpServer: noop("registerMcpServer"),
     unregisterMcpServer: noop("unregisterMcpServer"),
     getMcpServers: () => [],
-    registerVirtualModel: noop("registerVirtualModel"),
-    unregisterVirtualModel: noop("unregisterVirtualModel"),
+    registerVirtualModel(def) {
+      const provider = String((def && def.provider) || "");
+      const id = String((def && def.id) || "");
+      if (!provider.trim() || !id.trim()) {
+        throw new Error("Virtual model provider and id must not be empty.");
+      }
+      if (typeof def.route !== "function") {
+        throw new Error("Virtual model " + provider + "/" + id + " must define route(request, ctx).");
+      }
+      const conflict = (config.models || []).find(
+        (model) =>
+          model.provider === provider && model.id === id && model.api !== "pi-virtual",
+      );
+      if (conflict) {
+        throw new Error("Virtual model " + provider + "/" + id + " conflicts with a physical model.");
+      }
+      const byProvider =
+        state.virtualModels[provider] || (state.virtualModels[provider] = Object.create(null));
+      byProvider[id] = def;
+      native.virtualModelRegistered(
+        JSON.stringify({
+          provider,
+          id,
+          name: def.name || id,
+          thinkingLevels: def.thinkingLevels || [],
+          contextWindow: def.contextWindow,
+          maxTokens: def.maxTokens,
+          input: def.input || [],
+        }),
+      );
+    },
+    unregisterVirtualModel(provider, id) {
+      const key = String(provider);
+      const modelId = String(id);
+      const byProvider = state.virtualModels[key];
+      if (!byProvider || !byProvider[modelId]) {
+        return;
+      }
+      delete byProvider[modelId];
+      if (Object.keys(byProvider).length === 0) {
+        delete state.virtualModels[key];
+      }
+      native.virtualModelUnregistered(key, modelId);
+    },
     events: {
       on() {
         return () => {};
@@ -356,6 +407,28 @@ globalThis.__timo_run_command = async function (name, argsJson) {
     const config = globalThis.__timo_config || {};
     const args = __timo_parse(argsJson, []);
     await entry.handler(args, __timo_make_ctx(config));
+  } catch (error) {
+    globalThis.__timo_state.lastError = __timo_error_text(error);
+  }
+};
+
+globalThis.__timo_route_virtual = async function (provider, id, payloadJson) {
+  globalThis.__timo_reset_error();
+  try {
+    const byProvider = globalThis.__timo_state.virtualModels[String(provider)];
+    const def = byProvider && byProvider[String(id)];
+    if (!def || typeof def.route !== "function") {
+      throw new Error("virtual model not registered: " + provider + "/" + id);
+    }
+    const request = __timo_parse(payloadJson, {});
+    const config = globalThis.__timo_config || {};
+    const ctx = __timo_make_ctx({
+      ...config,
+      model: request.model,
+      thinkingLevel: request.thinkingLevel,
+    });
+    const result = await def.route(request, ctx);
+    globalThis.__timo_state.lastResult = JSON.stringify(result ?? null);
   } catch (error) {
     globalThis.__timo_state.lastError = __timo_error_text(error);
   }

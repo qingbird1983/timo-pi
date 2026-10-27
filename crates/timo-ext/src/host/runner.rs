@@ -183,6 +183,55 @@ pub(super) fn command_one(
     })
 }
 
+pub(super) fn route_one(
+    contexts: &[(String, Context)],
+    state: &Arc<Mutex<HostState>>,
+    provider: &str,
+    id: &str,
+    payload: JsonValue,
+    deadline: &Rc<Cell<Option<Instant>>>,
+    budget: Duration,
+) -> Result<JsonValue> {
+    let ext = state
+        .lock()
+        .ok()
+        .and_then(|state| {
+            state
+                .virtual_models
+                .iter()
+                .find(|model| model.provider == provider && model.id == id)
+                .map(|model| model.ext_id.clone())
+        })
+        .ok_or_else(|| {
+            runtime(
+                ErrorCode::E303,
+                format!("virtual model not registered: {provider}/{id}"),
+            )
+        })?;
+    let (_, context) = contexts
+        .iter()
+        .find(|(loaded, _)| loaded == &ext)
+        .ok_or_else(|| runtime(ErrorCode::E305, format!("extension not loaded: {ext}")))?;
+    let payload_json = serde_json::to_string(&payload)
+        .map_err(|error| runtime(ErrorCode::E304, error.to_string()))?;
+    context.with(|ctx| -> Result<JsonValue> {
+        let _ = invoke(&ctx, deadline, Some(budget), || {
+            let call: Function = ctx.globals().get("__timo_route_virtual")?;
+            call.call((provider.to_string(), id.to_string(), payload_json))
+        })?;
+        if let Some(error) = take_string(&ctx, "lastError") {
+            return Err(runtime(ErrorCode::E303, error));
+        }
+        let result = take_string(&ctx, "lastResult").unwrap_or_else(|| "null".to_string());
+        serde_json::from_str(&result).map_err(|error| {
+            runtime(
+                ErrorCode::E304,
+                format!("virtual route result is not valid JSON: {error}"),
+            )
+        })
+    })
+}
+
 pub(super) fn dispatch_all(
     contexts: &[(String, Context)],
     state: &Arc<Mutex<HostState>>,

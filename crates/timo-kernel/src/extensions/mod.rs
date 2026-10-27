@@ -39,6 +39,8 @@ pub struct ExtensionOptions {
     pub running: Arc<AtomicBool>,
     /// `--ext-flag` 值。
     pub flags: std::collections::BTreeMap<String, String>,
+    /// 目录快照（`ctx.modelRegistry`；设计 10 §4.2）。
+    pub models: Vec<serde_json::Value>,
 }
 
 /// 装载结果。
@@ -131,7 +133,8 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
         .with_agent_dir(options.data_dir.clone())
         .with_abort_flag(Arc::clone(&options.abort))
         .with_running(Arc::clone(&options.running))
-        .with_flags(options.flags.clone());
+        .with_flags(options.flags.clone())
+        .with_models(options.models.clone());
     let budget = std::env::var("TIMO_EXT_BUDGET_MS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
@@ -212,7 +215,8 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
                     .with_ui(options.interactive)
                     .with_abort_flag(Arc::clone(&options.abort))
                     .with_running(Arc::clone(&options.running))
-                    .with_flags(options.flags.clone()),
+                    .with_flags(options.flags.clone())
+                    .with_models(options.models.clone()),
                 );
                 let bundle = root.join(&manifest.bundle);
                 match host.load_with(&id, &bundle, services) {

@@ -11,9 +11,23 @@ use timo_config::Clock;
 use timo_session::SessionWriter;
 use tokio_util::sync::CancellationToken;
 
-use crate::events::{CompactionReason, EventBus, KernelEvent};
-use crate::hooks::{BeforeAgentStart, RouteRequest};
+use crate::events::{EventBus, KernelEvent};
+use crate::hooks::BeforeAgentStart;
 use crate::queue::PendingMessageQueue;
+
+/// 请求期模型装配（设计 10 §4.2）：把"选中模型 / 本轮请求模型 / adapter"拆开。
+///
+/// 内核提供目录与凭证；测试不提供时沿用 `LoopConfig` 里的单一 adapter/凭证。
+pub trait ModelDispatch: Send + Sync {
+    /// 按 `provider/id` 取目录里的物理模型（虚拟条目/缺失 → None）。
+    fn resolve(&self, provider: &str, id: &str) -> Option<timo_ai::Model>;
+    /// 模型对应的协议适配器。
+    fn api(&self, model: &timo_ai::Model) -> std::sync::Arc<dyn timo_ai::ProviderApi> {
+        timo_ai::api_for(model.api)
+    }
+    /// 模型供应商的凭证解析器。
+    fn auth(&self, model: &timo_ai::Model) -> std::sync::Arc<timo_ai::AuthResolver>;
+}
 
 /// 工具批执行模式（pi toolExecution）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -57,6 +71,8 @@ pub struct LoopConfig {
     pub provider_hooks: Option<std::sync::Arc<dyn timo_ai::ProviderHooks>>,
     /// 工具执行前审阅器（None = 自动执行，Phase 1/2 行为）。
     pub review: Option<std::sync::Arc<dyn timo_tools::ToolReview>>,
+    /// 请求期模型装配（None = 单一 adapter/凭证，Phase 1/2 行为）。
+    pub dispatch: Option<std::sync::Arc<dyn ModelDispatch>>,
 }
 
 /// 会话写入口（MessageAdded 落盘挂点；None = 无会话）。
@@ -126,8 +142,11 @@ pub async fn run_agent_loop(
         messages: history,
         new_messages: Vec::new(),
         system_prompt: Some(system_prompt),
+        selection: config.model.clone(),
+        selected_thinking: config.thinking_level,
         model: config.model.clone(),
         thinking_level: config.thinking_level,
+        route_state: None,
         last_request: None,
     };
     for m in prompt {
@@ -151,7 +170,6 @@ pub async fn run_agent_loop(
             for m in std::mem::take(&mut pending) {
                 ctx.push_message(m).await;
             }
-            ctx.maybe_compact().await;
             let message = ctx.request().await;
             // assistant 终态消息入上下文（对齐 pi message_end 语义）
             ctx.push_message(Message::Assistant(message.clone())).await;
@@ -226,8 +244,16 @@ struct Ctx<'a> {
     messages: Vec<Message>,
     new_messages: Vec<Message>,
     system_prompt: Option<String>,
+    /// 选中的模型（可为虚拟；run 内不变）。
+    selection: timo_ai::Model,
+    /// 选中的思考档位（run 内不变）。
+    selected_thinking: timo_config::ThinkingLevel,
+    /// 本请求实际使用的物理模型。
     model: timo_ai::Model,
+    /// 本请求实际使用的思考档位。
     thinking_level: timo_config::ThinkingLevel,
+    /// 路由状态（B2 在 run 内传递；B3 落会话）。
+    route_state: Option<serde_json::Value>,
     /// 最近一次请求快照（预热用）。
     last_request: Option<WarmRequest>,
 }
@@ -252,111 +278,6 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// 请求前按阈值压缩上下文（phase-3.5/04）；失败只发事件，不中断。
-    async fn maybe_compact(&mut self) {
-        let Some(settings) = self.config.compaction.clone() else {
-            return;
-        };
-        if !settings.enabled || self.cancel.is_cancelled() {
-            return;
-        }
-        let tokens = crate::compaction::context_tokens(&self.messages);
-        if !crate::compaction::should_compact(tokens, self.model.context_window, &settings) {
-            return;
-        }
-        let input = crate::compaction::CompactInput {
-            messages: &self.messages,
-            model: &self.model,
-            api: &self.config.api,
-            auth: &self.config.auth,
-            retry: &self.config.retry,
-            thinking: self.thinking_level,
-            settings: &settings,
-            cancel: &self.cancel,
-            clock: &self.config.clock,
-            instructions: None,
-        };
-        match crate::compaction::compact(input).await {
-            Ok(outcome) => {
-                if let Some(sink) = &self.session {
-                    let mut writer = sink.lock().await;
-                    let _ = writer.append_raw(
-                        timo_session::kinds::COMPACTION,
-                        outcome.entry_payload(CompactionReason::Threshold),
-                    );
-                }
-                self.messages = outcome.messages;
-                self.bus.emit(KernelEvent::Compacted {
-                    reason: CompactionReason::Threshold,
-                    tokens_before: outcome.tokens_before,
-                    tokens_after: outcome.tokens_after,
-                });
-            }
-            Err(crate::compaction::CompactionError::Nothing) => {}
-            Err(error) => self.bus.emit(KernelEvent::Error {
-                context: format!("compaction: {error}"),
-            }),
-        }
-    }
-
-    /// 一次模型请求（含 assistant 轮次重试；设计 02 §4.c/d）。
-    async fn request(&mut self) -> AssistantMessage {
-        let mut attempt: u32 = 0;
-        loop {
-            self.apply_route().await;
-            self.bus.emit(KernelEvent::ProviderRequest {
-                provider: self.model.provider.clone(),
-                model: self.model.id.clone(),
-            });
-            let message = self.request_once().await;
-            self.bus.emit(KernelEvent::ProviderResponse {
-                provider: self.model.provider.clone(),
-                model: self.model.id.clone(),
-                usage: message.usage.clone(),
-            });
-            let retryable = message.stop_reason == StopReason::Error
-                && self.config.retry.enabled
-                && attempt < self.config.retry.max_retries
-                && message
-                    .error_message
-                    .as_deref()
-                    .map(timo_ai::retry::assistant_error_retryable)
-                    .unwrap_or(false);
-            if !retryable {
-                return message;
-            }
-            attempt += 1;
-            let delay = timo_ai::retry::assistant_backoff(
-                attempt,
-                self.config.retry.base_delay_ms,
-                self.config.retry.max_retry_delay_ms,
-            );
-            tokio::select! {
-                _ = self.cancel.cancelled() => return message,
-                _ = tokio::time::sleep(delay) => {}
-            }
-        }
-    }
-
-    /// 虚拟模型路由（每次请求前；D23 仅同 provider）。
-    async fn apply_route(&mut self) {
-        let Some(hooks) = self.config.hooks.clone() else {
-            return;
-        };
-        let choice = hooks
-            .route_model(RouteRequest {
-                model: &self.model,
-                messages: &self.messages,
-            })
-            .await;
-        if let Some(choice) = choice {
-            self.model = choice.model;
-            if let Some(level) = choice.thinking_level {
-                self.thinking_level = level;
-            }
-        }
-    }
-
     async fn request_once(&mut self) -> AssistantMessage {
         let mut messages = self.messages.clone();
         if let Some(hooks) = self.config.hooks.clone() {
@@ -375,9 +296,14 @@ impl<'a> Ctx<'a> {
                 None => backup,
             };
         }
-        let api_key = match self.config.auth.resolve().await {
-            Ok(k) => k,
-            Err(e) => return self.error_terminal(&e.to_string(), false),
+        // 未路由的虚拟条目不需要凭证：交给拒绝式适配器报 `ModelMustBeRouted`（T4）。
+        let api_key = if self.model.is_virtual() {
+            None
+        } else {
+            match self.auth_for(&self.model).resolve().await {
+                Ok(k) => Some(k),
+                Err(e) => return self.error_terminal(&e.to_string(), false),
+            }
         };
         let ctx = timo_ai::Context {
             system_prompt: self.system_prompt.clone(),
@@ -396,7 +322,7 @@ impl<'a> Ctx<'a> {
             thinking_level: Some(self.thinking_level),
         };
         let options = timo_ai::StreamOptions {
-            api_key: Some(api_key),
+            api_key,
             cancel: self.cancel.clone(),
             max_retries: 0,
             provider_hooks: self.config.provider_hooks.clone(),
@@ -406,7 +332,10 @@ impl<'a> Ctx<'a> {
             model: self.model.id.clone(),
             context: ctx.clone(),
         });
-        let mut stream = self.config.api.stream(&self.model, &ctx, options).await;
+        let mut stream = self
+            .api_for(&self.model)
+            .stream(&self.model, &ctx, options)
+            .await;
         let mut terminal: Option<AssistantMessage> = None;
         while let Some(ev) = stream.next_event().await {
             match &ev {
@@ -447,4 +376,6 @@ impl<'a> Ctx<'a> {
     }
 }
 
+mod request;
+mod routing;
 mod tools;

@@ -6,7 +6,7 @@ use rquickjs::{Ctx, Function, Object};
 use serde_json::{Value as JsonValue, json};
 
 use crate::diag::{DiagnosticEntry, ErrorCode};
-use crate::host::{HostServices, HostState, ToolMeta};
+use crate::host::{HostServices, HostState, ToolMeta, VirtualModelMeta};
 
 pub(super) fn install<'js>(
     ctx: &Ctx<'js>,
@@ -58,6 +58,37 @@ fn install_registration<'js>(
             Function::new(ctx.clone(), move |name: String| {
                 if let Ok(mut state) = state.lock() {
                     state.commands.push((ext_id.clone(), name));
+                }
+            })?,
+        )?;
+    }
+    {
+        let state = Arc::clone(&state);
+        let ext_id = ext_id.to_string();
+        native.set(
+            "virtualModelRegistered",
+            Function::new(ctx.clone(), move |json: String| {
+                if let Ok(mut meta) = serde_json::from_str::<VirtualModelMeta>(&json) {
+                    meta.ext_id = ext_id.clone();
+                    if let Ok(mut state) = state.lock() {
+                        state
+                            .virtual_models
+                            .retain(|m| !(m.provider == meta.provider && m.id == meta.id));
+                        state.virtual_models.push(meta);
+                    }
+                }
+            })?,
+        )?;
+    }
+    {
+        let state = Arc::clone(&state);
+        native.set(
+            "virtualModelUnregistered",
+            Function::new(ctx.clone(), move |provider: String, id: String| {
+                if let Ok(mut state) = state.lock() {
+                    state
+                        .virtual_models
+                        .retain(|m| !(m.provider == provider && m.id == id));
                 }
             })?,
         )?;

@@ -10460,6 +10460,7 @@ dependencies = [
  "thiserror 2.0.21",
  "timo-agent",
  "timo-ai",
+ "timo-config",
  "timo-tools",
  "tokio",
 ]

@@ -1,8 +1,8 @@
-# Phase 3.5 阶段进度报告（P0 / P1 完成）
+# Phase 3.5 阶段进度报告（P0 / P1 / D6 完成；P2 进行中）
 
 - 日期：2026-10-27
 - 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计、compaction、缓存、无头模式——装进内核，并让 CLI 与桌面共用同一份能力。
-- 状态：**P0、P1 完成；D6 标尺与 P2 未开工**
+- 状态：**P0、P1、D6 完成；P2 第一题完成，第二题进行中（B1/B2 已落地，B3 待做），余 codemode / 信任门控待定稿**
 
 ## 完成了什么
 
@@ -118,6 +118,15 @@
 - **真机**（临时数据目录 + models.json 声明 `router/auto`）：`timo run "hi" --provider router --model auto` 与裸 `--model auto` 都 RC=1，stderr 一行即蓝本文案；数据目录里除 models.json 外一个文件都没多——失败发生在解析期，早于会话创建与任何请求。如实登记：真机侧只能证明"解析期失败"，"不发网络"由单测的计数传输层（断言 0 次）证明。
 - **留给 B2 的两个实现约束**（本批只读摸底，未改）：① 循环里已有 `LoopHooks::route_model`（D23，同 provider），但它直接改写 `self.model`——虚拟路由要求"选中模型（可为虚拟）"与"本轮请求模型（物理）"分开，否则会话记录会丢掉虚拟名；② `LoopConfig.api` 在装配期固定，路由到物理模型后必须按请求模型的 api 取 adapter，否则虚拟条目会被送进上面的拒绝式适配器。
 
+### P2 第二题·批 B2 读数：路由契约与扩展注册（2026-10-27）
+
+- **落地**：`LoopHooks::route_model` 改为 `Result<Option<RouteChoice>, String>`；请求携带 `RouteReason`（user/continuation/retry/direct）、虚拟档位、`previous`/`failed`（模型身份）与分支 `state`。循环拆成"选中模型（可为虚拟，run 内不变）/ 本轮请求模型（物理）/ adapter+凭证"；`LoopConfig.dispatch` 由内核的 `CatalogDispatch` 提供（按 `provider/id` 核对目录、按协议缓存适配器、按供应商解析凭证），无 dispatch 时沿用装配期单适配器（Phase 1/2 语义不变）。reason 判定与蓝本同源；压缩阈值改用本轮物理模型的窗口，压缩摘要按 `Direct` 单独路由且不传/不存 state；未路由的虚拟选中跳过凭证解析，交给拒绝式适配器，原文案不变。扩展面实装 `registerVirtualModel`/`unregisterVirtualModel`、`__timo_route_virtual` 与 `ctx.modelRegistry.find/getModels/getAllModels`（目录快照经宿主 config 下发）。虚拟条目仍由 `models.json` 声明（D69），`thinkingLevels`/limits/input 只做注册期校验（D70）。
+- gate：fmt / clippy `-D warnings` / workspace **361 tests**（+13，既有测试只补契约字段，断言语义未改）/ `check-size` OK（拆分后 `run/mod.rs` 381 行、`kernel.rs` 500 行；target 20.6GiB 超软限，阶段收尾 `clean-build`）。
+- **变异 13/13 承重**（拆分后重跑，逐条确认 `test result: FAILED` 且编译通过、文件按 sha 还原）：reason 二选一、重试原因、目录核对、跳过虚拟凭证、state 回存、previous 快照、终态档位回填、只路由已注册虚拟、注销生效、物理 id 冲突、虚拟不能作路由目标、按模型取 adapter、`modelRegistry.find`。
+- **真机 DeepSeek**（临时数据目录；`router/auto` 由 models.json 声明，扩展注册路由）：同一 run 内用户轮 `provider_request deepseek/deepseek-chat`、工具续轮 `deepseek/deepseek-reasoner`，终答 `VM_ROUTER_OK`，exit 0，`--no-session` 下零会话文件；`--no-extensions` 再选同一虚拟模型 → `Virtual model router/auto must be routed before streaming`、exit 1、零网络。
+- **真机顺带发现（未修，登记）**：把续轮目标换成 `deepseek-flash` 时 400——"The `reasoning_content` in the thinking mode must be passed back to the API"。同一历史改投 `deepseek-reasoner` 正常；说明该模型的思考模式在工具调用回放时要求 assistant 消息带 `reasoning_content`，我们的 openai 适配器未回传。与 B2 路由无关，见「已知问题」。
+
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。
@@ -128,7 +137,7 @@
 
 - docs/：当前 76 篇（软上限 60，超 16）。P1 新增 `design/phase-3.5/04~07` 四篇；阶段设计稿与详设属硬流程交付物，登记豁免；整合评审仍待办（删除面需所有者确认）。
 - .agents/：文件 51（不含 vendored 技能为 17，上限 40）；`CONTEXT.md` 57 行（上限 150）。
-- 代码：最大文件 498 行（`timo-desktop/src/app.rs`），无超 500 行文件；最大 crate `timo-desktop` 5,661 行（上限 15,000 触发评审）。
+- 代码：最大文件 500 行（`timo-kernel/src/kernel.rs`，含拆分后的边界），无超 500 行文件；最大 crate `timo-desktop` 5,661 行（上限 15,000 触发评审）。
 - 依赖：无新增第三方依赖；`timo-cli` 增 `serde_json` 边、`timo-kernel` 增 `async-trait` dev-dep，均已在 workspace 中。
 - 构建产物：P0 收尾 `clean-build` 到 14.0GiB；P1 开发后 20.5GiB（incremental 4.4 / deps 14.9），阶段收尾需再跑。
 - 豁免登记：docs 总数软上限 +16。
@@ -141,6 +150,7 @@
 - **费用依赖费率配置**：`models.json` 未写 `cost` 时费用恒为 0；不重新计价是设计选择，需在配置里给费率。
 - **缓存统计只在 CLI `/session` 呈现**，桌面暂无 cache 行；桌面状态栏的费用已含缓存计价，不新增面板（设计 05 §3.3）。
 - `target/` 无 sccache 时不做全清；当前 23.2GiB（incremental 5.2），阶段收尾需跑 `clean-build`。
+- **DeepSeek 思考模式 + 工具调用的 `reasoning_content` 回放**（B2 真机发现）：从非思考模型切到 `deepseek-flash` 时，含工具调用的 assistant 历史被拒（400，要求回传 `reasoning_content`）；同一历史改投 `deepseek-reasoner` 正常。我们的 openai 适配器未把思考内容写回请求；属供应商兼容项，未在本批修，随 provider composer/codemode 的思考链处理一起定。
 - **无头 stderr 混入技能告警噪音**：`--no-session -p` 一次运行会打出项目 `.agents/skills/` 里 8 条 frontmatter 告警（README 与 ponytail 等非技能文件被扫）。资源告警本身是要出口的，但子代理场景里父进程会把 stderr 原文贴进结果，噪音挤掉有效信息。处置方向（未定）：`-p`/`--mode json` 下只出口与本次请求相关的告警，或把非技能 md 排除出扫描面——随 P2 信任与资源治理一起定。
 
 ## 下一步

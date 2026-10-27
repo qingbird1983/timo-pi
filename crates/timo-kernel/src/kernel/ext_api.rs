@@ -29,6 +29,15 @@ impl Kernel {
             .map(|runtime| runtime.report.render_human())
     }
 
+    /// 扩展目录快照（`ctx.modelRegistry`；设计 10 §4.2）。
+    pub(crate) fn extension_models(&self) -> Vec<serde_json::Value> {
+        self.catalog
+            .all()
+            .into_iter()
+            .filter_map(|model| serde_json::to_value(model).ok())
+            .collect()
+    }
+
     /// 已注册扩展命令名（含 `plugin_<id>_` 前缀）。
     #[must_use]
     pub fn extension_commands(&self) -> Vec<String> {

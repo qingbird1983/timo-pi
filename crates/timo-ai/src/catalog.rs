@@ -135,6 +135,28 @@ impl Model {
             compat: Compat::default(),
         }
     }
+
+    /// 只带身份的最小条目（路由钩子里 `previous`/`failed` 等跨参场景用）。
+    ///
+    /// 不是目录条目：宿主应按 `provider/id` 从目录重新取数据（设计 10 §4.2）。
+    #[must_use]
+    pub fn descriptor(provider: &str, id: &str, api: ApiKind) -> Self {
+        Self {
+            id: id.to_string(),
+            name: id.to_string(),
+            provider: provider.to_string(),
+            api,
+            base_url: String::new(),
+            reasoning: false,
+            input: vec!["text".to_string()],
+            cost: RateCard::default(),
+            context_window: 0,
+            max_tokens: 0,
+            headers: vec![],
+            cache_ttl_seconds: None,
+            compat: Compat::default(),
+        }
+    }
 }
 
 /// 费率卡（含阶梯；对齐 pi cost.tiers）。

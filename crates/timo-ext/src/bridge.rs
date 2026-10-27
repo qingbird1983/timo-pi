@@ -127,9 +127,64 @@ impl LoopHooks for ExtHooks {
         Some((system, messages))
     }
 
-    async fn route_model(&self, _req: RouteRequest<'_>) -> Option<RouteChoice> {
-        // D23：虚拟模型路由在 kernel 注册面落地前不参与请求。
-        None
+    async fn route_model(
+        &self,
+        req: RouteRequest<'_>,
+    ) -> std::result::Result<Option<RouteChoice>, String> {
+        // 只有注册过的虚拟模型参与路由；物理选中沿用旧行为（None）。
+        if !self
+            .host
+            .virtual_models()
+            .iter()
+            .any(|model| model.provider == req.model.provider && model.id == req.model.id)
+        {
+            return Ok(None);
+        }
+        let pair = |model: &timo_ai::Model, level: timo_config::ThinkingLevel| json!({ "model": model, "thinkingLevel": level.as_str() });
+        let mut payload = json!({
+            "model": req.model,
+            "thinkingLevel": req.thinking.as_str(),
+            "reason": req.reason.as_str(),
+            "messages": req.messages,
+        });
+        if let Some((model, level)) = req.previous
+            && let Some(object) = payload.as_object_mut()
+        {
+            object.insert("previous".into(), pair(model, level));
+        }
+        if let Some((model, level)) = req.failed
+            && let Some(object) = payload.as_object_mut()
+        {
+            object.insert("failed".into(), pair(model, level));
+        }
+        if let Some(state) = req.state
+            && let Some(object) = payload.as_object_mut()
+        {
+            object.insert("state".into(), state.clone());
+        }
+        let value = self
+            .host
+            .route_virtual(&req.model.provider, &req.model.id, payload)
+            .map_err(|error| error.to_string())?;
+        let model: timo_ai::Model = value
+            .get("model")
+            .cloned()
+            .ok_or_else(|| "route must return a catalog model".to_string())
+            .and_then(|model| {
+                serde_json::from_value(model)
+                    .map_err(|error| format!("route returned an invalid model: {error}"))
+            })?;
+        let thinking = value
+            .get("thinkingLevel")
+            .and_then(JsonValue::as_str)
+            .and_then(timo_config::ThinkingLevel::parse)
+            .ok_or_else(|| "route must return a valid thinkingLevel".to_string())?;
+        let state = value.get("state").cloned().filter(|state| !state.is_null());
+        Ok(Some(RouteChoice {
+            model,
+            thinking,
+            state,
+        }))
     }
 
     async fn before_tool_call(&self, call: &Content) -> Option<BeforeToolCall> {

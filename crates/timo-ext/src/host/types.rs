@@ -77,3 +77,31 @@ pub struct LoadedExtension {
     /// 订阅的事件。
     pub hooks: Vec<String>,
 }
+
+/// 虚拟模型注册元数据（路由函数留在 JS；设计 10 §4.2）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualModelMeta {
+    /// 供应商 id。
+    pub provider: String,
+    /// 模型 id。
+    pub id: String,
+    /// 展示名。
+    #[serde(default)]
+    pub name: String,
+    /// 可选档位（仅注册期校验）。
+    #[serde(default)]
+    pub thinking_levels: Vec<String>,
+    /// 首个响应前的窗口（仅注册期校验）。
+    #[serde(default)]
+    pub context_window: Option<u64>,
+    /// 首个响应前的输出上限（仅注册期校验）。
+    #[serde(default)]
+    pub max_tokens: Option<u64>,
+    /// 输入模态（仅注册期校验）。
+    #[serde(default)]
+    pub input: Vec<String>,
+    /// 所属扩展（宿主填写，不由 JS 传入）。
+    #[serde(skip)]
+    pub ext_id: String,
+}

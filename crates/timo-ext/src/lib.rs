@@ -29,7 +29,7 @@ pub use error::ExtError;
 pub use fs_scope::dir_scope;
 pub use host::{
     BasicServices, DirItem, ExecOutput, ExecRequest, ExtensionHost, FetchOutput, Grants,
-    HostServices, LoadedExtension, ToolCallResult, ToolMeta,
+    HostServices, LoadedExtension, ToolCallResult, ToolMeta, VirtualModelMeta,
 };
 pub use manifest::{
     Capabilities, FsCapability, MANIFEST_SCHEMA, Manifest, NetCapability, compute_source_hash,

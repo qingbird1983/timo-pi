@@ -12,7 +12,7 @@ mod types;
 
 pub use api::{DirItem, ExecOutput, ExecRequest, FetchOutput, Grants, HostServices};
 pub use services::BasicServices;
-pub use types::{LoadedExtension, ToolCallResult, ToolMeta};
+pub use types::{LoadedExtension, ToolCallResult, ToolMeta, VirtualModelMeta};
 
 use std::cell::Cell;
 use std::path::Path;
@@ -28,13 +28,14 @@ use serde_json::Value as JsonValue;
 use crate::Result;
 use crate::diag::{DiagnosticEntry, ErrorCode};
 use crate::error::ExtError;
-use runner::{call_one, command_one, dispatch_all, load_one};
+use runner::{call_one, command_one, dispatch_all, load_one, route_one};
 
 #[derive(Default)]
 pub(crate) struct HostState {
     pub(crate) tools: Vec<ToolMeta>,
     pub(crate) commands: Vec<(String, String)>,
     pub(crate) hooks: Vec<(String, String)>,
+    pub(crate) virtual_models: Vec<VirtualModelMeta>,
     pub(crate) diagnostics: Vec<(String, DiagnosticEntry)>,
     pub(crate) system_prompt: String,
 }
@@ -59,6 +60,12 @@ enum Request {
     Command {
         name: String,
         args: JsonValue,
+        reply: Sender<Result<JsonValue>>,
+    },
+    RouteVirtual {
+        provider: String,
+        id: String,
+        payload: JsonValue,
         reply: Sender<Result<JsonValue>>,
     },
     Event {
@@ -190,6 +197,33 @@ impl ExtensionHost {
             .map_err(|_| runtime(ErrorCode::E305, "extension host is not running"))?;
         rx.recv()
             .map_err(|_| runtime(ErrorCode::E305, "extension host dropped the reply"))?
+    }
+
+    /// 调一个已注册虚拟模型的 JS 路由函数。
+    ///
+    /// # Errors
+    /// 未注册/E303（JS 抛错）/E301（无法收敛）。
+    pub fn route_virtual(&self, provider: &str, id: &str, payload: JsonValue) -> Result<JsonValue> {
+        let (reply, rx) = mpsc::channel();
+        self.tx
+            .send(Request::RouteVirtual {
+                provider: provider.to_string(),
+                id: id.to_string(),
+                payload,
+                reply,
+            })
+            .map_err(|_| runtime(ErrorCode::E305, "extension host is not running"))?;
+        rx.recv()
+            .map_err(|_| runtime(ErrorCode::E305, "extension host dropped the reply"))?
+    }
+
+    /// 当前已注册虚拟模型快照。
+    #[must_use]
+    pub fn virtual_models(&self) -> Vec<VirtualModelMeta> {
+        self.state
+            .lock()
+            .map(|state| state.virtual_models.clone())
+            .unwrap_or_default()
     }
 
     /// 是否有扩展订阅某事件。
@@ -373,6 +407,17 @@ fn actor(
                 let result = command_one(&contexts, &state, &name, &args, &deadline, budget);
                 let _ = reply.send(result);
             }
+            Request::RouteVirtual {
+                provider,
+                id,
+                payload,
+                reply,
+            } => {
+                let result = route_one(
+                    &contexts, &state, &provider, &id, payload, &deadline, budget,
+                );
+                let _ = reply.send(result);
+            }
             Request::Event { event, payload } => {
                 let _ = dispatch_all(&contexts, &state, &event, payload, &deadline, budget);
             }
@@ -400,6 +445,9 @@ fn fail_request(request: Request, message: &str) {
             let _ = reply.send(Err(error()));
         }
         Request::Command { reply, .. } => {
+            let _ = reply.send(Err(error()));
+        }
+        Request::RouteVirtual { reply, .. } => {
             let _ = reply.send(Err(error()));
         }
         Request::Event { .. } | Request::SetSystemPrompt(_) | Request::Shutdown => {}

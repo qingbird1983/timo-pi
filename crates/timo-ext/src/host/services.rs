@@ -120,6 +120,7 @@ pub struct BasicServices {
     settings: JsonValue,
     model: JsonValue,
     thinking: String,
+    models: Vec<JsonValue>,
     aborted: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     flags: std::collections::BTreeMap<String, String>,
@@ -137,6 +138,7 @@ impl BasicServices {
             settings,
             model: JsonValue::Null,
             thinking: "off".to_string(),
+            models: Vec::new(),
             aborted: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
             flags: std::collections::BTreeMap::new(),
@@ -161,6 +163,13 @@ impl BasicServices {
     #[must_use]
     pub fn with_model(mut self, model: JsonValue) -> Self {
         self.model = model;
+        self
+    }
+
+    /// 目录快照（`ctx.modelRegistry`；设计 10 §4.2）。
+    #[must_use]
+    pub fn with_models(mut self, models: Vec<JsonValue>) -> Self {
+        self.models = models;
         self
     }
 
@@ -407,6 +416,7 @@ impl HostServices for BasicServices {
             "agentDir": self.agent_dir.display().to_string(),
             "model": self.model,
             "thinkingLevel": self.thinking,
+            "models": self.models,
             "systemPrompt": "",
             "flags": self.flags,
         })

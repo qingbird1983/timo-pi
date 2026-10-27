@@ -102,16 +102,17 @@ impl LoopHooks for TestHooks {
         None
     }
 
-    async fn route_model(&self, _req: RouteRequest<'_>) -> Option<RouteChoice> {
+    async fn route_model(&self, _req: RouteRequest<'_>) -> Result<Option<RouteChoice>, String> {
         self.calls.lock().unwrap().push("route_model");
-        self.route_to.map(|id| {
+        Ok(self.route_to.map(|id| {
             let mut model = base_model();
             model.id = id.to_string();
             RouteChoice {
                 model,
-                thinking_level: Some(ThinkingLevel::Medium),
+                thinking: ThinkingLevel::Medium,
+                state: None,
             }
-        })
+        }))
     }
 
     async fn before_tool_call(&self, _call: &Content) -> Option<BeforeToolCall> {
@@ -204,6 +205,7 @@ fn handle(
         hooks: Some(hooks),
         provider_hooks: None,
         review: None,
+        dispatch: None,
     })
 }
 

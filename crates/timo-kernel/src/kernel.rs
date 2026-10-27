@@ -18,7 +18,7 @@ use crate::Result;
 use crate::error::KernelError;
 use crate::extensions::{self, ExtensionOptions, ExtensionRuntime};
 use crate::prompt;
-use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
+use crate::resolve::{CatalogDispatch, ResolvedModel, load_catalog, resolve_model};
 
 mod cache_api;
 mod compaction_api;
@@ -35,6 +35,9 @@ pub use options::KernelOptions;
 pub struct Kernel {
     work_dir: PathBuf,
     resolved: ResolvedModel,
+    /// 装配期目录 + 请求期模型装配（扩展目录快照 / 路由换模型）。
+    catalog: timo_ai::Catalog,
+    dispatch: Arc<dyn timo_agent::ModelDispatch>,
     bus: EventBus,
     mcp: Arc<timo_mcp::McpRuntime>,
     sessions_dir: PathBuf,
@@ -120,6 +123,11 @@ impl Kernel {
         )?;
         let custom = timo_config::load_custom_providers(&models_path)?;
         let catalog = load_catalog(&custom)?;
+        let dispatch: Arc<dyn timo_agent::ModelDispatch> = Arc::new(CatalogDispatch::new(
+            catalog.clone(),
+            custom.clone(),
+            options.api_key.clone(),
+        ));
         let resolved = resolve_model(
             &catalog,
             &settings,
@@ -169,6 +177,8 @@ impl Kernel {
         let mut kernel = Self {
             work_dir,
             resolved,
+            catalog,
+            dispatch,
             bus: EventBus::new(),
             mcp,
             sessions_dir,
@@ -302,6 +312,7 @@ impl Kernel {
                 abort: Arc::clone(&self.ext_abort),
                 running: Arc::clone(&self.ext_running),
                 flags: self.ext_flags.clone(),
+                models: self.extension_models(),
             })
             .await;
             if let Some(host) = &runtime.host {
@@ -355,6 +366,7 @@ impl Kernel {
                     hooks,
                     provider_hooks,
                     review: self.tool_review.clone(),
+                    dispatch: Some(Arc::clone(&self.dispatch)),
                 },
                 self.bus.clone(),
                 Arc::clone(&self.steering),

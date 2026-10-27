@@ -133,6 +133,7 @@ async fn doctor(json: bool) -> i32 {
         abort: Arc::new(AtomicBool::new(false)),
         running: Arc::new(AtomicBool::new(false)),
         flags: Default::default(),
+        models: Vec::new(),
     })
     .await;
     if json {
