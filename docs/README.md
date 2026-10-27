@@ -37,7 +37,7 @@ docs/
 | research/03-stack-nsh-gpui-kit.md | 定稿 | 桌面技术栈（gpui-kit + NSH）评估结论 |
 | research/04-reference-pi-desktop.md | 定稿 | 参考项目 PI-Desktop 的做法与教训 |
 | research/05-reference-pi-flash.md | 定稿 | 参考项目 pi-flash（GPUI 桌面壳/插件系统）的做法与教训 |
-| research/06-pi-interaction-logic.md | **草稿** | pi 交互逻辑/数据流向/提示词工程调查计划与初步地图（Phase 3.5 前置，ADR-0013） |
+| research/06-pi-interaction-logic.md | 定稿 | pi 交互逻辑/数据流向/提示词工程调查（Phase 3.5 R1 产出：提示词合同、数据流图、17 条交互对照） |
 | research/07-ui-references.md | **草稿** | 桌面壳 UI 参考清单（三类产品图链+设计语言笔记；视觉精修批次前置素材，随时增补） |
 | adr/ADR-0001 ~ 0013 | 定稿 | 13 项重大决策（见各文件；0013 = 内核深化阶段立项） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
@@ -68,9 +68,10 @@ docs/
 | design/phase-3/04-tool-review.md | 定稿 | 执行前审阅接缝、拒绝语义、并发与 CLI 兼容 |
 | design/phase-3/prototype.html | 定稿（方向稿） | 桌面壳布局、工具过程 trace 与 diff 审阅原型 |
 | design/phase-3/report.md | 定稿 | Phase 3 阶段进度报告（C1~C6 全通过；NSH 热更与拒绝路径真机验收） |
+| design/phase-3.5/00-overview.md | **草案** | Phase 3.5 总览：模块布局、批次序列、K1~K9 决策、D30~D35 偏离（P0 详设定稿时转定稿） |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
-| roadmap/phase-0 ~ phase-4 | phase-3.5 为草稿（立项），其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
+| roadmap/phase-0 ~ phase-4 | phase-3.5 为设计进行中；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
 | standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agents/代码/依赖的预算与清理机制） |
 | standards/09-standards-review.md | 定稿 | 规范自身的复查与进化（漏洞/过严/过松的例行与触发复查、修正分级） |
