@@ -26,10 +26,19 @@ impl Fixture {
     }
 
     fn with_budget(id: &str, source: &str, budget: Duration) -> Self {
+        Self::with_services(id, source, services(), budget)
+    }
+
+    fn with_services(
+        id: &str,
+        source: &str,
+        services: Arc<dyn HostServices>,
+        budget: Duration,
+    ) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("bundle.cjs");
         std::fs::write(&path, source).unwrap();
-        let host = ExtensionHost::start(services(), budget).unwrap();
+        let host = ExtensionHost::start(services, budget).unwrap();
         let loaded = host.load(id, &path).unwrap();
         assert_eq!(loaded.id, id);
         Self {
@@ -279,4 +288,87 @@ module.exports = function (pi) {
         ),
         "diagnostics were {entries:?}"
     );
+}
+
+const FS_SURFACE: &str = r#"
+module.exports = function (pi) {
+  pi.registerTool({
+    name: "readok",
+    label: "read ok",
+    description: "read granted scope",
+    parameters: { type: "object" },
+    execute: async () => {
+      const text = await pi.readFile("agents/scout.md");
+      const items = await pi.listDir("agents");
+      const runs = await pi.execParallel([
+        { command: __CMD__, args: __ARGS_A__ },
+        { command: __CMD__, args: __ARGS_B__ },
+      ]);
+      return {
+        content: [{ type: "text", text: text + "|" + items.map((i) => i.name).join(",") + "|" + runs.map((r) => r.code).join(",") + "|" + runs.map((r) => r.stdout.trim()).join(",") }],
+        details: {},
+      };
+    },
+  });
+  pi.registerTool({
+    name: "readdenied",
+    label: "read denied",
+    description: "read outside scope",
+    parameters: { type: "object" },
+    execute: async () => {
+      try {
+        await pi.readFile("private.txt");
+        return { content: [{ type: "text", text: "allowed" }], details: {} };
+      } catch (error) {
+        return { content: [{ type: "text", text: String(error.code) + "|" + String(error.message).slice(0, 4) }], details: {} };
+      }
+    },
+  });
+};
+"#;
+
+#[test]
+fn file_and_parallel_apis_reach_extensions_with_codes() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("agents")).unwrap();
+    std::fs::write(dir.path().join("agents/scout.md"), "scout body").unwrap();
+    std::fs::write(dir.path().join("private.txt"), "secret").unwrap();
+    let shell = if cfg!(windows) { "cmd" } else { "sh" };
+    let switch = if cfg!(windows) { "/C" } else { "-c" };
+    let source = FS_SURFACE
+        .replace("__CMD__", &format!(r#""{shell}""#))
+        .replace("__ARGS_A__", &format!(r#"["{switch}", "echo A"]"#))
+        .replace("__ARGS_B__", &format!(r#"["{switch}", "echo B"]"#));
+    let services: Arc<dyn HostServices> = Arc::new(BasicServices::new(
+        dir.path(),
+        Grants {
+            exec: true,
+            net_domains: vec![],
+            fs_read: vec!["./agents".to_string()],
+        },
+        serde_json::Value::Null,
+    ));
+    let fixture = Fixture::with_services("fs", &source, services, Duration::from_secs(30));
+    let ok = fixture
+        .host
+        .call_tool("plugin_fs_readok", json!({}))
+        .unwrap();
+    let text = ok.content[0]["text"].as_str().unwrap().to_string();
+    assert!(
+        text.starts_with("scout body|scout.md|0,0|A,B"),
+        "got {text}"
+    );
+    let denied = fixture
+        .host
+        .call_tool("plugin_fs_readdenied", json!({}))
+        .unwrap();
+    let text = denied.content[0]["text"].as_str().unwrap();
+    assert_eq!(text, "E403|read", "denial must carry the code: {text}");
+    let codes: Vec<ErrorCode> = fixture
+        .host
+        .diagnostics_for("fs")
+        .iter()
+        .map(|entry| entry.code)
+        .collect();
+    assert!(codes.contains(&ErrorCode::E403), "{codes:?}");
 }

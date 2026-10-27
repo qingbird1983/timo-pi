@@ -1,6 +1,6 @@
 //! 宿主服务契约（设计 01 §5、03 §5）：扩展触达 OS/用户的唯一通道。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 
 /// 已授予能力（v1 子集；完整规则见设计 03）。
@@ -10,6 +10,8 @@ pub struct Grants {
     pub exec: bool,
     /// 允许出网的域名（空 = 无网）。
     pub net_domains: Vec<String>,
+    /// `fs.read` 作用域（空 = 不可读；设计 08 §4.1）。
+    pub fs_read: Vec<String>,
 }
 
 /// 子进程执行结果。
@@ -21,6 +23,28 @@ pub struct ExecOutput {
     pub stderr: String,
     /// 退出码。
     pub code: i32,
+}
+
+/// 目录条目（`pi.listDir` 返回项）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirItem {
+    /// 条目名（不含路径）。
+    pub name: String,
+    /// 是否目录。
+    pub is_dir: bool,
+}
+
+/// 并发执行的一条子请求（`pi.execParallel`）。
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ExecRequest {
+    /// 可执行文件名。
+    pub command: String,
+    /// 参数表。
+    pub args: Vec<String>,
+    /// 超时（毫秒；None = 不设限）。
+    pub timeout_ms: Option<u64>,
 }
 
 /// HTTP 获取结果。
@@ -47,6 +71,22 @@ pub trait HostServices: Send + Sync {
     fn fetch(&self, url: &str) -> std::result::Result<FetchOutput, String> {
         let _ = url;
         Err("E401 network capability is not available".to_string())
+    }
+    /// 读文本文件（`fs.read` 作用域内；默认未实现）。
+    fn read_file(&self, path: &str) -> std::result::Result<String, String> {
+        Err(format!("E401 fs.read is not available: `{path}`"))
+    }
+    /// 列目录（`fs.read` 作用域内；默认未实现）。
+    fn list_dir(&self, path: &str) -> std::result::Result<Vec<DirItem>, String> {
+        Err(format!("E401 fs.read is not available: `{path}`"))
+    }
+    /// 并发执行子进程（默认未实现）。
+    fn exec_parallel(
+        &self,
+        requests: Vec<ExecRequest>,
+    ) -> std::result::Result<Vec<ExecOutput>, String> {
+        let _ = requests;
+        Err("E401 exec capability is not available".to_string())
     }
     /// 用户通知。
     fn notify(&self, message: &str, kind: &str);

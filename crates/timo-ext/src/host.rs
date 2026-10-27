@@ -10,7 +10,7 @@ mod runner;
 mod services;
 mod types;
 
-pub use api::{ExecOutput, FetchOutput, Grants, HostServices};
+pub use api::{DirItem, ExecOutput, ExecRequest, FetchOutput, Grants, HostServices};
 pub use services::BasicServices;
 pub use types::{LoadedExtension, ToolCallResult, ToolMeta};
 

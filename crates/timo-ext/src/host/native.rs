@@ -169,6 +169,61 @@ fn install_actions<'js>(
         let state = Arc::clone(&state);
         let ext_id = ext_id.clone();
         native.set(
+            "readFile",
+            Function::new(ctx.clone(), move |path: String| {
+                let value = match services.read_file(&path) {
+                    Ok(text) => json!({ "ok": true, "text": text }),
+                    Err(error) => json!({ "ok": false, "error": error }),
+                };
+                record_denial(&ext_id, &state, &value);
+                bridge_json(value)
+            })?,
+        )?;
+    }
+    {
+        let services = Arc::clone(&services);
+        let state = Arc::clone(&state);
+        let ext_id = ext_id.clone();
+        native.set(
+            "listDir",
+            Function::new(ctx.clone(), move |path: String| {
+                let value = match services.list_dir(&path) {
+                    Ok(items) => json!({ "ok": true, "items": items }),
+                    Err(error) => json!({ "ok": false, "error": error }),
+                };
+                record_denial(&ext_id, &state, &value);
+                bridge_json(value)
+            })?,
+        )?;
+    }
+    {
+        let services = Arc::clone(&services);
+        let state = Arc::clone(&state);
+        let ext_id = ext_id.clone();
+        native.set(
+            "execParallel",
+            Function::new(ctx.clone(), move |request: String| {
+                let parsed: Vec<crate::host::ExecRequest> =
+                    serde_json::from_str(&request).unwrap_or_default();
+                let value = if parsed.is_empty() {
+                    Err("E304 execParallel expects a non-empty request list".to_string())
+                } else {
+                    services.exec_parallel(parsed)
+                };
+                let value = match value {
+                    Ok(outputs) => json!({ "ok": true, "results": outputs }),
+                    Err(error) => json!({ "ok": false, "error": error }),
+                };
+                record_denial(&ext_id, &state, &value);
+                bridge_json(value)
+            })?,
+        )?;
+    }
+    {
+        let services = Arc::clone(&services);
+        let state = Arc::clone(&state);
+        let ext_id = ext_id.clone();
+        native.set(
             "fetch",
             Function::new(ctx.clone(), move |request: String| {
                 let url = serde_json::from_str::<JsonValue>(&request)

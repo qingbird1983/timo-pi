@@ -49,6 +49,20 @@ function __timo_diag_once(key, code, message) {
   __timo_diag(code, message);
 }
 
+function __timo_host_call(fn, payload, fallback, label) {
+  const out = __timo_parse(fn(String(payload)), fallback);
+  if (!out || out.ok !== true) {
+    const detail = (out && out.error) || "host bridge failed";
+    const error = new Error(label + ": " + detail);
+    const code = String(detail).split(" ")[0];
+    if (/^E\d\d\d$/.test(code)) {
+      error.code = code;
+    }
+    throw error;
+  }
+  return out;
+}
+
 function __timo_make_ctx(config) {
   const native = globalThis.__timo_native;
   const base = {
@@ -233,6 +247,40 @@ globalThis.__timo_make_api = function (config) {
         throw new Error(out.error || "exec failed");
       }
       return { stdout: out.stdout || "", stderr: out.stderr || "", code: out.code ?? 0 };
+    },
+    readFile: async (path) =>
+      __timo_host_call(
+        native.readFile,
+        String(path),
+        { ok: false, error: "readFile bridge failed" },
+        "readFile",
+      ).text ?? "",
+    listDir: async (path) =>
+      __timo_host_call(
+        native.listDir,
+        String(path),
+        { ok: false, error: "listDir bridge failed" },
+        "listDir",
+      ).items ?? [],
+    execParallel: async (requests) => {
+      const list = Array.isArray(requests) ? requests : [];
+      if (list.length === 0) {
+        throw new Error("execParallel: empty request list");
+      }
+      if (list.length > 8) {
+        throw new Error("too many parallel commands (max 8)");
+      }
+      const payload = list.map((item) => ({
+        command: String(item.command),
+        args: (item.args || []).map(String),
+        timeoutMs: item.timeoutMs === undefined ? null : item.timeoutMs,
+      }));
+      return __timo_host_call(
+        native.execParallel,
+        JSON.stringify(payload),
+        { ok: false, error: "execParallel bridge failed" },
+        "execParallel",
+      ).results ?? [];
     },
     getActiveTools: () => __timo_parse(native.action("getActiveTools", "{}"), []),
     getAllTools: () => __timo_parse(native.action("getAllTools", "{}"), []),

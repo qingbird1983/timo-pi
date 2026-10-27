@@ -227,6 +227,7 @@ fn granted_exec_runs_command() {
         Grants {
             exec: true,
             net_domains: vec![],
+            fs_read: vec![],
         },
         serde_json::Value::Null,
     );
@@ -245,4 +246,115 @@ fn granted_exec_runs_command() {
         .exec(command, &args, &serde_json::Value::Null)
         .unwrap_err();
     assert!(error.starts_with("E401"));
+}
+
+#[test]
+fn fs_read_scopes_gate_file_access() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("agents")).unwrap();
+    std::fs::write(dir.path().join("agents/scout.md"), "scout prompt").unwrap();
+    std::fs::write(dir.path().join("private.txt"), "secret").unwrap();
+    std::fs::write(dir.path().join(".env"), "TOKEN=1").unwrap();
+
+    let granted = BasicServices::new(
+        dir.path(),
+        Grants {
+            exec: false,
+            net_domains: vec![],
+            fs_read: vec!["./agents".to_string()],
+        },
+        serde_json::Value::Null,
+    );
+    assert_eq!(
+        granted.read_file("agents/scout.md").unwrap(),
+        "scout prompt"
+    );
+    let items = granted.list_dir("agents").unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].name, "scout.md");
+    assert!(!items[0].is_dir);
+
+    let err = granted.read_file("private.txt").unwrap_err();
+    assert!(err.starts_with("E403"), "{err}");
+    let err = granted.read_file(".env").unwrap_err();
+    assert!(err.starts_with("E404"), "{err}");
+    // 归一化后仍受作用域约束（不能用 .. 绕出去）
+    let err = granted.read_file("agents/../private.txt").unwrap_err();
+    assert!(err.starts_with("E403"), "{err}");
+
+    let none = BasicServices::new(dir.path(), Grants::default(), serde_json::Value::Null);
+    let err = none.read_file("agents/scout.md").unwrap_err();
+    assert!(err.starts_with("E401"), "{err}");
+}
+
+#[test]
+fn exec_parallel_keeps_order_and_limits() {
+    let dir = tempfile::tempdir().unwrap();
+    let services = BasicServices::new(
+        dir.path(),
+        Grants {
+            exec: true,
+            net_domains: vec![],
+            fs_read: vec![],
+        },
+        serde_json::Value::Null,
+    );
+    let echo = |text: &str| timo_ext::ExecRequest {
+        command: if cfg!(windows) { "cmd" } else { "sh" }.to_string(),
+        args: if cfg!(windows) {
+            vec!["/C".to_string(), format!("echo {text}")]
+        } else {
+            vec!["-c".to_string(), format!("echo {text}")]
+        },
+        timeout_ms: None,
+    };
+    let outputs = services
+        .exec_parallel(vec![echo("A"), echo("B"), echo("C")])
+        .unwrap();
+    assert_eq!(outputs.len(), 3);
+    for (index, output) in outputs.iter().enumerate() {
+        let expected = ["A", "B", "C"][index];
+        assert_eq!(output.code, 0, "{output:?}");
+        assert!(output.stdout.contains(expected), "{output:?}");
+    }
+
+    let too_many = services.exec_parallel((0..9).map(|_| echo("x")).collect());
+    let err = too_many.unwrap_err();
+    assert!(err.contains("too many parallel commands"), "{err}");
+
+    let denied = BasicServices::new(dir.path(), Grants::default(), serde_json::Value::Null);
+    let err = denied.exec_parallel(vec![echo("x")]).unwrap_err();
+    assert!(err.starts_with("E401"), "{err}");
+}
+
+#[test]
+fn exec_parallel_timeout_kills_the_child() {
+    let dir = tempfile::tempdir().unwrap();
+    let services = BasicServices::new(
+        dir.path(),
+        Grants {
+            exec: true,
+            net_domains: vec![],
+            fs_read: vec![],
+        },
+        serde_json::Value::Null,
+    );
+    let slow = timo_ext::ExecRequest {
+        command: if cfg!(windows) { "cmd" } else { "sh" }.to_string(),
+        args: if cfg!(windows) {
+            vec!["/C".to_string(), "ping -n 30 127.0.0.1 > nul".to_string()]
+        } else {
+            vec!["-c".to_string(), "sleep 30".to_string()]
+        },
+        timeout_ms: Some(200),
+    };
+    let started = std::time::Instant::now();
+    let outputs = services.exec_parallel(vec![slow]).unwrap();
+    assert_eq!(outputs[0].code, -1, "{:?}", outputs[0]);
+    assert!(outputs[0].stderr.contains("timeout"), "{:?}", outputs[0]);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "timeout must bound the wait: {:?}",
+        started.elapsed()
+    );
 }

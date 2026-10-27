@@ -1,13 +1,115 @@
 //! 默认宿主服务：子进程、stdin 对话框、设置快照（设计 01 §5、03 §5）。
 
-use std::io::{self, Write};
-use std::path::PathBuf;
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use serde_json::{Value as JsonValue, json};
 
-use crate::host::{ExecOutput, FetchOutput, Grants, HostServices};
+use crate::host::{DirItem, ExecOutput, ExecRequest, FetchOutput, Grants, HostServices};
+
+/// `pi.execParallel` 的单批上限（设计 08 §4.4，与 pi parallel 模式同值）。
+pub const MAX_PARALLEL_REQUESTS: usize = 8;
+/// `pi.execParallel` 的并发上限。
+pub const MAX_PARALLEL_CONCURRENCY: usize = 4;
+/// kill 之后等管道收尾的宽限（孙进程可能长期握着写端，不能无限等）。
+const PIPE_DRAIN_GRACE: Duration = Duration::from_millis(800);
+
+/// 文件访问失败的统一文案（非安全事件，`E303`）。
+fn io_error(path: &str, reason: &str) -> String {
+    format!("E303 cannot access `{path}`: {reason}")
+}
+
+/// 单独跑一条子进程：取消或超时 kill，输出仍按已读到的部分返回。
+fn run_one(cwd: &Path, request: &ExecRequest, aborted: &AtomicBool) -> ExecOutput {
+    let mut command = std::process::Command::new(&request.command);
+    command
+        .args(&request.args)
+        .current_dir(cwd)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            return ExecOutput {
+                stdout: String::new(),
+                stderr: format!("cannot run `{}`: {error}", request.command),
+                code: -1,
+            };
+        }
+    };
+    // 先起读线程：管道写满会让子进程阻塞，轮询等待期间必须持续消费。
+    let stdout = child.stdout.take().map(read_pipe);
+    let stderr = child.stderr.take().map(read_pipe);
+    let deadline = request
+        .timeout_ms
+        .map(|ms| Instant::now() + Duration::from_millis(ms));
+    let mut code = -1;
+    let mut note = String::new();
+    loop {
+        if aborted.load(Ordering::SeqCst) {
+            let _ = child.kill();
+            note = "cancelled by host".to_string();
+            break;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                code = status.code().unwrap_or(-1);
+                break;
+            }
+            Ok(None) => {
+                if deadline.is_some_and(|at| Instant::now() >= at) {
+                    let _ = child.kill();
+                    note = "timeout".to_string();
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => {
+                let _ = child.kill();
+                note = format!("wait failed: {error}");
+                break;
+            }
+        }
+    }
+    // kill 路径也要 reap 直接子进程，否则它变成僵尸且孙进程更晚才被清理。
+    let _ = child.wait();
+    let stdout = join_pipe(stdout);
+    let mut stderr = join_pipe(stderr);
+    if !note.is_empty() {
+        if !stderr.is_empty() {
+            stderr.push('\n');
+        }
+        stderr.push_str(&note);
+    }
+    ExecOutput {
+        stdout,
+        stderr,
+        code,
+    }
+}
+
+fn read_pipe<R: Read + Send + 'static>(pipe: R) -> std::sync::mpsc::Receiver<String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buffer = Vec::new();
+        let _ = pipe
+            .take(crate::fs_scope::READ_CAP_BYTES as u64)
+            .read_to_end(&mut buffer);
+        let _ = tx.send(String::from_utf8_lossy(&buffer).into_owned());
+    });
+    rx
+}
+
+/// 取管道读数。被 kill 的子进程可能留下孙进程仍握着管道写端，`read_to_end` 等不到 EOF，
+/// 因此读取本身有界：超时即按"已读到的部分"返回，不让 kill 路径变成阻塞等待。
+fn join_pipe(receiver: Option<std::sync::mpsc::Receiver<String>>) -> String {
+    receiver
+        .and_then(|rx| rx.recv_timeout(PIPE_DRAIN_GRACE).ok())
+        .unwrap_or_default()
+}
 
 /// CLI/测试用的基础服务实现。
 pub struct BasicServices {
@@ -101,6 +203,70 @@ impl HostServices for BasicServices {
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             code: output.status.code().unwrap_or(-1),
         })
+    }
+
+    fn read_file(&self, path: &str) -> std::result::Result<String, String> {
+        let absolute = crate::fs_scope::check_read(&self.cwd, &self.grants.fs_read, path)?;
+        let mut file =
+            std::fs::File::open(&absolute).map_err(|error| io_error(path, &error.to_string()))?;
+        let mut buffer = Vec::new();
+        std::io::Read::read_to_end(
+            &mut std::io::Read::take(&mut file, crate::fs_scope::READ_CAP_BYTES as u64 + 1),
+            &mut buffer,
+        )
+        .map_err(|error| io_error(path, &error.to_string()))?;
+        let text = String::from_utf8_lossy(&buffer).into_owned();
+        Ok(crate::fs_scope::cap_text(&text))
+    }
+
+    fn list_dir(&self, path: &str) -> std::result::Result<Vec<DirItem>, String> {
+        let absolute = crate::fs_scope::check_read(&self.cwd, &self.grants.fs_read, path)?;
+        let entries =
+            std::fs::read_dir(&absolute).map_err(|error| io_error(path, &error.to_string()))?;
+        let mut items = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|error| io_error(path, &error.to_string()))?;
+            items.push(DirItem {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                is_dir: entry.path().is_dir(),
+            });
+        }
+        items.sort_by_key(|a| a.name.to_lowercase());
+        Ok(items)
+    }
+
+    fn exec_parallel(
+        &self,
+        requests: Vec<ExecRequest>,
+    ) -> std::result::Result<Vec<ExecOutput>, String> {
+        if !self.grants.exec {
+            return Err("E401 exec capability is not granted".to_string());
+        }
+        if requests.len() > MAX_PARALLEL_REQUESTS {
+            return Err(format!(
+                "too many parallel commands (max {MAX_PARALLEL_REQUESTS})"
+            ));
+        }
+        let mut outputs = Vec::with_capacity(requests.len());
+        for chunk in requests.chunks(MAX_PARALLEL_CONCURRENCY) {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|request| {
+                    let cwd = self.cwd.clone();
+                    let aborted = Arc::clone(&self.aborted);
+                    let request = request.clone();
+                    std::thread::spawn(move || run_one(&cwd, &request, &aborted))
+                })
+                .collect();
+            for handle in handles {
+                outputs.push(handle.join().unwrap_or_else(|_| ExecOutput {
+                    stdout: String::new(),
+                    stderr: "worker panicked".to_string(),
+                    code: -1,
+                }));
+            }
+        }
+        Ok(outputs)
     }
 
     fn notify(&self, message: &str, kind: &str) {

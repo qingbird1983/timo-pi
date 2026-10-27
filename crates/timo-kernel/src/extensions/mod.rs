@@ -203,6 +203,7 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
                         Grants {
                             exec: capabilities.exec,
                             net_domains: capabilities.net.domains.clone(),
+                            fs_read: capabilities.fs.read.clone(),
                         },
                         json!({}),
                     )

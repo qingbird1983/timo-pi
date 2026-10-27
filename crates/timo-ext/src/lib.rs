@@ -10,6 +10,7 @@ mod bridge;
 mod diag;
 mod discovery;
 mod error;
+mod fs_scope;
 mod host;
 mod manifest;
 #[cfg(feature = "pack")]
@@ -26,8 +27,8 @@ pub use discovery::{
 };
 pub use error::ExtError;
 pub use host::{
-    BasicServices, ExecOutput, ExtensionHost, FetchOutput, Grants, HostServices, LoadedExtension,
-    ToolCallResult, ToolMeta,
+    BasicServices, DirItem, ExecOutput, ExecRequest, ExtensionHost, FetchOutput, Grants,
+    HostServices, LoadedExtension, ToolCallResult, ToolMeta,
 };
 pub use manifest::{
     Capabilities, FsCapability, MANIFEST_SCHEMA, Manifest, NetCapability, compute_source_hash,
