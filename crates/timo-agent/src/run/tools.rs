@@ -118,7 +118,7 @@ impl<'a> Ctx<'a> {
                     tool_name: name.clone(),
                     content: output.content,
                     is_error: output.is_error,
-                    usage: None,
+                    usage: output.usage,
                     duration_ms: Some(duration),
                     timestamp: self.now_ms(),
                 });

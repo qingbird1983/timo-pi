@@ -75,6 +75,24 @@ module.exports = function (pi) {
 };
 "#;
 
+/// 工具回报"内部还有一次模型调用"的用量（设计 08 §4.3）。
+/// 独立 bundle：不扩 HELLO，免得动它既有的一条注册数断言。
+const USAGE_RESULT: &str = r#"
+module.exports = function (pi) {
+  pi.registerTool({
+    name: "nested",
+    label: "Nested",
+    description: "Reports the usage of an inner model call",
+    parameters: { type: "object" },
+    execute: async () => ({
+      content: [{ type: "text", text: "nested done" }],
+      details: {},
+      usage: { input: 4321, output: 128, cache_read: 900, total_tokens: 5349, cost: { total: 0.0107 } },
+    }),
+  });
+};
+"#;
+
 #[test]
 fn load_registers_prefixed_tools_commands_and_hooks() {
     let fixture = Fixture::new("demo", HELLO);
@@ -104,6 +122,31 @@ fn call_tool_returns_result() {
     assert_eq!(result.content[0]["text"], "hello qoder");
     assert_eq!(result.details["call"], "toolcall");
     assert!(!result.is_error);
+}
+
+#[test]
+fn tool_usage_crosses_the_json_boundary() {
+    let fixture = Fixture::new("demo", USAGE_RESULT);
+    let usage = fixture
+        .host
+        .call_tool("plugin_demo_nested", json!({}))
+        .unwrap()
+        .usage
+        .expect("usage forwarded");
+    assert_eq!(usage.input, 4_321);
+    assert_eq!(usage.cache_read, 900);
+    assert_eq!(usage.total_tokens, 5_349);
+    assert!(
+        (usage.cost.total - 0.0107).abs() < 1e-12,
+        "cost.total must survive: {usage:?}"
+    );
+
+    let plain = Fixture::new("demo", HELLO);
+    let none = plain
+        .host
+        .call_tool("plugin_demo_hello", json!({ "name": "x" }))
+        .unwrap();
+    assert!(none.usage.is_none(), "不带 usage 时不得凭空造用量");
 }
 
 #[test]

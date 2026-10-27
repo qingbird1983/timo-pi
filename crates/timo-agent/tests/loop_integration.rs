@@ -111,6 +111,37 @@ fn echo_tool_registry() -> Arc<ToolRegistry> {
             })
         }),
     });
+    // 子代理型工具：内部另有一次模型调用，通过 ToolOutput.usage 回报用量（设计 08 §4.3）。
+    reg.register(timo_tools::ToolDefinition {
+        name: "scout".into(),
+        label: "Scout".into(),
+        description: "pretends to be a nested agent and reports its usage".into(),
+        prompt_snippet: None,
+        prompt_guidelines: vec![],
+        parameters: serde_json::json!({"type": "object", "properties": {}}),
+        output_schema: None,
+        exposure: timo_tools::Exposure::Direct,
+        namespace: None,
+        annotations: timo_tools::Annotations::default(),
+        execution_mode: timo_tools::ExecutionMode::Parallel,
+        execute: Arc::new(|_| {
+            Box::pin(async move {
+                Ok(timo_tools::ToolOutput {
+                    usage: Some(timo_ai::Usage {
+                        input: 4_321,
+                        output: 128,
+                        total_tokens: 4_449,
+                        cost: timo_ai::Cost {
+                            total: 0.0107,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }),
+                    ..timo_tools::ToolOutput::text("scout: 3 files")
+                })
+            })
+        }),
+    });
     Arc::new(reg)
 }
 
@@ -205,6 +236,37 @@ async fn full_loop_text_then_tool_then_stop() {
     }
     // 接缝 #6：流事件富枚举通路存在（本轮无增量，Done 已在 StreamEvent 通路转发）
     let _ = count;
+}
+
+#[tokio::test]
+async fn a_tool_can_report_usage_into_its_result_message() {
+    let api = Arc::new(ScriptedApi::new(vec![
+        tool_call_done("call_9", "scout", serde_json::json!({})),
+        text_done("done"),
+    ]));
+    let agent = handle(api);
+    let mut rx = agent.bus().subscribe();
+    let out = agent.run("go".into(), vec![], None).await.expect("run");
+    let message_usage = match &out[2] {
+        Message::ToolResult(t) => t.usage.clone().expect("tool usage forwarded"),
+        other => panic!("tool result expected: {other:?}"),
+    };
+    assert_eq!(message_usage.input, 4_321);
+    assert_eq!(message_usage.total_tokens, 4_449);
+    assert!(
+        (message_usage.cost.total - 0.0107).abs() < 1e-12,
+        "{message_usage:?}"
+    );
+    // 事件通路同样带出用量：UI 与 `/session` 都从消息/事件现算，不只看上下文
+    let mut event_usage = None;
+    while let Ok(event) = rx.try_recv() {
+        if let KernelEvent::ToolCallFinished { result, .. } = event
+            && let Message::ToolResult(tool_result) = result.as_ref()
+        {
+            event_usage = tool_result.usage.clone();
+        }
+    }
+    assert_eq!(event_usage.expect("event carries usage").input, 4_321);
 }
 
 struct AllowingReview;

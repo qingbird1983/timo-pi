@@ -71,6 +71,13 @@
 - 三条新闸门逐个变异验红（去掉 `!self.no_session`、把过滤换成空集、把 append 循环换成空文本），对应测试各自转红后逐字节还原并复核 sha。
 - 本轮补的出口缺口：无头 `-p` 路径原先不调用资源告警打印，`--tools` 未命中在子代理场景里静默；现由 `print::run` 收尾统一出口（失败提前 return 也会打印）。
 
+### D6 批③ 用量回报读数
+
+- 接缝打通四处：`ToolOutput.usage` → `ToolResultMessage.usage`（`run/tools.rs`）→ `Tools/summaries` 桶（`usage.rs` 既有聚合，未改语义）；扩展侧 `ToolCallResult.usage` 走 serde 原样过 JSON 边界（shim 不裁字段），内建工具与 MCP 一律 `None`（现状不变）。
+- 新增 2 条测试：agent 层 `a_tool_can_report_usage_into_its_result_message`（消息与 `ToolCallFinished` 事件两条通路都断到 input/total_tokens/cost.total）；ext 层 `tool_usage_crosses_the_json_boundary`（带 usage 解析成功 + 不带 usage 不得凭空造）。workspace 315 tests。
+- 变异验证：把 `usage: output.usage` 换成 `None` → agent 那条测试转红（还原后 sha 一致）。
+- **实测覆盖缺口（不谎报）**：把内核适配器 `crates/timo-kernel/src/extensions/events.rs` 的 `usage: result.usage` 换成 `None` 后，`timo-kernel` + `timo-ext` 全部测试仍绿——该环没有公开测试入口（`mod extensions` 私有、内核无单工具执行 API）。批④ 子代理真机验收要用 `/session` 的 `Tools` 桶读数把它端到端补上，否则不许算完成。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。

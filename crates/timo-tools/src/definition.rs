@@ -71,6 +71,8 @@ pub struct ToolOutput {
     pub is_error: bool,
     /// 本批早停信号（全部工具 terminate=true 才生效）。
     pub terminate: bool,
+    /// 工具自身用量（子代理这类"内部还有一次模型调用"的工具用它回报，设计 08 §4.3）。
+    pub usage: Option<timo_ai::Usage>,
 }
 
 impl ToolOutput {

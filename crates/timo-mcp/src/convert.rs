@@ -72,6 +72,7 @@ pub(crate) fn result_to_output(result: &CallToolResult) -> timo_tools::ToolOutpu
             structured_content: result.structured_content.clone(),
             is_error,
             terminate: false,
+            usage: None,
         };
     }
     let full_text: String = contents
@@ -102,6 +103,7 @@ pub(crate) fn result_to_output(result: &CallToolResult) -> timo_tools::ToolOutpu
         structured_content: result.structured_content.clone(),
         is_error,
         terminate: false,
+        usage: None,
     }
 }
 

@@ -61,6 +61,8 @@ pub struct ToolCallResult {
     pub is_error: bool,
     /// 本批早停提示。
     pub terminate: bool,
+    /// 工具自身用量：形态与 `timo_ai::Usage` 一致，缺省 `None`（设计 08 §4.3）。
+    pub usage: Option<timo_ai::Usage>,
 }
 
 /// 单扩展装载结果。

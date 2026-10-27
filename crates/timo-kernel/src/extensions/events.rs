@@ -60,6 +60,7 @@ pub fn tool_definition(meta: &ToolMeta, host: Arc<ExtensionHost>) -> timo_tools:
                     structured_content: result.structured_content,
                     is_error: result.is_error,
                     terminate: result.terminate,
+                    usage: result.usage,
                 })
             })
         }),
