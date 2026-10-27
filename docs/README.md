@@ -80,6 +80,7 @@ docs/
 | design/phase-3.5/08-subagent.md | 定稿 | D6 标尺：subagent 扩展、宿主 fs API、无头子进程与用量回报 |
 | design/phase-3.5/09-prompt-templates.md | 定稿 | P2 第一题：prompt 模板发现与 `$@` 占位展开、命令清单接线、D56 workflow 预设 |
 | design/phase-3.5/10-provider-composer.md | 定稿 | P2 第二题：请求头/认证头/兼容性配置面，虚拟模型的目录/路由/状态三步 |
+| design/phase-3.5/11-codemode.md | 定稿 | P2 第三题：脚本沙箱、嵌套工具调用接缝、输出截断与资源限制（D72~D79） |
 | design/phase-3.5/report.md | 进度中（P0+P1+D6 完成，P2 两题在落地） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板与 provider 配置面，含真机读数与体量核对 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |

@@ -31,6 +31,7 @@
 | `timo-kernel/src/cache_stats.rs`、`warmer.rs` | 缓存 miss 统计、按 TTL 预热与用量记录 | P1 | 05 |
 | `apps/timo-cli/src/json_mode.rs` | `-p` / `--mode json` 无头输出 | P1 | 06 |
 | `timo-ext`（宿主 fs API + `execParallel`）+ `examples/extensions/subagent` | D6 标尺：子代理扩展、无头子进程、用量回报 | D6 | 08 |
+| `timo-tools/src/nested.rs` + `timo-agent/src/run/nested.rs` + `timo-kernel/src/codemode/` | 嵌套工具执行接缝、codemode 沙箱与脚本工具面 | P2 | 11 |
 
 后续批次（P2）：`prompt_templates`、`provider-composer`、`nested-tool-calls`、`trust`。各自详设编号在开工前补，不在本文预设签名。
 
@@ -42,7 +43,7 @@
 4. 用量聚合（单测：分桶键、成本、缺失字段、工具/摘要桶）。
 5. CLI 与桌面接线（命令菜单列出技能；状态区显示用量；D1 的桌面半场可验）。
 6. P1 详设 04~07 定稿 → 实现（压缩、缓存统计与预热、无头模式、会话分区与导出）。
-7. P2 详设定稿 → 实现（模板、路由、codemode、信任）。
+7. P2 详设定稿 → 实现（模板、路由、codemode、信任；09/10/11 已定稿，12 待写）。
 8. 验收 D1~D7 → `report.md` → 看板/CHANGELOG → tag `phase-3.5.end`。
 
 > 每批门禁四连不变（fmt / clippy / workspace tests / check-size）；新增提示输出用快照式断言（固定输入 → 逐字期望），不只 `contains`。
