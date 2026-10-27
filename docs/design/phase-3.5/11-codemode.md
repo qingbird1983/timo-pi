@@ -133,7 +133,7 @@ pub trait NestedToolHost: Send + Sync {
 // exposure: ModelOnly；未激活时 Hidden；activation: default_tools 的 "+codemode" 或 --tools
 ```
 
-- **注册点**：`Kernel::ensure_ready()` 在 MCP 与扩展工具注册之后、`apply_allowlist` 之前注册，使 `--tools codemode` 不被报"unknown tool"；`apply_allowlist` 之后、装配 agent 之前把暴露面校正回 `ModelOnly`（或未激活时 `Hidden`）。
+- **注册点**：`Kernel::ensure_ready()` 分两步——先在 `apply_allowlist` **之前**注册一个占位定义（使 `--tools codemode` 不被报"unknown tool"），allowlist 之后再按**最终注册表**重建一次：描述来自最终可调集合，暴露面 = 激活时 `ModelOnly`、否则 `Hidden`。`apply_allowlist` 可能把占位项提升为 `Direct`，重建会覆盖掉它。
 - **默认关**：不进 `DEFAULT_ACTIVE`；未激活时 `Hidden`，脚本面不存在。
 - **描述**：`prompt_snippet = "codemode(code): run JavaScript that calls other tools"`；一条 guideline 说明"批量/串联/过滤大结果优先用它"；`description` 由注册表快照按与运行时 `catalog()` 同源的可调视图渲染：
   - 头部：脚本形态、`await tools.<name>({...})` 的解析规则、选项行；
@@ -219,7 +219,7 @@ pub trait NestedToolHost: Send + Sync {
 | 单文件 | 均 < 500 行；`kernel.rs` 只加注册调用，拆分点不够时按既有 `kernel/*.rs` 先例拆 |
 | 依赖 | `timo-kernel` 增 `rquickjs`、`tempfile`（均已在 workspace）；`timo-agent`/`timo-tools` 不增第三方；无新 crate |
 | 文档 | design 新增 1 篇（11）；本阶段设计稿 00~11 + report = 13 篇，超出 standards/08"每阶段新增 ≤12"1 篇，阶段收尾在报告登记豁免 |
-| docs 总数 | 新增后 77 篇（软上限 120） |
+| docs 总数 | 本篇新增 1 篇；工作树当前 81 篇（含并行会话新增），阶段收尾按报告口径复核（软上限 120） |
 
 ## 8. 偏离登记（接续 10 的 D71）
 
