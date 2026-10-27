@@ -6,6 +6,17 @@
 
 ---
 
+## [0.1.36] - 2026-10-27
+
+### 实现：用量与成本聚合（Phase 3.5 P0 批 4）
+
+- 新增 `usage.rs`：从消息历史现算四项 token 与费用；assistant 按 `provider/response_model` 分桶，工具结果进 `Tools/summaries`；空桶过滤、成本降序、同价按 key 升序。
+- 成本直接取消息里的 `usage.cost.total`（适配器已按费率写入），聚合只做加法，不重新计价；内核不再需要保存目录。
+- 内核新增 `usage_summary()` / `usage_totals()` / `usage_breakdown()`；CLI `/session` 打印总计与每桶一行。
+- 测试：kernel 35 条（含分桶排序、稳定排序、tool 桶、response_model 键、空历史）；四门禁通过；`target/` 24.0GiB 超软限（阶段收尾清扫）。
+
+---
+
 ## [0.1.35] - 2026-10-27
 
 ### 实现：技能发现与命令注册面（Phase 3.5 P0 批 3）

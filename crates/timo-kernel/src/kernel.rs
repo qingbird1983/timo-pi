@@ -23,6 +23,7 @@ use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
 mod options;
 mod prompt_api;
 mod sessions;
+mod usage_api;
 
 pub use options::KernelOptions;
 

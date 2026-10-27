@@ -81,11 +81,25 @@ pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOu
         }
         "session" => {
             match kernel.session_id() {
-                Some(id) => println!(
-                    "[session] {id} · {} · {} messages",
-                    kernel.model_label(),
-                    kernel.history().map_or(0, |history| history.len())
-                ),
+                Some(id) => {
+                    let summary = kernel.usage_summary();
+                    println!(
+                        "[session] {id} · {} · {} messages · input={} output={} cache_read={} cache_write={} · ${:.4}",
+                        kernel.model_label(),
+                        kernel.history().map_or(0, |history| history.len()),
+                        summary.totals.input,
+                        summary.totals.output,
+                        summary.totals.cache_read,
+                        summary.totals.cache_write,
+                        summary.totals.cost
+                    );
+                    for bucket in &summary.buckets {
+                        println!(
+                            "  {} tokens={} ${:.4}",
+                            bucket.key, bucket.tokens, bucket.cost
+                        );
+                    }
+                }
                 None => println!("[session] draft (not saved yet)"),
             }
             CommandOutcome::Handled

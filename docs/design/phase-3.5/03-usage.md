@@ -39,7 +39,7 @@ pub struct UsageSummary {
 }
 ```
 
-`UsageTotals` 复用 `timo_ai::Usage` 的四项计数器语义；成本用目录里的 `RateCard` 计算（`timo_ai::catalog::calculate_cost`）。
+`UsageTotals` 复用 `timo_ai::Usage` 的四项计数器语义；成本直接取消息里的 `usage.cost.total`（适配器在收到 usage 时已按目录费率算好并写入消息）。
 
 固定字符串 `"Tools/summaries"` 与 pi 的同名桶一致，作为跨实现的对照锚点（也便于将来对齐）。
 
@@ -57,9 +57,9 @@ pub struct UsageSummary {
 
 ## 4. 成本
 
-- 目录查找：`Catalog::get(provider, model)`；命中 → `calculate_cost(model.cost, usage)`；未命中 → 成本 0（token 仍计入）。
-- 内核在 `Kernel::new` 里 `load_catalog` 后**保存** `Arc<Catalog>`（现状是解析完即丢弃）；P0 不加新依赖。
-- 金额单位 USD、不做币种换算；展示精度由界面决定（CLI 两位小数，桌面两位小数）。
+- 成本取消息内的 `usage.cost.total`：两个协议适配器在收到 usage 时已用目录费率算好并写进消息，聚合只做加法，不重新计价。
+- 因此内核**不需要**保存目录；会话重放时成本随消息恢复，未知/自定义模型以消息里的值为准（通常为 0）。
+- 金额单位 USD、不做币种换算；CLI 展示 4 位小数（`$0.0000`），桌面后续批次同。
 
 ## 5. 计算规则
 
