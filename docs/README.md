@@ -69,7 +69,7 @@ docs/
 | design/phase-3/04-tool-review.md | 定稿 | 执行前审阅接缝、拒绝语义、并发与 CLI 兼容 |
 | design/phase-3/prototype.html | 定稿（方向稿） | 桌面壳布局、工具过程 trace 与 diff 审阅原型 |
 | design/phase-3/report.md | 定稿 | Phase 3 阶段进度报告（C1~C6 全通过；NSH 热更与拒绝路径真机验收） |
-| design/phase-3.5/00-overview.md | 定稿 | Phase 3.5 总览：模块布局、批次序列、K1~K9 决策、D30~D38 偏离 |
+| design/phase-3.5/00-overview.md | 定稿 | Phase 3.5 总览：模块布局、批次序列、K1~K9 决策、D30~D56 偏离 |
 | design/phase-3.5/01-system-prompt.md | 定稿 | 提示分节装配、项目上下文发现、SYSTEM/APPEND 文件、重载与测试 |
 | design/phase-3.5/02-skills-and-commands.md | 定稿 | 技能发现/校验/注入/展开、命令注册面与输入分发 |
 | design/phase-3.5/03-usage.md | 定稿 | 用量与成本聚合、分桶规则与内核 API |
@@ -77,7 +77,8 @@ docs/
 | design/phase-3.5/05-cache.md | 定稿 | 缓存 miss 统计、预热调度、经济阈值与模型 TTL 元数据 |
 | design/phase-3.5/06-headless.md | 定稿 | `-p` / `--mode json` 线协议、退出码与取消语义 |
 | design/phase-3.5/07-session-storage.md | 定稿 | 会话按 cwd 分区、跨分区查找与 JSONL 导出 |
-| design/phase-3.5/report.md | 草稿（P0） | Phase 3.5 进度报告：P0 批 1~5、D1/D2/D4/D7 真机验收与体量核对 |
+| design/phase-3.5/08-subagent.md | 定稿 | D6 标尺：subagent 扩展、宿主 fs API、无头子进程与用量回报 |
+| design/phase-3.5/report.md | 进度中（P0+P1 完成） | Phase 3.5 进度报告：P0 批 1~5 与 P1 批 1~4、D1/D2/D3/D4/D5/D7 真机验收与体量核对 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | phase-3.5 进行中（P0 完成）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |

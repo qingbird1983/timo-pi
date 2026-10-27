@@ -6,6 +6,17 @@
 
 ---
 
+## [0.1.74] - 2026-10-27
+
+### 设计：D6 标尺详设定稿（subagent 扩展）
+
+- 新增 `docs/design/phase-3.5/08-subagent.md`：以 pi 官方 subagent 示例为行为蓝本（只读不抄），定义"主会话一次工具调用 → 无头子进程 → 独立上下文 / 受限工具 / 指定模型 → 结果与用量回主会话"的完整契约与验收步骤。
+- 核对出四道缺口并给出补齐方案：扩展读不到文件（`node:fs` 打包期禁、`fs.read` 只有契约）→ 宿主 `pi.readFile`/`pi.listDir`；CLI 缺 `--no-session`/`--tools`/`--append-system-prompt`；工具结果 usage 恒为空 → `ToolOutput.usage`；`pi.exec` 同步无并发 → 宿主 `pi.execParallel`（≤8 任务、4 并发）。
+- 偏离登记 D51~D56，其中两条如实延后：子代理实时进度本批不落地（宿主无流式）、workflow 预设随 P2 prompt-templates。
+- 文档地图、总览偏离表与看板同步；实现分四小批：宿主 fs API + `execParallel` → 内核/CLI 参数 → 用量回报 → 扩展本体与真机验收。
+
+---
+
 ## [0.1.70] - 2026-10-27
 
 ### 规范修订：docs/ 文档总数软上限 60 → 120（ADR-0014）

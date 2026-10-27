@@ -1,6 +1,6 @@
 # 设计 00：Phase 3.5 总览与跨模块决策
 
-- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批；P1 详设 04~07 于同日补定稿）
+- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批；P1 详设 04~07 于同日补定稿；D6 标尺详设 08 于同日定稿）
 - 关联：roadmap/phase-3.5；ADR-0011/0013；research/06；design/phase-1/02~05
 - 行为蓝本：pi 1.4.0（本地只读，不复制；铁律 7）
 
@@ -30,6 +30,7 @@
 | `timo-session`（投影/导出/分区） | 压缩 entry 投影、会话目录编码、JSONL 导出 | P1 | 04/07 |
 | `timo-kernel/src/cache_stats.rs`、`warmer.rs` | 缓存 miss 统计、按 TTL 预热与用量记录 | P1 | 05 |
 | `apps/timo-cli/src/json_mode.rs` | `-p` / `--mode json` 无头输出 | P1 | 06 |
+| `timo-ext`（宿主 fs API + `execParallel`）+ `examples/extensions/subagent` | D6 标尺：子代理扩展、无头子进程、用量回报 | D6 | 08 |
 
 后续批次（P2）：`prompt_templates`、`provider-composer`、`nested-tool-calls`、`trust`。各自详设编号在开工前补，不在本文预设签名。
 
@@ -87,6 +88,12 @@
 | D48 | 压缩 entry 用 `keep_recent_messages` 计数而非 `first_kept_entry_id` | b（线性链实现更简） | 免去"消息 → entry id"映射；投影时在链上倒数 N 条（04） |
 | D49 | 无头模式先调 `Kernel::start_session()` 预建会话 | b（缺口补齐） | 会话头必须在首行而 run 内部才建会话；预建后 run 复用，仅此一处新增内核入口（06 §8） |
 | D50 | 预热只在 run 收尾排定（streaming 续一次、idle 窗内重复） | d（范围收敛） | 循环内无空闲点回调；退到 run 级挂点，经济账与安全窗不变（05 §2） |
+| D51 | subagent 读代理定义走宿主 `pi.readFile`/`pi.listDir`（`fs.read` 能力），不给 `node:fs` | a（沙箱无 OS 面） | phase-2/03 预留契约落地（08 §4.1） |
+| D52 | 子代理系统提示经 `--append-system-prompt <text|@file>` 传入，不写临时文件 | b（免开 `fs.write`） | 08 §4.2 |
+| D53 | 子代理实时进度不落地（`pi.exec` 返回才有结果） | c（宿主无流式） | GUI/审阅批次再补 `onUpdate`（08 §3） |
+| D54 | parallel 由宿主 `pi.execParallel` 实现（≤8 任务、4 并发） | a（QuickJS 单线程） | 语义仍是"一次提交、按序回填"（08 §4.4） |
+| D55 | 子代理用量计入主会话 `Tools/summaries` 桶 | b（pi 仅 TUI 展示） | 经 `ToolOutput.usage` → `ToolResultMessage.usage`（08 §4.3） |
+| D56 | workflow 预设（`/implement` 等）随 P2 prompt-templates 落 | d（排期） | 本批只做工具与代理定义（08 §5） |
 
 ## 7. 接缝核对（architecture/03）
 
