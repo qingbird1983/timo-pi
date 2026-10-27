@@ -24,6 +24,37 @@ pub mod kinds {
     pub const CUSTOM: &str = "custom";
     /// 扩展消息（入 LLM 上下文，Phase 2 起用）。
     pub const CUSTOM_MESSAGE: &str = "custom_message";
+    /// 上下文压缩检查点（phase-3.5/04）。
+    pub const COMPACTION: &str = "session.compaction";
+}
+
+/// 压缩摘要消息的前缀（读端投影与写端共用；phase-3.5/04 §5）。
+pub const COMPACTION_SUMMARY_PREFIX: &str = "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
+
+/// 压缩摘要消息的后缀。
+pub const COMPACTION_SUMMARY_SUFFIX: &str = "\n</summary>";
+
+/// 构造注入上下文的摘要消息（user 角色，与 pi 的 compactionSummary 投影一致）。
+#[must_use]
+pub fn summary_message(summary: &str, timestamp: i64) -> timo_ai::Message {
+    timo_ai::user_text(
+        &format!("{COMPACTION_SUMMARY_PREFIX}{summary}{COMPACTION_SUMMARY_SUFFIX}"),
+        timestamp,
+    )
+}
+
+/// 从消息中提取压缩摘要正文（非摘要消息返回 None）。
+#[must_use]
+pub fn extract_summary(message: &timo_ai::Message) -> Option<&str> {
+    let timo_ai::Message::User(user) = message else {
+        return None;
+    };
+    let text = user.content.iter().find_map(|c| match c {
+        timo_ai::Content::Text { text } => Some(text.as_str()),
+        _ => None,
+    })?;
+    text.strip_prefix(COMPACTION_SUMMARY_PREFIX)?
+        .strip_suffix(COMPACTION_SUMMARY_SUFFIX)
 }
 
 /// 会话首条 payload（每文件第一条，parent_id = null）。

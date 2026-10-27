@@ -76,7 +76,7 @@ const BUILTIN: [(&str, &str, Option<&str>, CommandStatus); 25] = [
         "compact",
         "Compact the session context",
         Some("[instructions]"),
-        CommandStatus::Planned("P1"),
+        CommandStatus::Ready,
     ),
     (
         "export",

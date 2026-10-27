@@ -351,6 +351,9 @@ impl ChatState {
                 }
             }
             KernelEvent::MessageAdded { .. } | KernelEvent::ProviderRequest { .. } => {}
+            KernelEvent::Compacted { .. } => {
+                // 压缩分隔条随 GUI 批次接入；内核侧已切换上下文。
+            }
         }
     }
 

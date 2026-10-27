@@ -51,15 +51,64 @@ pub fn read_entries(path: &Path) -> Result<Vec<Entry>> {
 
 /// 沿 leaf 链投影 LLM 上下文（设计 04：树形结构 MVP 只写线性链，投影按通用树实现）。
 ///
-/// 只取 `message` entry 的 payload；未知类型与其他 entry 不入上下文。
+/// 只取 `message` entry 的 payload；最新 `session.compaction` 生效：
+/// 摘要消息 + 压缩点之前最近 `keep_recent_messages` 条消息 + 压缩点之后的消息。
 #[must_use]
 pub fn project_context(entries: &[Entry]) -> Vec<Message> {
     let chain = leaf_chain(entries);
+    let compaction = chain.iter().rposition(|e| e.kind == kinds::COMPACTION);
+    let Some(compaction_index) = compaction else {
+        return messages_of(&chain[..]);
+    };
+    let entry = chain[compaction_index];
+    let summary = entry
+        .payload
+        .get("summary")
+        .and_then(serde_json::Value::as_str)
+        .filter(|s| !s.trim().is_empty());
+    let Some(summary) = summary else {
+        // 摘要损坏：忽略该检查点，退回原始消息链。
+        return messages_of(&chain[..]);
+    };
+    let keep = entry
+        .payload
+        .get("keep_recent_messages")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0) as usize;
+
+    let before = &chain[..compaction_index];
+    let mut start = if keep == 0 { before.len() } else { 0 };
+    let mut seen = 0usize;
+    for (i, e) in before.iter().enumerate().rev() {
+        if e.kind == kinds::MESSAGE {
+            seen += 1;
+            if seen == keep {
+                start = i;
+                break;
+            }
+        }
+    }
+
+    let mut out = vec![crate::entry::summary_message(
+        summary,
+        entry_timestamp_ms(entry),
+    )];
+    out.extend(messages_of(&chain[start..]));
+    out
+}
+
+fn messages_of(chain: &[&Entry]) -> Vec<Message> {
     chain
         .iter()
         .filter(|e| e.kind == kinds::MESSAGE)
         .filter_map(|e| serde_json::from_value::<Message>(e.payload.clone()).ok())
         .collect()
+}
+
+fn entry_timestamp_ms(entry: &Entry) -> i64 {
+    time::OffsetDateTime::parse(&entry.ts, &time::format_description::well_known::Rfc3339)
+        .map(|t| (t.unix_timestamp_nanos() / 1_000_000) as i64)
+        .unwrap_or(0)
 }
 
 /// 从 leaf（未被任何 entry 引用为 parent 的 entry）回溯父链，返回根→leaf 顺序。
@@ -251,6 +300,63 @@ mod tests {
         let msgs = project_context(&entries);
         assert_eq!(msgs.len(), 2);
         assert_eq!(msgs[0].timestamp(), 5);
+    }
+
+    #[test]
+    fn projection_uses_the_latest_compaction_checkpoint() {
+        let (dir, idgen) = setup("compaction");
+        let mut w =
+            SessionWriter::create(&dir, "D:/demo", None, Arc::new(FixedClock::new(1)), idgen)
+                .unwrap();
+        for (i, text) in ["one", "two", "three", "four", "five"].iter().enumerate() {
+            w.append_raw(
+                kinds::MESSAGE,
+                serde_json::to_value(user_text(text, i as i64)).unwrap(),
+            )
+            .unwrap();
+        }
+        w.append_raw(
+            kinds::COMPACTION,
+            serde_json::json!({"summary": "checkpoint", "keep_recent_messages": 2}),
+        )
+        .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("six", 6)).unwrap(),
+        )
+        .unwrap();
+
+        let msgs = project_context(&read_entries(w.path()).unwrap());
+        assert_eq!(msgs.len(), 4);
+        assert_eq!(crate::extract_summary(&msgs[0]), Some("checkpoint"));
+        assert_eq!(msgs[1].timestamp(), 3);
+        assert_eq!(msgs[2].timestamp(), 4);
+        assert_eq!(msgs[3].timestamp(), 6);
+    }
+
+    #[test]
+    fn projection_falls_back_when_the_summary_is_empty() {
+        let (dir, idgen) = setup("compaction-bad");
+        let mut w =
+            SessionWriter::create(&dir, "D:/demo", None, Arc::new(FixedClock::new(1)), idgen)
+                .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("one", 1)).unwrap(),
+        )
+        .unwrap();
+        w.append_raw(kinds::COMPACTION, serde_json::json!({"summary": ""}))
+            .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("two", 2)).unwrap(),
+        )
+        .unwrap();
+
+        let msgs = project_context(&read_entries(w.path()).unwrap());
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].timestamp(), 1);
+        assert_eq!(msgs[1].timestamp(), 2);
     }
 
     #[test]

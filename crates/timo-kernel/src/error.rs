@@ -18,6 +18,12 @@ pub enum KernelError {
     /// agent 前置错误。
     #[error("agent: {0}")]
     Agent(#[from] timo_agent::AgentError),
+    /// 手动压缩错误（隔离于 run 装配，CLI 只打一行原因）。
+    #[error("compaction: {0}")]
+    Compaction(#[from] timo_agent::compaction::CompactionError),
+    /// 命令前置条件不满足（如草稿会话执行 `/compact`）。
+    #[error("{0}")]
+    Unavailable(String),
     /// MCP 装配错误（单 server 失败不阻断；此处为注册表级错误）。
     #[error("mcp: {0}")]
     Mcp(#[from] timo_mcp::McpError),

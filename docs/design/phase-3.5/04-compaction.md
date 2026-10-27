@@ -107,28 +107,29 @@ Do NOT continue the conversation. Do NOT respond to any questions in the convers
 新增 `kinds::COMPACTION = "session.compaction"`（ADR-0007 预留位）。payload：
 
 ```json
-{"summary": "…", "first_kept_entry_id": "01J…", "tokens_before": 123456, "tokens_after": 20001,
+{"summary": "…", "keep_recent_messages": 3, "tokens_before": 123456, "tokens_after": 20001,
  "reason": "threshold|manual", "usage": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}, "details": {"read_files": [], "modified_files": []}}
 ```
 
-- `first_kept_entry_id` = 保留范围第一条消息的 entry id。
+- `keep_recent_messages` = 压缩时保留的近期消息**条数**（D48：不用 entry id；线性链上计数即可，免去消息→entry id 映射）。
 - entry 的 `parent_id` = 当前 leaf；写完后 leaf = 压缩 entry，后续消息接在它后面。
 - 原始 entry 全部保留在文件里（只增不改）；投影时最新压缩 entry 生效。
-- `tokens_after` 用估算值；`usage` 记录摘要请求的用量（P1 不计入 `/session` 总量，登记为已知限制）。
+- `tokens_after` 用估算值：按「摘要消息 + 保留尾部」全量估算，不沿用压缩前最后一条 assistant 的 usage（那颗数字反映的是压缩前上下文，压缩后会明显偏大）。`usage` 记录摘要请求的用量（P1 不计入 `/session` 总量，登记为已知限制）。
 
 投影算法（`timo-session::project_context`）：
 
 1. 取 leaf 链；
 2. 找链上最后一条 `session.compaction`；
-3. 有的情况：从 `first_kept_entry_id` 在链上的位置开始取消息（找不到则从压缩 entry 之后取）；把摘要消息（§5 的包装文本，`timestamp` = entry 时间）放在最前；压缩 entry 本身跳过；
+3. 有的情况：在压缩 entry 之前倒数 `keep_recent_messages` 条 message entry 作为保留段起点（不足则从链首开始）；把摘要消息（§5 的包装文本，`timestamp` = entry 时间）放在最前；压缩 entry 本身跳过；压缩 entry 之后的消息照常追加；
 4. 没有：现状不变（只取 `message` entry）；
-5. 多条压缩：最后一条胜出；更早的压缩 entry 与它之前的消息都不再投影。
+5. 摘要为空：忽略该检查点，退回原始消息链；
+6. 多条压缩：最后一条胜出；更早的压缩 entry 与它之前的消息都不再投影。
 
 ## 9. 内核接口
 
 - 自动：`Kernel::run` 内的循环按 §4 判断，无需调用方参与。
 - 手动：`Kernel::compact(&mut self, instructions: Option<&str>) -> Result<CompactionOutcome>`；没有会话/没有可摘要内容时报错。
-  - `CompactionOutcome { summary, tokens_before, tokens_after, first_kept_entry_id }`。
+  - `CompactionOutcome { summary, keep_recent_messages, tokens_before, tokens_after }`。
 - 事件：`KernelEvent::Compacted { reason: CompactionReason, tokens_before: u64, tokens_after: u64 }`；失败走 `Error`。
 - 设置入口：`Kernel::compaction_settings()` 只读快照（桌面/CLI 展示用）。
 
@@ -145,7 +146,7 @@ Do NOT continue the conversation. Do NOT respond to any questions in the convers
 2. `should_compact`：边界值 `>`、`reserve` 大于窗口、`enabled=false`。
 3. 切点：从尾部累计到预算、回退到最近 user、无可摘要内容返回 None、tool result 不会被切在中间。
 4. 序列化与文件清单：tool result 截断、thinking 不出现、read/write/edit 去重与排序、XML 段落。
-5. entry/投影：压缩 entry 往返；投影得到"摘要 + 保留尾部"；多条压缩只认最后一条；缺 `first_kept_entry_id` 时退化为压缩 entry 之后。
+5. entry/投影：压缩 entry 往返；投影得到"摘要 + 保留尾部"；多条压缩只认最后一条；缺 `keep_recent_messages` 时退化为只取压缩 entry 之后的消息。
 6. 摘要失败：Error/Length/工具调用/空正文四种都不写 entry。
 
 集成（fixture SSE，无真实模型）：

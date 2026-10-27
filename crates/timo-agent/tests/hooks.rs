@@ -200,6 +200,7 @@ fn handle(
         system_prompt: "base".into(),
         clock: Arc::new(FixedClock::new(1_000)),
         max_turns: None,
+        compaction: None,
         hooks: Some(hooks),
         provider_hooks: None,
         review: None,

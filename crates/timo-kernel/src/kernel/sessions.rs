@@ -21,7 +21,7 @@ fn valid_session_id(id: &str) -> bool {
 
 impl Kernel {
     /// 查找会话文件：旧平铺 → 当前项目分区 → 其他一级分区（phase-3.5/07）。
-    fn find_session_path(&self, id: &str) -> Option<PathBuf> {
+    pub(super) fn find_session_path(&self, id: &str) -> Option<PathBuf> {
         if !valid_session_id(id) {
             return None;
         }
@@ -234,16 +234,34 @@ mod tests {
                 serde_json::to_value(user_text("hello", 5)).unwrap(),
             )
             .unwrap();
+        let mut assistant = timo_ai::AssistantMessage::pending(
+            "openai-completions",
+            "anthropic",
+            "claude-sonnet-4-5",
+            6,
+        );
+        assistant.stop_reason = timo_ai::StopReason::Stop;
+        assistant.content = vec![timo_ai::Content::Text { text: "hi".into() }];
+        assistant.usage.input = 7;
+        assistant.usage.output = 3;
+        assistant.usage.total_tokens = 10;
+        writer
+            .append_raw(
+                timo_session::kinds::MESSAGE,
+                serde_json::to_value(timo_ai::Message::Assistant(assistant)).unwrap(),
+            )
+            .unwrap();
         drop(writer);
 
         assert_eq!(kernel.list_sessions().len(), 1);
         kernel.resume(&id).await.unwrap();
-        assert_eq!(kernel.history().unwrap().len(), 1);
+        assert_eq!(kernel.history().unwrap().len(), 2);
+        assert_eq!(kernel.usage_totals().input, 7);
 
         let target = data.join("out.jsonl");
         assert_eq!(kernel.export_session(Some(&target)).unwrap(), target);
         let text = std::fs::read_to_string(&target).unwrap();
-        assert_eq!(text.lines().count(), 2);
+        assert_eq!(text.lines().count(), 3);
         assert!(kernel.export_session(Some(&target)).is_err());
 
         let default = kernel.export_session(None).unwrap();

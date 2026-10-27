@@ -7,6 +7,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 mod agent;
+pub mod compaction;
 mod error;
 mod events;
 mod hooks;
@@ -15,8 +16,9 @@ mod run;
 mod tool_calls;
 
 pub use agent::{AbortHandle, AgentHandle};
+pub use compaction::{CompactInput, CompactionError, CompactionOutcome};
 pub use error::AgentError;
-pub use events::{EventBus, KernelEvent};
+pub use events::{CompactionReason, EventBus, KernelEvent};
 pub use hooks::{
     BeforeAgentStart, BeforeToolCall, LoopHooks, RouteChoice, RouteRequest, ToolOutcome,
     ToolOutputPatch,

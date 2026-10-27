@@ -49,6 +49,28 @@ impl Default for ImageSettings {
     }
 }
 
+/// 自动上下文压缩设置（phase-3.5/04；默认值与 pi 一致）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompactionSettings {
+    /// 是否启用阈值触发。
+    pub enabled: bool,
+    /// 给输出预留的 token（窗口 − reserve 为触发线）。
+    pub reserve_tokens: u64,
+    /// 压缩后保留的近期 token 目标。
+    pub keep_recent_tokens: u64,
+}
+
+impl Default for CompactionSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reserve_tokens: 16384,
+            keep_recent_tokens: 20000,
+        }
+    }
+}
+
 /// 设置文件顶层结构（全局 + 项目深合并后的结果）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -79,6 +101,8 @@ pub struct Settings {
     pub skills: Vec<String>,
     /// 技能是否进入命令发现（手动 `/skill:` 不受影响）。
     pub enable_skill_commands: bool,
+    /// 自动上下文压缩。
+    pub compaction: CompactionSettings,
 }
 
 impl Default for Settings {
@@ -97,6 +121,7 @@ impl Default for Settings {
             temperature: None,
             skills: Vec::new(),
             enable_skill_commands: true,
+            compaction: CompactionSettings::default(),
         }
     }
 }

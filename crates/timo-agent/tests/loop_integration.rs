@@ -163,6 +163,7 @@ fn handle_with_review(
         system_prompt: "test".into(),
         clock: Arc::new(FixedClock::new(1_000)),
         max_turns: None,
+        compaction: None,
         hooks: None,
         provider_hooks: None,
         review,

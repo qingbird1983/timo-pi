@@ -20,6 +20,7 @@ use crate::extensions::{self, ExtensionOptions, ExtensionRuntime};
 use crate::prompt;
 use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
 
+mod compaction_api;
 mod options;
 mod prompt_api;
 mod sessions;
@@ -64,11 +65,12 @@ pub struct Kernel {
     skill_paths: Vec<String>,
     /// 技能是否进入命令发现。
     skill_commands_enabled: bool,
+    /// 自动压缩设置（settings.compaction）。
+    compaction: timo_config::CompactionSettings,
 }
 
 impl Kernel {
-    /// 装配内核：配置 → 目录 → 模型解析 → 内置工具注册表。
-    ///
+    /// 装配内核：配置 → 目录 → 模型解析 → 内置工具注册表。    ///
     /// MCP 仅读配置（不连接）；agent 在首次 [`Kernel::run`]/[`Kernel::tools`] 时装配。
     ///
     /// # Errors
@@ -177,6 +179,7 @@ impl Kernel {
             skills: Vec::new(),
             skill_paths,
             skill_commands_enabled,
+            compaction: settings.compaction,
         })
     }
 
@@ -299,6 +302,7 @@ impl Kernel {
                     system_prompt: system_prompt.clone(),
                     clock: Arc::clone(&self.clock),
                     max_turns: self.max_turns,
+                    compaction: Some(self.compaction.clone()),
                     hooks,
                     provider_hooks,
                     review: self.tool_review.clone(),
@@ -461,38 +465,5 @@ impl Kernel {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn commit_outcome_keeps_the_full_context() {
-        let data = std::env::temp_dir().join(format!("timo-kernel-k0-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&data);
-        let work = data.join("work");
-        std::fs::create_dir_all(&work).unwrap();
-        let mut kernel = Kernel::new(KernelOptions {
-            data_dir: Some(data.clone()),
-            work_dir: Some(work),
-            model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
-            api_key: Some("test-key".into()),
-            ..Default::default()
-        })
-        .await
-        .expect("assemble");
-
-        let outcome = timo_agent::RunOutcome {
-            new_messages: vec![timo_ai::user_text("second", 2)],
-            context: vec![
-                timo_ai::user_text("first", 1),
-                timo_ai::user_text("first reply", 1),
-                timo_ai::user_text("second", 2),
-            ],
-        };
-        let new_messages = kernel.commit_outcome(outcome);
-        assert_eq!(new_messages.len(), 1);
-        // K0：第二次 run 能从完整上下文继续，而不是只剩新消息
-        assert_eq!(kernel.history().unwrap().len(), 3);
-        let _ = std::fs::remove_dir_all(&data);
-    }
-}
+#[path = "kernel/kernel_tests.rs"]
+mod tests;

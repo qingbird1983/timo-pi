@@ -118,6 +118,17 @@ pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOu
             }
             CommandOutcome::Handled
         }
+        "compact" => {
+            let instructions = (!rest.is_empty()).then_some(rest);
+            match kernel.compact(instructions).await {
+                Ok(outcome) => println!(
+                    "[compact] tokens: {} → {} (kept {} messages)",
+                    outcome.tokens_before, outcome.tokens_after, outcome.keep_recent_messages
+                ),
+                Err(error) => eprintln!("[error] {error}"),
+            }
+            CommandOutcome::Handled
+        }
         "quit" => CommandOutcome::Quit,
         _ => {
             match kernel

@@ -11,7 +11,7 @@ use timo_config::Clock;
 use timo_session::SessionWriter;
 use tokio_util::sync::CancellationToken;
 
-use crate::events::{EventBus, KernelEvent};
+use crate::events::{CompactionReason, EventBus, KernelEvent};
 use crate::hooks::{BeforeAgentStart, RouteRequest};
 use crate::queue::PendingMessageQueue;
 
@@ -49,6 +49,8 @@ pub struct LoopConfig {
     pub clock: std::sync::Arc<dyn Clock>,
     /// 单次 run 的模型请求轮数上限（None = 不限）。
     pub max_turns: Option<usize>,
+    /// 自动压缩设置（None = 关闭；Kernel 从 settings 传入）。
+    pub compaction: Option<timo_config::CompactionSettings>,
     /// 循环钩子（扩展宿主注入；None = 与 Phase 1 逐字节等价）。
     pub hooks: Option<std::sync::Arc<dyn crate::hooks::LoopHooks>>,
     /// 供应商钩子（透传到每次请求；None = 无钩子）。
@@ -137,6 +139,7 @@ pub async fn run_agent_loop(
             for m in std::mem::take(&mut pending) {
                 ctx.push_message(m).await;
             }
+            ctx.maybe_compact().await;
             let message = ctx.request().await;
             // assistant 终态消息入上下文（对齐 pi message_end 语义）
             ctx.push_message(Message::Assistant(message.clone())).await;
@@ -231,6 +234,53 @@ impl<'a> Ctx<'a> {
         {
             let mut w = sink.lock().await;
             let _ = w.append_raw(timo_session::kinds::MESSAGE, payload);
+        }
+    }
+
+    /// 请求前按阈值压缩上下文（phase-3.5/04）；失败只发事件，不中断。
+    async fn maybe_compact(&mut self) {
+        let Some(settings) = self.config.compaction.clone() else {
+            return;
+        };
+        if !settings.enabled || self.cancel.is_cancelled() {
+            return;
+        }
+        let tokens = crate::compaction::context_tokens(&self.messages);
+        if !crate::compaction::should_compact(tokens, self.model.context_window, &settings) {
+            return;
+        }
+        let input = crate::compaction::CompactInput {
+            messages: &self.messages,
+            model: &self.model,
+            api: &self.config.api,
+            auth: &self.config.auth,
+            retry: &self.config.retry,
+            thinking: self.thinking_level,
+            settings: &settings,
+            cancel: &self.cancel,
+            clock: &self.config.clock,
+            instructions: None,
+        };
+        match crate::compaction::compact(input).await {
+            Ok(outcome) => {
+                if let Some(sink) = &self.session {
+                    let mut writer = sink.lock().await;
+                    let _ = writer.append_raw(
+                        timo_session::kinds::COMPACTION,
+                        outcome.entry_payload(CompactionReason::Threshold),
+                    );
+                }
+                self.messages = outcome.messages;
+                self.bus.emit(KernelEvent::Compacted {
+                    reason: CompactionReason::Threshold,
+                    tokens_before: outcome.tokens_before,
+                    tokens_after: outcome.tokens_after,
+                });
+            }
+            Err(crate::compaction::CompactionError::Nothing) => {}
+            Err(error) => self.bus.emit(KernelEvent::Error {
+                context: format!("compaction: {error}"),
+            }),
         }
     }
 

@@ -26,7 +26,10 @@ pub use paths::{
     agent_dir, encode_cwd, mcp_path, models_path, project_settings_path, session_dir_for,
     sessions_dir, settings_path,
 };
-pub use settings::{ImageSettings, RetrySettings, Settings, load_settings, resolve_default_tools};
+pub use settings::{
+    CompactionSettings, ImageSettings, RetrySettings, Settings, load_settings,
+    resolve_default_tools,
+};
 pub use thinking::ThinkingLevel;
 
 /// 结果别名：本 crate 一律以 [`ConfigError`] 报错。

@@ -11,7 +11,10 @@ mod error;
 mod reader;
 mod writer;
 
-pub use entry::{ENTRY_VERSION, Entry, SessionHeader, kinds};
+pub use entry::{
+    COMPACTION_SUMMARY_PREFIX, COMPACTION_SUMMARY_SUFFIX, ENTRY_VERSION, Entry, SessionHeader,
+    extract_summary, kinds, summary_message,
+};
 pub use error::SessionError;
 pub use reader::{SessionInfo, list_sessions, project_context, read_entries, serialize_export};
 pub use writer::{IdGen, SessionWriter};

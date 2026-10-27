@@ -89,6 +89,35 @@ pub enum KernelEvent {
         /// 上下文描述。
         context: String,
     },
+    /// 上下文压缩完成（phase-3.5/04）。
+    Compacted {
+        /// 触发原因。
+        reason: CompactionReason,
+        /// 压缩前估算 token。
+        tokens_before: u64,
+        /// 压缩后估算 token。
+        tokens_after: u64,
+    },
+}
+
+/// 压缩触发原因（事件与会话 entry 共用字符串）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompactionReason {
+    /// 达到上下文窗口阈值（自动）。
+    Threshold,
+    /// 手动 `/compact`。
+    Manual,
+}
+
+impl CompactionReason {
+    /// 会话 entry / 日志中的稳定字符串。
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Threshold => "threshold",
+            Self::Manual => "manual",
+        }
+    }
 }
 
 /// 广播事件总线（容量 1024；滞后订阅者收到 Lagged 不致命）。
