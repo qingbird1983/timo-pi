@@ -6,21 +6,23 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P0 实现完成（ADR-0013）**：R1 调查与 P0 详设定稿；批 2 提示/上下文、批 3 技能/命令、批 4 用量、批 5 桌面接线已提交。下一步 D1/D2/D4/D7 真机验收与 `report` 草稿，之后 P1 详设。
+- **Phase 3.5 P0 完成（ADR-0013）**：R1 调查、P0 详设、批 2~5 已提交；D1/D2/D4/D7 真机验收通过，报告 `docs/design/phase-3.5/report.md`（P0 草稿）。下一步 P1 详设（compaction/缓存/无头）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
+- **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
+- **验收中修复**：桌面把 `/skill:` 原文发给模型 → 展开收进 `Kernel::run`（`85527d4`）。
 - **测试**：窗口级面板测试移到 `features/palette_tests.rs`，`app_tests.rs` 回到 500 行内；新增事件到壳、插入动作与调色板关闭断言。
-- **门禁**：fmt / clippy / workspace tests / check-size 全绿；`clean-build` 后 `target/` 25.4 → 14.0GiB。
+- **门禁**：fmt / clippy / workspace tests / check-size 全绿；`clean-build` 后 `target/` 25.4 → 14.0GiB（验收重建后 15.0）。
 
 ## 下一步（按优先级）
 
-1. Phase 3.5 P0 收口：D1/D2/D4/D7 真机验收（CLI + 桌面，真实 DeepSeek）→ `docs/design/phase-3.5/report.md` 草稿；之后 P1 详设（compaction/缓存/无头）。
+1. Phase 3.5 P1：先写 compaction/缓存统计/无头模式详设，再按批实现；P0 报告见 `docs/design/phase-3.5/report.md`。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
-3. `target/` 已按新版 §7 清到 14GiB；后续每阶段收尾跑 `scripts/clean-build`（40.6 → 14.0，释放 26.6GiB）。sccache 到位后再把硬限收紧到 15GiB。docs 总数 65 超软限 60，Phase 3.5 开工前做整合评审。
+3. `target/` 当前 15.0GiB（软 15 / 硬 25）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 总数 69 超软限 60，整合评审待办（删除面需所有者确认）。
 
 > 施工顺序唯一来源：当前阶段设计文档；设计错误先改文档再写码。
 

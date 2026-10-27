@@ -6,12 +6,24 @@
 
 ---
 
+## [0.1.42] - 2026-10-27
+
+### 验收：Phase 3.5 P0 真机通过（D1/D2/D4/D7）
+
+- 真实 DeepSeek、临时数据目录：项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；`/skill:hello` 在 CLI 与桌面面板都触发并遵循技能内容。
+- 用量：第二轮请求 `cache_read=1536`；`/session` 显示累计 token/费用与 `provider/response_model` 分桶；桌面状态栏显示累计 tokens 与费用（夹具未配费率，费用为 0）。
+- 验收中修复桌面 `/skill:` 不展开的问题（改由 `Kernel::run` 统一展开）；workspace 263 tests 与四门禁全绿，既有测试零改动。
+- 新增 `docs/design/phase-3.5/report.md`（P0 草稿，含体量核对与 D33/D36 等已知偏差）。
+
+---
+
 ## [0.1.37] - 2026-10-27
 
 ### 实现：桌面端接技能命令与用量（Phase 3.5 P0 批 5）
 
 - 桥接启动后重载资源，并下发 `Commands`/`Usage`；新建、打开、删除会话与每轮结束后刷新用量。
 - 命令面板新增「技能」组：只列 `Ready` 的技能命令，点选把 `/skill:<name> ` 插入输入框并聚焦；无技能时不显示该组。
+- `/skill:` 展开收进内核 `run`，CLI 与桌面共用同一条路径；桌面在输入框发送技能命令即可触发。
 - 状态栏在有用量时显示 `tokens · 费用 · 版本`。
 - 测试拆分：窗口级面板测试移到 `features/palette_tests.rs`，`app_tests.rs` 回到 500 行内；新增事件到壳、插入动作与调色板关闭的断言。
 - 四门禁通过；`scripts/clean-build` 后 `target/` 25.4 → 14.0GiB。

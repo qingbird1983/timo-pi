@@ -72,9 +72,10 @@ docs/
 | design/phase-3.5/01-system-prompt.md | 定稿 | 提示分节装配、项目上下文发现、SYSTEM/APPEND 文件、重载与测试 |
 | design/phase-3.5/02-skills-and-commands.md | 定稿 | 技能发现/校验/注入/展开、命令注册面与输入分发 |
 | design/phase-3.5/03-usage.md | 定稿 | 用量与成本聚合、分桶规则与内核 API |
+| design/phase-3.5/report.md | 草稿（P0） | Phase 3.5 进度报告：P0 批 1~5、D1/D2/D4/D7 真机验收与体量核对 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
-| roadmap/phase-0 ~ phase-4 | phase-3.5 为设计进行中；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
+| roadmap/phase-0 ~ phase-4 | phase-3.5 进行中（P0 完成）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
 | standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agents/代码/依赖的预算与清理机制） |
 | standards/09-standards-review.md | 定稿 | 规范自身的复查与进化（漏洞/过严/过松的例行与触发复查、修正分级） |
