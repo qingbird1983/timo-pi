@@ -14,6 +14,7 @@
 - 用量：第二轮请求 `cache_read=1536`；`/session` 显示累计 token/费用与 `provider/response_model` 分桶；桌面状态栏显示累计 tokens 与费用（夹具未配费率，费用为 0）。
 - 验收中修复桌面 `/skill:` 不展开的问题（改由 `Kernel::run` 统一展开）；workspace 263 tests 与四门禁全绿，既有测试零改动。
 - 新增 `docs/design/phase-3.5/report.md`（P0 草稿，含体量核对与 D33/D36 等已知偏差）。
+- 看板、docs/README 与阶段文档状态行同步为 P0 完成。
 
 ---
 
