@@ -7,11 +7,14 @@
 // 测试代码自由使用 unwrap/expect/panic（standards/04 §2）。
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+mod commands;
 mod error;
 mod extensions;
 mod kernel;
 mod prompt;
 mod resolve;
+
+pub use commands::{CommandSource, CommandStatus, SlashCommand};
 
 pub use error::KernelError;
 pub use extensions::{

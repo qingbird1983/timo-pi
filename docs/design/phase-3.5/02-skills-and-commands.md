@@ -21,8 +21,8 @@ pub(crate) struct Skill {
     pub disable_model_invocation: bool,
 }
 
-pub(crate) struct ResourceWarning {
-    pub kind: WarningKind,           // InvalidName | InvalidDescription | Parse | Collision | Io
+pub struct ResourceWarning {          // 内核再导出；壳层只读
+    pub kind: WarningKind,            // Io | InvalidName | InvalidDescription | Parse | Collision
     pub message: String,
     pub path: PathBuf,
 }
@@ -105,7 +105,7 @@ Relative paths resolve against /home/u/.timo/skills/pdf-tools.
 ```
 
 - 未命中：返回 `None`（调用方原样透传，不报错）。
-- 读失败：记告警，返回 `None`。
+- 读失败：同样返回 `None`（只读路径不引入可变告警状态；发现阶段已经报过读错误）。
 - 隐藏技能（`disable_model_invocation`）仍可被显式展开（pi 同义）。
 
 ## 6. 命令注册面

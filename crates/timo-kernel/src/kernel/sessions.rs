@@ -28,6 +28,12 @@ impl Kernel {
     pub fn list_sessions_at(dir: &Path) -> Vec<SessionInfo> {
         list_sessions(dir)
     }
+    /// 会话列表（修改时间倒序）。
+    #[must_use]
+    pub fn list_sessions(&self) -> Vec<SessionInfo> {
+        list_sessions(&self.sessions_dir)
+    }
+
     /// 恢复会话（投影历史；后续 run 追加到该文件）。
     ///
     /// # Errors

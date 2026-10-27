@@ -11,7 +11,7 @@ use timo_agent::{
     AgentHandle, EventBus, KernelEvent, PendingMessageQueue, SessionSink, ToolExecutionMode,
 };
 use timo_config::Clock;
-use timo_session::{SessionInfo, SessionWriter, list_sessions};
+use timo_session::SessionWriter;
 use timo_tools::{ToolDefinition, ToolRegistry};
 
 use crate::Result;
@@ -57,6 +57,12 @@ pub struct Kernel {
     prompt_text: String,
     /// 上下文装载告警。
     prompt_warnings: Vec<prompt::ResourceWarning>,
+    /// 已发现技能（每次提示装配刷新）。
+    skills: Vec<prompt::Skill>,
+    /// 设置里的显式技能路径。
+    skill_paths: Vec<String>,
+    /// 技能是否进入命令发现。
+    skill_commands_enabled: bool,
 }
 
 impl Kernel {
@@ -113,6 +119,8 @@ impl Kernel {
             Some(d) => PathBuf::from(d),
             None => default_sessions,
         };
+        let skill_paths = settings.skills.clone();
+        let skill_commands_enabled = settings.enable_skill_commands;
         // 工具注册表：内置（默认激活集 + default_tools 修饰；未激活 = Hidden）
         let active = timo_config::resolve_default_tools(
             &timo_tools::tools::DEFAULT_ACTIVE
@@ -165,6 +173,9 @@ impl Kernel {
             tool_review: options.tool_review,
             prompt_text: String::new(),
             prompt_warnings: Vec::new(),
+            skills: Vec::new(),
+            skill_paths,
+            skill_commands_enabled,
         })
     }
 
@@ -272,8 +283,9 @@ impl Kernel {
                     ),
                     None => (None, None),
                 };
-            let (system_prompt, warnings) = self.build_prompt();
+            let (system_prompt, skills, warnings) = self.build_prompt();
             self.prompt_warnings = warnings;
+            self.skills = skills;
             let agent = AgentHandle::with_parts(
                 timo_agent::LoopConfig {
                     model: self.resolved.model.clone(),
@@ -413,12 +425,6 @@ impl Kernel {
     pub fn follow_up(&self, text: &str) {
         self.follow_up
             .push(timo_ai::user_text(text, self.clock.now_ms()));
-    }
-
-    /// 会话列表（修改时间倒序）。
-    #[must_use]
-    pub fn list_sessions(&self) -> Vec<SessionInfo> {
-        list_sessions(&self.sessions_dir)
     }
 
     /// 对模型声明的工具名快照（不触发 MCP 连接；连接后语义见 [`Kernel::tools`]）。

@@ -6,6 +6,18 @@
 
 ---
 
+## [0.1.35] - 2026-10-27
+
+### 实现：技能发现与命令注册面（Phase 3.5 P0 批 3）
+
+- 技能：五个根（用户、`.timo`、`.pi`、向上到仓库根的 `.agents`、设置显式路径）；含 `SKILL.md` 的目录即技能根不再下钻；根级 `*.md` 作为独立技能；复用 `ignore` crate 读 `.gitignore`/`.ignore`、跳过隐藏项与 `node_modules`；frontmatter 只解析单层标量；同名先到先得并告警。
+- 提示注入：`<available_skills>` 只含名字/描述/路径，隐藏技能不进提示；`/skill:name` 把正文与参数展开进用户消息。
+- 命令面：内建命令三态（Ready/Planned/Unsupported）+ 技能 `skill:<name>` + 扩展命令合并；CLI 分发顺序改为「扩展 → 内建 → `/skill:` → 普通提示」，新增 `/new`、`/resume`、`/session`、`/reload`、`/quit`，未实现命令给出批次说明而不是当提示发送。
+- 拆分：`skills` 模块与测试分文件；CLI 分发移到 `commands.rs`；全部单文件回到 500 行内。
+- 测试：kernel 29 条（技能发现/截断/冲突/ignore/展开、命令合并、内核接线）；四门禁通过；`target/` 24.0GiB 超软限（阶段收尾清扫）。
+
+---
+
 ## [0.1.34] - 2026-10-27
 
 ### 实现：系统提示分节与项目上下文（Phase 3.5 P0 批 2）

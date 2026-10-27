@@ -12,13 +12,18 @@ impl Kernel {
     /// 装配系统提示：上下文文件 + SYSTEM/APPEND + 工具 loadout（设计 01）。
     ///
     /// 节名非法不中止装配：发 `Error` 事件并降级为身份行。
-    pub(super) fn build_prompt(&self) -> (String, Vec<prompt::ResourceWarning>) {
-        let (context_files, warnings) =
+    pub(super) fn build_prompt(
+        &self,
+    ) -> (String, Vec<prompt::Skill>, Vec<prompt::ResourceWarning>) {
+        let (context_files, mut warnings) =
             prompt::discover_context_files(&self.work_dir, &self.data_dir);
+        let roots = prompt::skill_roots(&self.data_dir, &self.work_dir, &self.skill_paths);
+        let skill_set = prompt::discover(&roots);
+        warnings.extend(skill_set.warnings);
+        let skills = skill_set.skills;
         let custom = prompt::custom_prompt(&self.data_dir, &self.work_dir);
         let append = prompt::append_system_prompt(&self.data_dir, &self.work_dir);
         let declared: Vec<&ToolDefinition> = self.registry.declared();
-        let skills: Vec<prompt::Skill> = Vec::new();
         let docs = docs_dir();
         let inputs = prompt::PromptInputs {
             cwd: &self.work_dir,
@@ -32,12 +37,12 @@ impl Kernel {
             extra_sections: &[],
         };
         match prompt::assemble(&inputs) {
-            Ok(assembled) => (assembled.render(), warnings),
+            Ok(assembled) => (assembled.render(), skills, warnings),
             Err(error) => {
                 self.bus.emit(KernelEvent::Error {
                     context: format!("prompt: {error}"),
                 });
-                (prompt::fallback().render(), warnings)
+                (prompt::fallback().render(), skills, warnings)
             }
         }
     }
@@ -54,14 +59,32 @@ impl Kernel {
         &self.prompt_warnings
     }
 
-    /// 重新发现上下文并重建提示；内容变化时下次运行重建 agent。
+    /// 重新发现上下文与技能并重建提示；内容变化时下次运行重建 agent。
     pub fn reload_resources(&mut self) {
-        let (text, warnings) = self.build_prompt();
+        let (text, skills, warnings) = self.build_prompt();
         self.prompt_warnings = warnings;
+        self.skills = skills;
         if text != self.prompt_text {
             self.prompt_text = text;
             self.agent = None;
         }
+    }
+
+    /// 命令清单：内建 + 技能 + 扩展（同名先到先得）。
+    #[must_use]
+    pub fn slash_commands(&self) -> Vec<crate::SlashCommand> {
+        crate::commands::merge(
+            crate::commands::builtin_commands(),
+            &self.skills,
+            self.skill_commands_enabled,
+            &self.extension_commands(),
+        )
+    }
+
+    /// `/skill:name args` 展开；其它文本原样返回。
+    #[must_use]
+    pub fn expand_input(&self, text: &str) -> String {
+        prompt::expand_command(text, &self.skills).unwrap_or_else(|| text.to_string())
     }
 }
 
@@ -107,6 +130,81 @@ mod tests {
         kernel.reload_resources();
         assert!(kernel.system_prompt().contains("reload-marker"));
         assert!(kernel.resource_warnings().is_empty());
+
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    fn write_skill(data: &std::path::Path, name: &str) {
+        let dir = data.join("skills").join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: does {name}\n---\nBody of {name}.\n"),
+        )
+        .unwrap();
+    }
+
+    async fn kernel_at(data: &std::path::Path) -> Kernel {
+        let work = data.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        Kernel::new(KernelOptions {
+            data_dir: Some(data.to_path_buf()),
+            work_dir: Some(work),
+            model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+            api_key: Some("test-key".into()),
+            ..Default::default()
+        })
+        .await
+        .expect("assemble")
+    }
+
+    #[tokio::test]
+    async fn skills_enter_prompt_commands_and_expansion() {
+        let data = std::env::temp_dir().join(format!("timo-kernel-skill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        write_skill(&data, "pdf");
+        let mut kernel = kernel_at(&data).await;
+        kernel.tools().await;
+
+        let prompt = kernel.system_prompt();
+        assert!(prompt.contains("<available_skills>"));
+        assert!(prompt.contains("<name>pdf</name>"));
+
+        let commands = kernel.slash_commands();
+        assert!(commands.iter().any(|command| command.name == "skill:pdf"));
+
+        let expanded = kernel.expand_input("/skill:pdf go");
+        assert!(expanded.contains("Body of pdf."));
+        assert!(expanded.ends_with("\n\ngo"));
+
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    #[tokio::test]
+    async fn disabled_skill_commands_hide_the_list_but_keep_expansion() {
+        let data = std::env::temp_dir().join(format!("timo-kernel-noskill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::write(
+            data.join("settings.json"),
+            r#"{"enable_skill_commands": false}"#,
+        )
+        .unwrap();
+        write_skill(&data, "pdf");
+        let mut kernel = kernel_at(&data).await;
+        kernel.tools().await;
+
+        assert!(
+            !kernel
+                .slash_commands()
+                .iter()
+                .any(|command| command.name == "skill:pdf")
+        );
+        assert!(
+            kernel
+                .expand_input("/skill:pdf go")
+                .contains("Body of pdf.")
+        );
 
         let _ = std::fs::remove_dir_all(&data);
     }

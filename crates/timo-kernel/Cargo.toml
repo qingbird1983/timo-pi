@@ -13,6 +13,7 @@ timo-ext = { workspace = true }
 timo-mcp = { workspace = true }
 timo-session = { workspace = true }
 timo-tools = { workspace = true }
+ignore = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 
+mod commands;
 mod ext_cmd;
+use commands::{CommandOutcome, WARNED, handle_command, print_resource_warnings};
 use timo_kernel::{
     AssistantStreamEvent, Content, Kernel, KernelEvent, KernelOptions, Message, ThinkingLevel,
     Usage,
@@ -170,37 +172,13 @@ async fn resume_command(args: ResumeArgs) -> i32 {
                 if text.is_empty() {
                     continue;
                 }
-                if text == "/abort" {
-                    kernel.abort();
-                    continue;
-                }
-                if text == "/ext" {
-                    if let Some(table) = kernel.extension_report_human() {
-                        eprintln!("{table}");
+                match handle_command(&mut kernel, text).await {
+                    CommandOutcome::Handled => {}
+                    CommandOutcome::Quit => break,
+                    CommandOutcome::Prompt => {
+                        let _ = run_prompt(&mut kernel, text).await;
                     }
-                    continue;
                 }
-                if let Some((raw, args)) = timo_kernel::split_command(text) {
-                    let candidates = kernel.extension_commands();
-                    let name = candidates
-                        .iter()
-                        .find(|name| {
-                            name.as_str() == raw || name.ends_with(&format!("_{raw}"))
-                        })
-                        .cloned();
-                    match name {
-                        Some(name) => {
-                            if let Err(error) = kernel.run_extension_command(&name, args) {
-                                eprintln!("[error] {error}");
-                            }
-                        }
-                        None => {
-                            eprintln!("[error] unknown command `/{raw}` (try `/ext`)");
-                        }
-                    }
-                    continue;
-                }
-                let _ = run_prompt(&mut kernel, text).await;
             }
         }
     }
@@ -239,9 +217,12 @@ fn sessions_command(args: SessionsArgs) -> i32 {
 
 /// 一次 prompt：并发消费事件（流式正文/工具行/usage），Ctrl+C 两段语义
 /// （第一次 abort、第二次退出进程）。
-async fn run_prompt(kernel: &mut Kernel, prompt: &str) -> i32 {
+pub(crate) async fn run_prompt(kernel: &mut Kernel, prompt: &str) -> i32 {
     // 先装配 agent（幂等），以便在 run 借出 &mut 期间仍能拿中止句柄。
     let _ = kernel.tools().await;
+    if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        print_resource_warnings(kernel);
+    }
     let abort = kernel.abort_handle();
     let ext_abort = kernel.abort_flag();
     let mut events = kernel.events();

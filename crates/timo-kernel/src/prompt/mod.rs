@@ -11,7 +11,7 @@ pub(crate) use context::{
     ContextFile, append_system_prompt, custom_prompt, discover_context_files,
 };
 use skills::Reader;
-pub(crate) use skills::Skill;
+pub(crate) use skills::{Skill, discover, expand_command, skill_roots};
 
 /// 无标签的首节名；其余节用同名 XML 标签包裹。
 pub(crate) const PREAMBLE: &str = "preamble";
@@ -31,11 +31,19 @@ const BUILTIN_SECTIONS: [&str; 7] = [
     "cwd",
 ];
 
-/// 资源装载告警（当前只有 I/O；技能批次会扩充种类）。
+/// 资源装载告警。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WarningKind {
     /// 文件读取失败。
     Io,
+    /// 技能名不合规（仍加载）。
+    InvalidName,
+    /// 描述缺失或超长。
+    InvalidDescription,
+    /// frontmatter 解析问题。
+    Parse,
+    /// 同名技能冲突（先到先得）。
+    Collision,
 }
 
 /// 一条资源告警：装载不中止，逐条上报（`Kernel::resource_warnings`）。
