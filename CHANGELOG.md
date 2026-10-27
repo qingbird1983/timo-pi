@@ -6,6 +6,17 @@
 
 ---
 
+## [0.1.33] - 2026-10-27
+
+### 设计：Phase 3.5 P0 详设定稿（提示、技能、命令、用量）
+
+- 新增 `design/phase-3.5/01-system-prompt.md`：分节装配顺序、上下文文件发现（全局优先/根到 cwd/去 BOM/真路径去重）、SYSTEM/APPEND 文件、构建时机与 `/reload`、golden 测试。
+- 新增 `02-skills-and-commands.md`：五个技能根与先到先得、`ignore` 遍历、frontmatter 子集、XML 注入、`/skill:` 展开、内建命令状态表（Ready/Planned/Unsupported）与输入分发顺序。
+- 新增 `03-usage.md`：从历史消息聚合用量与成本、`provider/model` 与 `Tools/summaries` 分桶、稳定排序与内核 API。
+- 00 总览同批转定稿；偏离增补 D36（工作树嵌套去重延后）、D37（不读 `.fdignore`）、D38（frontmatter 单层标量）。
+
+---
+
 ## [0.1.32] - 2026-10-27
 
 ### 设计：Phase 3.5 总览草案（P0 前置）

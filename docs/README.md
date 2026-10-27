@@ -68,7 +68,10 @@ docs/
 | design/phase-3/04-tool-review.md | 定稿 | 执行前审阅接缝、拒绝语义、并发与 CLI 兼容 |
 | design/phase-3/prototype.html | 定稿（方向稿） | 桌面壳布局、工具过程 trace 与 diff 审阅原型 |
 | design/phase-3/report.md | 定稿 | Phase 3 阶段进度报告（C1~C6 全通过；NSH 热更与拒绝路径真机验收） |
-| design/phase-3.5/00-overview.md | **草案** | Phase 3.5 总览：模块布局、批次序列、K1~K9 决策、D30~D35 偏离（P0 详设定稿时转定稿） |
+| design/phase-3.5/00-overview.md | 定稿 | Phase 3.5 总览：模块布局、批次序列、K1~K9 决策、D30~D38 偏离 |
+| design/phase-3.5/01-system-prompt.md | 定稿 | 提示分节装配、项目上下文发现、SYSTEM/APPEND 文件、重载与测试 |
+| design/phase-3.5/02-skills-and-commands.md | 定稿 | 技能发现/校验/注入/展开、命令注册面与输入分发 |
+| design/phase-3.5/03-usage.md | 定稿 | 用量与成本聚合、分桶规则与内核 API |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/phase-0 ~ phase-4 | phase-3.5 为设计进行中；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |

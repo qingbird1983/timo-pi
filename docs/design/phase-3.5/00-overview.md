@@ -1,6 +1,6 @@
 # 设计 00：Phase 3.5 总览与跨模块决策
 
-- 状态：草案（2026-10-27；P0 详设 01~03 定稿时一并转定稿）
+- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批）
 - 关联：roadmap/phase-3.5；ADR-0011/0013；research/06；design/phase-1/02~05
 - 行为蓝本：pi 1.4.0（本地只读，不复制；铁律 7）
 
@@ -47,14 +47,14 @@
 | # | 决策 | 理由 / 约束 |
 |---|---|---|
 | K1 | 不新建 crate，模块落在 `timo-kernel`；单文件超 500 行就拆文件 | 内核是唯一装配点；新增 crate 会带来依赖边与版本负担；skills/命令只有内核与壳两个消费者 |
-| K2 | 系统提示**不写入会话**；每轮按节重建并渲染为整段字符串发给模型 | 现有 wire 只接受整段 system；相同输入渲染出相同字节，提示缓存等价；省去"按节补丁"的持久化面（偏离 D30） |
+| K2 | 系统提示**不写入会话**；装配时（或 `/reload`）按节构建一次并渲染为整段字符串；提示变化时重建 agent | 现有 wire 只接受整段 system；相同输入渲染出相同字节，提示缓存等价；省去"按节补丁"的持久化面（偏离 D30） |
 | K3 | 分节规则逐条对齐 pi：`preamble` 裸文本、其余 `<节名>` 包裹、节名正则 `^[a-z][a-z0-9_-]*$`、空节跳过、`forceSystemPrompt` 整段替换 | 扩展改写面（Phase 4）依赖同一套名字与标签；无节名规则会直接拒绝 |
-| K4 | 上下文文件候选名、全局优先、根到 cwd 顺序、去 BOM、工作树去重按 pi | 属于"提示词工程"复刻范围（ADR-0013）；顺序错会改变模型行为 |
+| K4 | 上下文文件候选名、全局优先、根到 cwd 顺序、去 BOM 按 pi；工作树嵌套去重留 P2（D36） | 属于"提示词工程"复刻范围（ADR-0013）；顺序错会改变模型行为 |
 | K5 | 技能目录：`<data_dir>/skills`、项目 `.timo/skills`、`.pi/skills`、`.agents/skills`（cwd→仓库根）、`settings.skills` 显式路径；同名先到先得 | 兼容 pi 生态位置，另加本项目 `.timo`；先到先得与告警对齐 pi（偏离 D31 仅目录集） |
 | K6 | 技能正文不进提示；`/skill:name` 把正文展开进**用户消息**，参数追加在后 | 与 pi 一致；未知技能原样透传，不报错 |
 | K7 | 命令注册面在内核：内建名 + 模板 + 技能 + 扩展命令合并，扩展仍带 `plugin_<id>_` 前缀 | 单一来源，CLI 与桌面消费同一清单；P0 只要求内建命令的**语义**，不要求 `share/bug/import/llama` 实现（D32） |
-| K8 | 用量从会话 entries 推导（assistant 消息、`usage` entry、摘要 entry），按 `provider/model` 分桶，工具与摘要进 `Tools/summaries` 桶 | 与 pi 的 `usage-totals` 对齐；不新增落盘格式（`usage` entry 已存在） |
-| K9 | 设置键沿用 pi 名：`skills`、`prompts`、`enableSkillCommands`；P1/P2 的 `compaction`、`defaultProjectTrust` 同样沿用 | 迁移与文档对照成本最低；未知键仍忽略 |
+| K8 | 用量从会话消息推导（assistant 消息的 `usage`；工具结果的 `usage` 进 `Tools/summaries` 桶），按 `provider/model` 分桶；`usage`/摘要 entry 在 P1 落地后再接入 | 与 pi 的 `usage-totals` 对齐；不新增落盘格式；P0 不改写会话 |
+| K9 | 设置键沿用本项目既有的 snake_case 约定（`default_tools` 等）；pi 的多词键转 snake_case（`enable_skill_commands`、`default_project_trust`），单词键同名（`skills`、`prompts`、`compaction`） | 与现有 settings.json 一致，避免两套命名；对照关系写进 01 |
 
 ## 6. 与 pi 的偏离登记（接续 Phase 2 的 D29）
 
@@ -62,12 +62,15 @@
 
 | # | 偏离 | 类别 | 说明 |
 |---|---|---|---|
-| D30 | 系统提示不落会话、不走"按节补丁" | b（自有会话格式，ADR-0007） | 每轮重建整段；内容等价，缓存等价；代价是改动后首轮缓存冷启动 |
+| D30 | 系统提示不落会话、不走"按节补丁" | b（自有会话格式，ADR-0007） | 装配与 `/reload` 时重建整段；内容等价，缓存等价；代价是改动后首轮缓存冷启动 |
 | D31 | 项目技能目录增加 `.timo/skills`，并保留 `.pi/skills`、`.agents/skills` | c（本项目配置目录） | 发现顺序：用户 → 项目 `.timo` → 项目 `.pi` → `.agents`（近到远）→ 显式路径 |
 | D32 | `share`/`bug`/`import`/`llama`/`scoped-models` 等命令不实现 | d（范围收敛） | 命令注册面如实标注"未实现"，不静默消失；语义对齐只覆盖可执行命令 |
 | D33 | 项目技能在 P0 无信任门控（pi 门控 `.pi/skills` 与项目 `.agents/skills`） | c（无信任管理器） | 与技术相关风险：技能是文本指令，与不受门控的上下文文件同级；本项目的审阅接缝是安全垫；信任门控在 P2 补齐后收紧 |
-| D34 | 用量分桶暂不含工具结果的内嵌用量 | d（嵌套调用在 P2） | P0 只统计 assistant 消息、`usage` entry、压缩摘要（P1 后出现）；P2 接线时补 `Tools/summaries` 的嵌套合并 |
-| D35 | 提示中的文档索引指向本仓库文档结构，而非 pi 安装路径 | a（自有文档） | 结构同 pi（主文档/附加文档/示例 + 主题索引），内容按本项目 |
+| D34 | 用量分桶暂不含工具结果的内嵌用量 | d（嵌套调用在 P2） | P0 统计 assistant 消息与工具结果自带的 `usage`（当前工具不产出，桶多为空）；P2 嵌套调用接线后补真实合并 |
+| D35 | 提示中的文档索引指向本仓库文档结构，而非 pi 安装路径 | a（自有文档） | 结构同 pi（主文档/附加文档/示例 + 主题索引），内容按本项目；运行时找不到文档目录则整节省略，不编造路径 |
+| D36 | 工作树嵌套去重留 P2 | d（范围收敛） | P0 只按真实路径去重（符号链接共享一份）；主仓与嵌套 worktree 各有一份 `AGENTS.md` 时可能重复注入，登记为已知偏差 |
+| D37 | 技能发现不读 `.fdignore` | d（依赖能力） | 复用工作区既有 `ignore` crate：读 `.gitignore` 与 `.ignore`，跳过隐藏项与 `node_modules`；`.fdignore` 不在其能力内 |
+| D38 | 技能 frontmatter 只解析单层标量 | a（无 YAML 依赖） | 只取 `name`/`description`/`disable-model-invocation`；嵌套、多行块、锚点忽略并告警；描述含冒号按首个冒号切分 |
 
 ## 7. 接缝核对（architecture/03）
 
