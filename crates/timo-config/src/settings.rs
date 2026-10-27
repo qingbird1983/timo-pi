@@ -114,6 +114,10 @@ pub struct Settings {
     pub skills: Vec<String>,
     /// 技能是否进入命令发现（手动 `/skill:` 不受影响）。
     pub enable_skill_commands: bool,
+    /// 显式 prompt 模板路径（`.md` 文件或目录；相对 cwd，phase-3.5/09）。
+    pub prompts: Vec<String>,
+    /// 是否发现默认 prompt 模板目录（关掉后显式路径仍加载，09 §2）。
+    pub enable_prompt_templates: bool,
     /// 自动上下文压缩。
     pub compaction: CompactionSettings,
     /// 缓存预热模式。
@@ -136,6 +140,8 @@ impl Default for Settings {
             temperature: None,
             skills: Vec::new(),
             enable_skill_commands: true,
+            prompts: Vec::new(),
+            enable_prompt_templates: true,
             compaction: CompactionSettings::default(),
             cache_warming: CacheWarmingMode::Streaming,
         }
@@ -264,6 +270,20 @@ mod tests {
         .expect("parse");
         assert_eq!(s.skills, vec!["/extras/skills".to_string()]);
         assert!(!s.enable_skill_commands);
+    }
+
+    #[test]
+    fn prompt_template_keys_default_to_on_and_parse() {
+        let s = Settings::default();
+        assert!(s.enable_prompt_templates);
+        assert!(s.prompts.is_empty());
+        let parsed: Settings = serde_json::from_value(serde_json::json!({
+            "prompts": ["examples/prompts"],
+            "enable_prompt_templates": false
+        }))
+        .expect("parse");
+        assert_eq!(parsed.prompts, vec!["examples/prompts".to_string()]);
+        assert!(!parsed.enable_prompt_templates);
     }
 
     #[test]

@@ -1,6 +1,7 @@
-//! 命令注册面（设计 phase-3.5/02 §6）：内建 + 技能 + 扩展合并为只读清单。
+//! 命令注册面（设计 phase-3.5/02 §6 + 09 §4.1）：内建 + 技能 + 扩展 + 模板合并为只读清单。
 
 use crate::prompt::Skill;
+use crate::prompt::templates::Template;
 
 /// 命令来源。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +12,8 @@ pub enum CommandSource {
     Skill,
     /// 扩展注册的命令（Phase 2，`plugin_<id>_*`）。
     Extension,
+    /// prompt 模板（`<名字>.md`，设计 09）。
+    Template,
 }
 
 /// 命令可用状态。
@@ -197,13 +200,14 @@ pub fn builtin_commands() -> Vec<SlashCommand> {
         .collect()
 }
 
-/// 合并清单：内建 → 技能 → 扩展；同名先到先得。
+/// 合并清单：内建 → 技能 → 扩展 → 模板；同名先到先得。
 #[must_use]
 pub fn merge(
     builtin: Vec<SlashCommand>,
     skills: &[Skill],
     skill_commands: bool,
     extensions: &[String],
+    templates: &[Template],
 ) -> Vec<SlashCommand> {
     let mut out = builtin;
     if skill_commands {
@@ -223,6 +227,15 @@ pub fn merge(
             description: "Extension command".to_string(),
             argument_hint: None,
             source: CommandSource::Extension,
+            status: CommandStatus::Ready,
+        });
+    }
+    for template in templates {
+        out.push(SlashCommand {
+            name: template.name.clone(),
+            description: template.description.clone(),
+            argument_hint: template.argument_hint.clone(),
+            source: CommandSource::Template,
             status: CommandStatus::Ready,
         });
     }
@@ -280,6 +293,7 @@ mod tests {
             &[skill("pdf")],
             true,
             &["plugin_x_echo".into()],
+            &[],
         );
         assert_eq!(commands[0].name, "new");
         let pdf = commands
@@ -293,13 +307,13 @@ mod tests {
 
     #[test]
     fn disabled_skill_commands_are_hidden() {
-        let commands = merge(builtin_commands(), &[skill("pdf")], false, &[]);
+        let commands = merge(builtin_commands(), &[skill("pdf")], false, &[], &[]);
         assert!(!commands.iter().any(|c| c.name == "skill:pdf"));
     }
 
     #[test]
     fn duplicate_names_keep_the_first() {
-        let commands = merge(builtin_commands(), &[], true, &["reload".into()]);
+        let commands = merge(builtin_commands(), &[], true, &["reload".into()], &[]);
         let reloads: Vec<&SlashCommand> = commands.iter().filter(|c| c.name == "reload").collect();
         assert_eq!(reloads.len(), 1);
         assert_eq!(reloads[0].source, CommandSource::Builtin);

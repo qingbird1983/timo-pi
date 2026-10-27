@@ -62,6 +62,20 @@ pub fn key(path: &Path) -> String {
     }
 }
 
+/// 目录作用域写法 `<path>/**`（与 [`key`] 同一套归一化）。
+///
+/// 装机时用它把数据目录补进 `fs.read`：用户级 `agents/`、`prompts/` 不在 cwd 之下，
+/// `**`（相对 cwd）覆盖不到，真机上读代理定义会被 E403 拒（09 §6 真机发现）。
+#[must_use]
+pub fn dir_scope(path: &Path) -> String {
+    let key = key(path);
+    if key.ends_with("/**") {
+        key
+    } else {
+        format!("{key}/**")
+    }
+}
+
 /// 读检查：返回错误文案（含 `E4xx` 前缀）或解析后的绝对路径。
 ///
 /// # Errors
@@ -178,6 +192,24 @@ mod tests {
         assert_eq!(key(&folded), format!("{}/docs/a.md", key(&cwd())));
         let abs = resolve(&cwd(), "agents/scout.md");
         assert!(key(&abs).ends_with("agents/scout.md"));
+    }
+
+    #[test]
+    fn dir_scope_grants_a_directory_outside_cwd() {
+        // 数据目录与 cwd 无关（真机：cwd 是项目，data_dir 在用户配置目录）。
+        let data = if cfg!(windows) {
+            PathBuf::from(r"D:gent-data")
+        } else {
+            PathBuf::from("/agent-data")
+        };
+        let scope = dir_scope(&data);
+        assert!(scope.ends_with("/**"), "{scope}");
+        // 幂等：已经是 `/**` 的写法不再叠一层。
+        assert_eq!(dir_scope(&PathBuf::from(&scope)), scope);
+        // 数据目录在 cwd 之外：cwd 的 `**` 够不着，dir_scope 够得着（真机 E403 的根因）。
+        let agent = data.join("agents").join("scout.md");
+        assert!(!allowed(&key(&cwd().join("**")), &key(&agent)));
+        assert!(allowed(&scope, &key(&agent)));
     }
 
     #[test]

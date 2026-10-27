@@ -102,6 +102,12 @@ pub async fn install_extension(data_dir: &Path, source: &Path) -> crate::Result<
                 manifest.capabilities.fs.read.push(scope);
             }
         }
+        // 用户级资源（`<data_dir>/agents` 等）不在 cwd 之下，`**` 覆盖不到，
+        // 装机时补一条数据目录自身的绝对作用域（09 §6 真机：E403 读不到代理定义）。
+        let data_scope = timo_ext::dir_scope(data_dir);
+        if !manifest.capabilities.fs.read.contains(&data_scope) {
+            manifest.capabilities.fs.read.push(data_scope);
+        }
         manifest
             .validate(&root.join("manifest.json"))
             .map_err(|error| crate::KernelError::Extension(error.to_string()))?;

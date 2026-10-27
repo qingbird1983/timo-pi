@@ -77,6 +77,12 @@ pub(crate) struct Common {
     /// Append text, or the contents of `@path`, to the system prompt (repeatable).
     #[arg(long = "append-system-prompt", value_name = "TEXT|@PATH")]
     append_system_prompt: Vec<String>,
+    /// Load a prompt template file or directory (repeatable).
+    #[arg(long = "prompt-template", value_name = "PATH")]
+    prompt_template: Vec<String>,
+    /// Skip the default prompt template directories (explicit paths still load).
+    #[arg(long = "no-prompt-templates")]
+    no_prompt_templates: bool,
 }
 
 #[derive(Args)]
@@ -337,6 +343,13 @@ pub(crate) fn build_options(
         no_session: common.no_session,
         tool_allowlist: (!tools.is_empty()).then_some(tools),
         append_system_prompt: append_prompt,
+        prompt_template_paths: common
+            .prompt_template
+            .iter()
+            .map(|path| path.trim().to_string())
+            .filter(|path| !path.is_empty())
+            .collect(),
+        no_prompt_templates: common.no_prompt_templates,
         tool_review: None,
     })
 }
@@ -447,6 +460,33 @@ mod tests {
         assert_eq!(
             usage_error(&common(&["--provider", "deepseek"])),
             "--provider needs --model as well"
+        );
+    }
+
+    #[test]
+    fn template_flags_reach_kernel_options() {
+        let options = build_options(
+            &common(&[
+                "--prompt-template",
+                "a.md",
+                "--prompt-template",
+                " b ",
+                "--no-prompt-templates",
+            ]),
+            None,
+        )
+        .expect("options");
+        assert_eq!(
+            options.prompt_template_paths,
+            ["a.md".to_string(), "b".to_string()]
+        );
+        assert!(options.no_prompt_templates);
+        // 空白项被丢掉，不会把 cwd 本身当成模板目录去扫。
+        assert_eq!(
+            build_options(&common(&["--prompt-template", "   "]), None)
+                .expect("options")
+                .prompt_template_paths,
+            Vec::<String>::new()
         );
     }
 }

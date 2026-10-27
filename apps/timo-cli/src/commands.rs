@@ -1,4 +1,4 @@
-//! CLI 输入分发（设计 phase-3.5/02 §6.2）：扩展命令 → 内建 → `/skill:` → 普通提示。
+//! CLI 输入分发（设计 phase-3.5/02 §6.2 + 09 G5）：扩展命令 → 内建 → `/skill:` → 模板 → 普通提示。
 
 use timo_kernel::{Kernel, WarmingState};
 
@@ -13,7 +13,7 @@ pub(crate) enum CommandOutcome {
 /// 首次装配后打印一次资源告警（`/reload` 会单独再打）。
 pub(crate) static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// 输入分发（设计 02 §6.2）：扩展命令 → 内建 → `/skill:` → 普通提示。
+/// 输入分发（设计 02 §6.2 + 09 G5）：扩展命令 → 内建 → `/skill:` → 模板 → 普通提示。
 pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOutcome {
     if !text.starts_with('/') {
         return CommandOutcome::Prompt;
@@ -151,6 +151,11 @@ pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOu
         }
         "quit" => CommandOutcome::Quit,
         _ => {
+            // 命中 prompt 模板 → 按普通提示发出（09 G5）；已实现的内建命令在上面就拦掉了，
+            // 未实现的内建占位（`copy`/`name` 那类）不遮挡同名模板。
+            if kernel.has_template(raw) {
+                return CommandOutcome::Prompt;
+            }
             match kernel
                 .slash_commands()
                 .into_iter()

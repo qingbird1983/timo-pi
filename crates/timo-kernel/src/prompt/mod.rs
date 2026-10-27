@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use timo_tools::ToolDefinition;
 
 mod context;
+mod resources;
 mod skills;
+pub(crate) mod templates;
 
 pub(crate) use context::{
     ContextFile, append_system_prompt, custom_prompt, discover_context_files,

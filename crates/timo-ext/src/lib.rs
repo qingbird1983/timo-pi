@@ -26,6 +26,7 @@ pub use discovery::{
     Discovered, DiscoveryIssue, DiscoveryOptions, DiscoveryOutcome, Scope, discover,
 };
 pub use error::ExtError;
+pub use fs_scope::dir_scope;
 pub use host::{
     BasicServices, DirItem, ExecOutput, ExecRequest, ExtensionHost, FetchOutput, Grants,
     HostServices, LoadedExtension, ToolCallResult, ToolMeta,

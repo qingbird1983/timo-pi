@@ -74,6 +74,12 @@ pub struct Kernel {
     skill_paths: Vec<String>,
     /// 技能是否进入命令发现。
     skill_commands_enabled: bool,
+    /// 已装载的 prompt 模板（设计 09；首次装配与 `/reload` 刷新）。
+    templates: Vec<prompt::templates::Template>,
+    /// 设置与命令行里的显式模板路径。
+    template_paths: Vec<String>,
+    /// 是否发现默认模板目录（`--no-prompt-templates` 只关这一半，09 §2）。
+    template_defaults: bool,
     /// 自动压缩设置（settings.compaction）。
     compaction: timo_config::CompactionSettings,
     /// 缓存预热器（settings.cache_warming）。
@@ -135,6 +141,10 @@ impl Kernel {
         };
         let skill_paths = settings.skills.clone();
         let skill_commands_enabled = settings.enable_skill_commands;
+        // 显式模板路径：设置在前、命令行在后；`-np` 只关默认目录（09 §2）。
+        let mut template_paths = settings.prompts.clone();
+        template_paths.extend(options.prompt_template_paths.clone());
+        let template_defaults = settings.enable_prompt_templates && !options.no_prompt_templates;
         // 工具注册表：内置（默认激活集 + default_tools 修饰；未激活 = Hidden）
         let active = timo_config::resolve_default_tools(
             &timo_tools::tools::DEFAULT_ACTIVE
@@ -156,7 +166,7 @@ impl Kernel {
             timo_mcp::load_server_registry(&mcp_path, &work_dir.join(".timo").join("mcp.json"))?;
         let mcp = timo_mcp::McpRuntime::new(mcp_entries).shared();
         let clock: Arc<dyn Clock> = Arc::new(timo_config::SystemClock);
-        Ok(Self {
+        let mut kernel = Self {
             work_dir,
             resolved,
             bus: EventBus::new(),
@@ -193,9 +203,16 @@ impl Kernel {
             skills: Vec::new(),
             skill_paths,
             skill_commands_enabled,
+            templates: Vec::new(),
+            template_paths,
+            template_defaults,
             compaction: settings.compaction,
             warmer: crate::warmer::CacheWarmer::new(settings.cache_warming),
-        })
+        };
+        // 模板在装配期就装载：`/模板名` 在首轮输入也要能认出来（09 G5）。
+        let template_warnings = kernel.load_templates();
+        kernel.prompt_warnings.extend(template_warnings);
+        Ok(kernel)
     }
 
     /// 事件总线（必须在 run 前订阅以接收全程事件）。

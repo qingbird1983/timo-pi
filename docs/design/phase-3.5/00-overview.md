@@ -93,7 +93,14 @@
 | D53 | 子代理实时进度不落地（`pi.exec` 返回才有结果） | c（宿主无流式） | GUI/审阅批次再补 `onUpdate`（08 §3） |
 | D54 | parallel 由宿主 `pi.execParallel` 实现（≤8 任务、4 并发） | a（QuickJS 单线程） | 语义仍是"一次提交、按序回填"（08 §4.4） |
 | D55 | 子代理用量计入主会话 `Tools/summaries` 桶 | b（pi 仅 TUI 展示） | 经 `ToolOutput.usage` → `ToolResultMessage.usage`（08 §4.3） |
-| D56 | workflow 预设（`/implement` 等）随 P2 prompt-templates 落 | d（排期） | 本批只做工具与代理定义（08 §5） |
+| D56 | workflow 预设（`/implement` 等）随 P2 prompt-templates 落 | d（排期） | 本批只做工具与代理定义（08 §5）；预设与模板机制见 09 §5 |
+| D57 | 子进程可执行文件与超时经 `--ext-flag bin=` / `--ext-flag timeout=` 传入，不读 `TIMO_BIN` 环境变量 | a（QuickJS 沙箱没有 `process.env`） | 蓝本用 env 传二进制路径；我们只有宿主 flag 通道，缺省按 PATH 找 `timo`、超时 600 秒（08 §5） |
+| D58 | 宿主新增 `pi.getAgentDir()`（config 带 `agentDir`）给扩展定位用户级 `agents/` | a（沙箱没有 `os.homedir`/`CONFIG_DIR_NAME`） | 同一个值经 `HostServices::config()` 交给 JS，缺省空串（08 §5） |
+| D59 | 模板根除 `<data_dir>/prompts`、`.pi/prompts` 外，还认 `.timo/prompts` 与向上每层 `.agents/prompts` | a（与技能同一套根逻辑） | 复用 K5/D31 的目录约定，避免同一属性两个出处（09 §4.1） |
+| D60 | 扩展自带资源目录（`resources_discover`）不在 prompt-templates 批 A | d（范围收敛） | 批 B 落；批 A 走显式路径与目录约定（09 §7） |
+| D61 | 模板 `description` 缺省截断按字符计数，不按 UTF-16 码元 | a（Rust 无码元语义） | 中文首行不被切成半个字，长度语义仍是 60（09 §2） |
+| D62 | 不做 `expandPromptTemplates` 程序化开关 | b（无二次展开面） | `expand_input` 仅 `Kernel::run` 与 CLI `/skill:` 两处调用，扩展注入不经此路（09 §4.3） |
+| D63 | 桌面命令面板暂不列模板 | d（范围收敛） | 面板只有「技能」组，模板并入语义不对、另起组要动中英 i18n，留给桌面壳精修批次（09 §6 T6） |
 
 ## 7. 接缝核对（architecture/03）
 

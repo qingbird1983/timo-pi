@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use super::resources::{canonical_key, parse_frontmatter};
 use super::{ResourceWarning, WarningKind};
 
 /// 一个已加载的技能。
@@ -42,38 +43,9 @@ pub(crate) enum Reader {
     Indirect,
 }
 
-/// 技能根，按发现顺序；重复路径只保留第一次。
+/// 技能根，按发现顺序；重复路径只保留第一次（约定见 `prompt::resources`）。
 pub(crate) fn skill_roots(data_dir: &Path, cwd: &Path, extra: &[String]) -> Vec<PathBuf> {
-    let mut roots = vec![
-        data_dir.join("skills"),
-        cwd.join(".timo").join("skills"),
-        cwd.join(".pi").join("skills"),
-    ];
-
-    let start = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let mut current = Some(start.as_path());
-    while let Some(dir) = current {
-        roots.push(dir.join(".agents").join("skills"));
-        if dir.join(".git").exists() {
-            break;
-        }
-        current = dir.parent();
-    }
-
-    for raw in extra {
-        let path = PathBuf::from(raw);
-        roots.push(if path.is_absolute() {
-            path
-        } else {
-            cwd.join(path)
-        });
-    }
-
-    let mut seen = HashSet::new();
-    roots
-        .into_iter()
-        .filter(|root| seen.insert(canonical_key(root)))
-        .collect()
+    super::resources::resource_roots(data_dir, cwd, extra, "skills")
 }
 
 /// 发现技能：目录含 `SKILL.md` 即技能根、不再下钻；根级 `*.md` 视为独立技能。
@@ -338,90 +310,6 @@ pub(crate) fn expand_command(text: &str, skills: &[Skill]) -> Option<String> {
         out.push_str(args);
     }
     Some(out)
-}
-
-struct Frontmatter<'a> {
-    values: HashMap<String, String>,
-    unsupported: Vec<String>,
-    unterminated: bool,
-    body: &'a str,
-}
-
-fn parse_frontmatter(raw: &str) -> Frontmatter<'_> {
-    let mut values = HashMap::new();
-    let mut unsupported = Vec::new();
-    if !raw.starts_with("---") {
-        return Frontmatter {
-            values,
-            unsupported,
-            unterminated: false,
-            body: raw,
-        };
-    }
-
-    let mut offset = 0;
-    let mut lines = raw.split_inclusive('\n');
-    let first = lines.next().unwrap_or_default();
-    if first.trim_end() != "---" {
-        return Frontmatter {
-            values,
-            unsupported,
-            unterminated: false,
-            body: raw,
-        };
-    }
-    offset += first.len();
-
-    let mut closed = false;
-    for line in lines {
-        offset += line.len();
-        if line.trim_end() == "---" {
-            closed = true;
-            break;
-        }
-        let trimmed = line.trim_end();
-        if line.starts_with(' ') || line.starts_with('\t') || trimmed.trim_start().starts_with('-')
-        {
-            unsupported.push(trimmed.to_string());
-            continue;
-        }
-        match trimmed.split_once(':') {
-            Some((key, value)) => {
-                values.insert(key.trim().to_string(), unquote(value.trim()).to_string());
-            }
-            None if !trimmed.trim().is_empty() => unsupported.push(trimmed.to_string()),
-            None => {}
-        }
-    }
-
-    let body = if closed && offset <= raw.len() {
-        &raw[offset..]
-    } else {
-        raw
-    };
-    Frontmatter {
-        values,
-        unsupported,
-        unterminated: !closed,
-        body,
-    }
-}
-
-fn unquote(value: &str) -> &str {
-    let bytes = value.as_bytes();
-    if bytes.len() >= 2
-        && ((bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"')
-            || (bytes[0] == b'\'' && bytes[bytes.len() - 1] == b'\''))
-    {
-        &value[1..value.len() - 1]
-    } else {
-        value
-    }
-}
-
-fn canonical_key(path: &Path) -> String {
-    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    canonical.display().to_string().to_lowercase()
 }
 
 /// 生成 `<available_skills>` 节内容；全部隐藏或为空时返回空串。

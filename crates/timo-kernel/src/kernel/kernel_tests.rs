@@ -213,3 +213,94 @@ async fn manual_compact_needs_a_session_and_content() {
     );
     let _ = std::fs::remove_dir_all(&data);
 }
+
+#[tokio::test]
+async fn a_prompt_template_expands_on_the_way_in() {
+    let data = std::env::temp_dir().join(format!("timo-kernel-templates-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let work = data.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(data.join("prompts")).unwrap();
+    std::fs::write(
+        data.join("prompts").join("flow.md"),
+        "---
+description: flow template
+argument-hint: <task>
+---
+step: $@
+",
+    )
+    .unwrap();
+
+    let kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data.clone()),
+        work_dir: Some(work.clone()),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("test-key".into()),
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+
+    assert!(kernel.has_template("flow"));
+    assert!(!kernel.has_template("nope"));
+    assert_eq!(
+        kernel.expand_input("/flow do this"),
+        "step: do this
+"
+    );
+    // 未命中的 `/xxx` 原样返回（蓝本：不匹配就发出原文）。
+    assert_eq!(kernel.expand_input("/nope"), "/nope");
+    let command = kernel
+        .slash_commands()
+        .into_iter()
+        .find(|command| command.name == "flow")
+        .expect("flow listed");
+    assert_eq!(command.description, "flow template");
+    assert_eq!(command.argument_hint.as_deref(), Some("<task>"));
+    assert_eq!(command.source, crate::CommandSource::Template);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test]
+async fn default_template_dirs_can_be_switched_off() {
+    let data = std::env::temp_dir().join(format!("timo-kernel-tp-off-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let work = data.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(data.join("prompts")).unwrap();
+    std::fs::write(
+        data.join("prompts").join("flow.md"),
+        "default dir
+",
+    )
+    .unwrap();
+    let extra = data.join("chosen");
+    std::fs::create_dir_all(&extra).unwrap();
+    std::fs::write(
+        extra.join("manual.md"),
+        "explicit: $1
+",
+    )
+    .unwrap();
+
+    let kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data.clone()),
+        work_dir: Some(work.clone()),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("test-key".into()),
+        prompt_template_paths: vec![extra.to_string_lossy().into_owned()],
+        no_prompt_templates: true,
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+
+    assert!(!kernel.has_template("flow"), "default dirs must be skipped");
+    assert_eq!(
+        kernel.expand_input("/manual x"),
+        "explicit: x
+"
+    );
+    let _ = std::fs::remove_dir_all(&data);
+}

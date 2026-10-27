@@ -35,6 +35,10 @@ pub struct KernelOptions {
     pub tool_allowlist: Option<Vec<String>>,
     /// 追加到系统提示尾部的文本（`--append-system-prompt`，可重复；设计 08 D52 走命令行文本）。
     pub append_system_prompt: Vec<String>,
+    /// 显式 prompt 模板路径（`--prompt-template`，可重复；设计 09 §4.4）。
+    pub prompt_template_paths: Vec<String>,
+    /// 停用默认模板目录（`--no-prompt-templates`；显式路径仍加载）。
+    pub no_prompt_templates: bool,
     /// 工具执行前审阅器（桌面注入；`None` = CLI/Phase 1/2 自动执行）。
     pub tool_review: Option<Arc<dyn timo_tools::ToolReview>>,
 }

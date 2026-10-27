@@ -64,16 +64,31 @@ impl Kernel {
         &self.prompt_text
     }
 
+    /// 装载 prompt 模板（设计 09 §4.1）：模板存 `self.templates`，返回装载告警。
+    pub(super) fn load_templates(&mut self) -> Vec<prompt::ResourceWarning> {
+        let roots = prompt::templates::template_roots(
+            &self.data_dir,
+            &self.work_dir,
+            &self.template_paths,
+            self.template_defaults,
+        );
+        let set = prompt::templates::load(&roots);
+        self.templates = set.templates;
+        set.warnings
+    }
+
     /// 上下文装载告警（`/reload` 后刷新）。
     #[must_use]
     pub fn resource_warnings(&self) -> &[crate::ResourceWarning] {
         &self.prompt_warnings
     }
 
-    /// 重新发现上下文与技能并重建提示；内容变化时下次运行重建 agent。
+    /// 重新发现上下文、技能与模板并重建提示；内容变化时下次运行重建 agent。
     pub fn reload_resources(&mut self) {
         let (text, skills, warnings) = self.build_prompt();
         self.prompt_warnings = warnings;
+        let template_warnings = self.load_templates();
+        self.prompt_warnings.extend(template_warnings);
         self.skills = skills;
         if text != self.prompt_text {
             self.prompt_text = text;
@@ -81,7 +96,7 @@ impl Kernel {
         }
     }
 
-    /// 命令清单：内建 + 技能 + 扩展（同名先到先得）。
+    /// 命令清单：内建 + 技能 + 扩展 + 模板（同名先到先得）。
     #[must_use]
     pub fn slash_commands(&self) -> Vec<crate::SlashCommand> {
         crate::commands::merge(
@@ -89,13 +104,23 @@ impl Kernel {
             &self.skills,
             self.skill_commands_enabled,
             &self.extension_commands(),
+            &self.templates,
         )
     }
 
-    /// `/skill:name args` 展开；其它文本原样返回。
+    /// `/skill:name args` → `/模板名 args` → 原样（设计 09 §4.3 的顺序）。
     #[must_use]
     pub fn expand_input(&self, text: &str) -> String {
-        prompt::expand_command(text, &self.skills).unwrap_or_else(|| text.to_string())
+        if let Some(expanded) = prompt::expand_command(text, &self.skills) {
+            return expanded;
+        }
+        prompt::templates::expand(text, &self.templates).unwrap_or_else(|| text.to_string())
+    }
+
+    /// 该名字是否命中 prompt 模板（CLI 兜底分派用，设计 09 G5）。
+    #[must_use]
+    pub fn has_template(&self, name: &str) -> bool {
+        self.templates.iter().any(|template| template.name == name)
     }
 }
 

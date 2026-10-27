@@ -88,6 +88,21 @@
 - 顺带把 `pi.exec` 与 `pi.execParallel` 合并到同一条执行路径：原先单条 exec 用 `Command::output()`，既不认 `timeoutMs` 也 kill 不掉，取消/超时验收过不去。
 - 未做（如实）：交互 Ctrl+C 触发的真机 abort（无头管道收不到信号）——用超时通道与进程内 abort 单测等价覆盖，读数见设计 08 §6.4。
 
+### P2 批 A 真机读数（prompt 模板，2026-10-27）
+
+- **模板机制落地**：`.md` 即 `/命令`，`$1`/`$@`/`${2:-默认}`/`${@:2:3}` 全套占位与 bash 分词；目录约定与技能共用一层（`prompt/resources.rs`）。gate：fmt / clippy `-D warnings` / workspace **338 tests**（较上轮 +17）/ `check-size` OK。
+- **变异 9/9 承重**（每条都看到 `Compiling timo-kernel`）：摘掉模板展开、切片右端不夹长度、同名遮蔽失效、未闭合 frontmatter 不跳过、默认目录开关恒关、关默认时连显式路径一起丢、共享层不认 `.pi`、清单来源标注被抹平、settings 默认值翻成 false——分别打到对应的那条测试。另补 `dir_scope` 的 2 条窄变异。
+- **一处无测试入口，实测证明**：CLI 兜底放行（`if kernel.has_template(raw)`）改成 `if false` 后 `timo-cli` 13 条测试仍全绿——该行只能靠真机覆盖（见下 T7b 的放行/报错对照）。
+- **真机六场景**（DeepSeek，临时数据目录，沙盒工作区）：
+  - 无头 `-p "/implement 在 notes.md 末尾加一行 '- item two'"`：模板在 `run` 里展开，chain 落地，沙盒 `notes.md` 真出现 `- item two`。
+  - 交互 REPL（`timo resume last` 喂 stdin）`/scout-and-plan`：**被放行**，chain 跑 14 946 ms，`/session` 打出 `Tools/summaries tokens=55310 $0.0027`。
+  - 负对照 `--no-prompt-templates`：同一行 → `[error] unknown command \`/scout-and-plan\``。
+  - 显式路径（关默认 + `--prompt-template examples/prompts`）：同一行可用，chain 跑 10 731 ms。
+  - 会话文件 2 个（= 2 次主会话，REPL 复用不新增），遗留 timo 进程 0。
+  - 坏模板（未闭合 frontmatter）不产生命令：`/broken` → `unknown command`。
+- **真机抓到一个真实缺口并修掉（G8）**：`fs.read` 的 `**` 按 cwd 解析，而用户级 `<data_dir>/agents` 几乎总在 cwd 之外 ⇒ 首次真机 `E403 … outside the declared fs.read scopes`，subagent 一个代理都发现不了。装机时补 `<data_dir>/**` 绝对作用域（`timo_ext::dir_scope`，与 `key()` 同一套归一化，`is_protected` 仍先拦 `.git/.ssh/.env`）。修复后同一场景通过——没有它，D56 的 workflow 预设在真实目录布局下不可用。
+- **如实登记两处噪音/未做**：① 扩展诊断表里每次都会留一行 `E303 cannot access …/.timo/agents`（扩展对"项目级 agents 目录不存在"的探测，功能无影响，与已登记的 stderr 噪音同类）；② REPL 在跑过一次 prompt 之前不打印资源告警（`WARNED` 首次打印的既有行为），所以坏模板的 warning 要等首轮对话才可见；③ 扩展自带资源目录（`resources_discover`）按 §7 留本题第二批；④ 桌面命令面板暂不列模板（D63）。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。
