@@ -28,6 +28,12 @@ pub struct KernelOptions {
     pub extensions_interactive: Option<bool>,
     /// `--ext-flag NAME=VALUE`。
     pub ext_flags: Vec<(String, String)>,
+    /// 不落会话文件（`--no-session`；子代理用，设计 08 §4.2）。
+    pub no_session: bool,
+    /// 工具允许列表（`--tools a,b,*`）：`None` = 按设置与默认激活集；列出的保持原 exposure，其余置 Hidden。
+    pub tool_allowlist: Option<Vec<String>>,
+    /// 追加到系统提示尾部的文本（`--append-system-prompt`，可重复；设计 08 D52 走命令行文本）。
+    pub append_system_prompt: Vec<String>,
     /// 工具执行前审阅器（桌面注入；`None` = CLI/Phase 1/2 自动执行）。
     pub tool_review: Option<Arc<dyn timo_tools::ToolReview>>,
 }

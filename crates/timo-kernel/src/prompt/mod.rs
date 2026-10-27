@@ -44,6 +44,8 @@ pub enum WarningKind {
     Parse,
     /// 同名技能冲突（先到先得）。
     Collision,
+    /// `--tools` 列表项没有命中任何已注册工具。
+    UnknownTool,
 }
 
 /// 一条资源告警：装载不中止，逐条上报（`Kernel::resource_warnings`）。

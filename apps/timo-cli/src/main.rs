@@ -3,8 +3,7 @@
 //! stdout 只出流式正文、`[tool]` 起止行与 usage 摘要；错误走 stderr。
 //! 薄壳只依赖 `timo-kernel` 门面（architecture/01 原则 2）。
 
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 
@@ -12,11 +11,11 @@ mod commands;
 mod ext_cmd;
 mod json_mode;
 mod print;
+mod printer;
+mod sessions_cmd;
 use commands::{CommandOutcome, WARNED, handle_command, print_resource_warnings};
-use timo_kernel::{
-    AssistantStreamEvent, Content, Kernel, KernelEvent, KernelOptions, Message, ThinkingLevel,
-    Usage,
-};
+use printer::Printer;
+use timo_kernel::{Kernel, KernelOptions, ThinkingLevel};
 
 #[derive(Parser)]
 #[command(name = "timo", about = "Timo-pi non-interactive smoke CLI", version)]
@@ -35,7 +34,7 @@ enum Command {
     /// Resume a session (`last` = most recently modified).
     Resume(ResumeArgs),
     /// List sessions.
-    Sessions(SessionsArgs),
+    Sessions(sessions_cmd::SessionsArgs),
     /// Manage extensions.
     Ext(ext_cmd::ExtArgs),
 }
@@ -69,6 +68,15 @@ pub(crate) struct Common {
     /// Extension flag value (`NAME=VALUE`; repeatable).
     #[arg(long = "ext-flag", value_name = "NAME=VALUE")]
     ext_flag: Vec<String>,
+    /// Do not persist a session for this run (ephemeral; subagents).
+    #[arg(long = "no-session")]
+    no_session: bool,
+    /// Comma-separated allowlist of tool names or `*` patterns to declare to the model.
+    #[arg(long = "tools", value_name = "TOOLS", value_delimiter = ',')]
+    tools: Vec<String>,
+    /// Append text, or the contents of `@path`, to the system prompt (repeatable).
+    #[arg(long = "append-system-prompt", value_name = "TEXT|@PATH")]
+    append_system_prompt: Vec<String>,
 }
 
 #[derive(Args)]
@@ -93,13 +101,6 @@ struct ResumeArgs {
     common: Common,
 }
 
-#[derive(Args)]
-struct SessionsArgs {
-    /// Only show sessions created in this working directory.
-    #[arg(long)]
-    cwd: Option<PathBuf>,
-}
-
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -111,7 +112,7 @@ async fn main() {
         Some(command) => match command {
             Command::Run(args) => run_command(args).await,
             Command::Resume(args) => resume_command(args).await,
-            Command::Sessions(args) => sessions_command(args),
+            Command::Sessions(args) => sessions_cmd::sessions_command(args),
             Command::Ext(args) => ext_cmd::run(args).await,
         },
         None if cli.print.prompts.is_empty() => {
@@ -143,6 +144,10 @@ async fn run_command(args: RunArgs) -> i32 {
 }
 
 async fn resume_command(args: ResumeArgs) -> i32 {
+    if args.common.no_session {
+        eprintln!("[error] --no-session cannot be combined with resume");
+        return 2;
+    }
     let options = match build_options(&args.common, None) {
         Ok(o) => o,
         Err(message) => {
@@ -199,36 +204,6 @@ async fn resume_command(args: ResumeArgs) -> i32 {
                 }
             }
         }
-    }
-    0
-}
-
-fn sessions_command(args: SessionsArgs) -> i32 {
-    let dir = match Kernel::sessions_dir(None) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("[error] {e}");
-            return 1;
-        }
-    };
-    let filter = args.cwd.as_ref().and_then(|p| p.canonicalize().ok());
-    for s in Kernel::list_sessions_at(&dir) {
-        if let Some(f) = &filter {
-            let matches = Path::new(&s.cwd)
-                .canonicalize()
-                .map(|c| &c == f)
-                .unwrap_or(false);
-            if !matches {
-                continue;
-            }
-        }
-        println!(
-            "{}  {}  {:>4} msgs  {}",
-            s.id,
-            format_ms(s.modified_ms),
-            s.message_count,
-            s.first_message
-        );
     }
     0
 }
@@ -322,6 +297,29 @@ pub(crate) fn build_options(
             .ok_or_else(|| format!("--ext-flag expects NAME=VALUE, got `{flag}`"))?;
         ext_flags.push((name.to_string(), value.to_string()));
     }
+    // `--tools`：逗号列表去空；整表为空视为用法错误（设计 08 §4.2）。
+    let tools: Vec<String> = common
+        .tools
+        .iter()
+        .map(|tool| tool.trim().to_string())
+        .filter(|tool| !tool.is_empty())
+        .collect();
+    if !common.tools.is_empty() && tools.is_empty() {
+        return Err("--tools expects at least one tool name or pattern".into());
+    }
+    // `--append-system-prompt`：`@path` 读文件，读不到即用法错误；空文本忽略并警告。
+    let mut append_prompt = Vec::new();
+    for item in &common.append_system_prompt {
+        match item.strip_prefix('@') {
+            Some(path) => append_prompt.push(std::fs::read_to_string(path).map_err(|error| {
+                format!("--append-system-prompt cannot read `{path}`: {error}")
+            })?),
+            None if item.trim().is_empty() => {
+                eprintln!("[warn] --append-system-prompt: empty text ignored");
+            }
+            None => append_prompt.push(item.clone()),
+        }
+    }
     Ok(KernelOptions {
         data_dir: None,
         work_dir: common.cwd.clone(),
@@ -334,6 +332,9 @@ pub(crate) fn build_options(
         no_extensions: common.no_extensions,
         extensions_interactive: None,
         ext_flags,
+        no_session: common.no_session,
+        tool_allowlist: (!tools.is_empty()).then_some(tools),
+        append_system_prompt: append_prompt,
         tool_review: None,
     })
 }
@@ -358,138 +359,75 @@ fn spawn_stdin_lines() -> tokio::sync::mpsc::UnboundedReceiver<String> {
     rx
 }
 
-/// 事件渲染（stdout 正文与工具行；错误走 stderr）。
-struct Printer {
-    at_line_start: bool,
-}
-
-impl Printer {
-    fn new() -> Self {
-        Self {
-            at_line_start: true,
-        }
-    }
-
-    fn handle(&mut self, event: &KernelEvent) {
-        match event {
-            KernelEvent::StreamEvent { event } => self.stream(event),
-            KernelEvent::ToolCallStarted {
-                tool_name, args, ..
-            } => {
-                self.ensure_newline();
-                let mut summary = args.to_string();
-                if summary.chars().count() > 120 {
-                    summary = summary.chars().take(119).chain(['…']).collect();
-                }
-                println!("[tool] {tool_name}({summary})");
-                let _ = std::io::stdout().flush();
-            }
-            KernelEvent::ToolCallFinished {
-                tool_name,
-                result,
-                duration_ms,
-                ..
-            } => {
-                let failed = matches!(result.as_ref(), Message::ToolResult(r) if r.is_error);
-                println!(
-                    "[tool] {tool_name} {} ({} ms)",
-                    if failed { "failed" } else { "done" },
-                    duration_ms.unwrap_or(0)
-                );
-            }
-            KernelEvent::Error { context } => {
-                self.ensure_newline();
-                eprintln!("[error] {context}");
-            }
-            KernelEvent::AgentFinished { messages } => {
-                self.ensure_newline();
-                if let Some(usage) = last_usage(messages) {
-                    println!(
-                        "[usage] input={} output={} cache_read={} cache_write={}",
-                        usage.input, usage.output, usage.cache_read, usage.cache_write
-                    );
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn stream(&mut self, event: &AssistantStreamEvent) {
-        match event {
-            AssistantStreamEvent::Delta {
-                index,
-                delta,
-                partial,
-            } => {
-                if matches!(partial.content.get(*index), Some(Content::Text { .. })) {
-                    print!("{delta}");
-                    let _ = std::io::stdout().flush();
-                    self.at_line_start = false;
-                }
-            }
-            AssistantStreamEvent::BlockEnd { index, partial } => {
-                if matches!(partial.content.get(*index), Some(Content::Text { .. })) {
-                    self.ensure_newline();
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn ensure_newline(&mut self) {
-        if !self.at_line_start {
-            println!();
-            self.at_line_start = true;
-        }
-    }
-}
-
-fn last_usage(messages: &[Message]) -> Option<&Usage> {
-    messages.iter().rev().find_map(|m| match m {
-        Message::Assistant(a) => Some(&a.usage),
-        _ => None,
-    })
-}
-
-/// unix 毫秒 → `YYYY-MM-DD HH:MM UTC`（不引入时间库）。
-fn format_ms(ms: i64) -> String {
-    let secs = ms.div_euclid(1000);
-    let days = secs.div_euclid(86_400);
-    let rem = secs.rem_euclid(86_400);
-    let (y, m, d) = civil_from_days(days);
-    format!(
-        "{y:04}-{m:02}-{d:02} {:02}:{:02} UTC",
-        rem / 3600,
-        (rem % 3600) / 60
-    )
-}
-
-/// Howard Hinnant 的 days → (year, month, day)（公历）。
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let z = days + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    (
-        if m <= 2 { y + 1 } else { y },
-        u32::try_from(m).unwrap_or(1),
-        u32::try_from(d).unwrap_or(1),
-    )
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 
+    /// 用真实 clap 解析器构造 `Common`（测试镜像生产路径，不手搭结构体）。
+    fn common(args: &[&str]) -> Common {
+        let cmd = <Common as clap::Args>::augment_args(
+            clap::Command::new("timo").disable_help_flag(true),
+        );
+        // argv[0] 是程序名：不补一位的话第一个 flag 会被当成命令名吃掉。
+        let mut argv = vec!["timo"];
+        argv.extend_from_slice(args);
+        let matches = cmd.try_get_matches_from(argv).expect("parse");
+        <Common as clap::FromArgMatches>::from_arg_matches(&matches).expect("into Common")
+    }
+
     #[test]
-    fn formats_epoch_in_utc() {
-        assert_eq!(format_ms(0), "1970-01-01 00:00 UTC");
-        assert_eq!(format_ms(1_700_000_000_000), "2023-11-14 22:13 UTC");
+    fn tool_allowlist_and_prompt_flags_reach_kernel_options() {
+        let options = build_options(
+            &common(&[
+                "--no-session",
+                "--tools",
+                "read, grep",
+                "--append-system-prompt",
+                "flag rule",
+            ]),
+            None,
+        )
+        .expect("options");
+        assert!(options.no_session);
+        assert_eq!(
+            options.tool_allowlist.as_deref(),
+            Some(["read".to_string(), "grep".to_string()].as_slice())
+        );
+        assert_eq!(options.append_system_prompt, ["flag rule".to_string()]);
+    }
+
+    #[test]
+    fn at_prefix_reads_the_file_into_the_prompt_appendix() {
+        let dir = std::env::temp_dir().join(format!("timo-cli-append-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("rule.md");
+        std::fs::write(&path, "rule from file").expect("write");
+        let flag = format!("@{}", path.display());
+        let options = build_options(&common(&["--append-system-prompt", &flag]), None)
+            .expect("readable file");
+        assert_eq!(options.append_system_prompt, ["rule from file".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 走生产入口拿用法错误文本（`KernelOptions` 不含 Debug，不能 unwrap_err）。
+    fn usage_error(common: &Common) -> String {
+        match build_options(common, None) {
+            Ok(_) => panic!("expected a usage error"),
+            Err(error) => error,
+        }
+    }
+
+    #[test]
+    fn empty_tool_list_and_unreadable_append_file_are_usage_errors() {
+        assert_eq!(
+            usage_error(&common(&["--tools", ",,"])),
+            "--tools expects at least one tool name or pattern"
+        );
+        let error = usage_error(&common(&["--append-system-prompt", "@missing-rule.md"]));
+        assert!(
+            error.starts_with("--append-system-prompt cannot read `missing-rule.md`:"),
+            "{error}"
+        );
     }
 }

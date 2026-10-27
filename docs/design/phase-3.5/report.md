@@ -64,6 +64,13 @@
 - miss 判定/代价公式与 `cache_warm` 基线条目由 6 条单测覆盖；`usage(cache_warm)` 落盘与"恰好一次刷新"由假适配器集成测试覆盖（1 秒 TTL）。
 - Anthropic 目录 17 个模型补 `cache_ttl_seconds: 300`；OpenAI 兼容目录不补。
 
+### D6 批② 真机读数（DeepSeek，临时数据目录）
+
+- `--mode json --no-session --tools read,bash --append-system-prompt @rule.md -p "跑 bash echo TIMO_FLAG_SMOKE，再说暗号"`：首行 `"session_id":null`；bash 工具真跑出 `TIMO_FLAG_SMOKE`；暗号答 `青柚李`（临时目录内会话文件数 0，`--no-session` 确实不落盘）。
+- `--no-session --tools read,ghost -p "用 bash 执行…"`：模型只答 `NO_TOOL`（bash 未声明给模型，声明面收窄真生效）；stderr 出现 `[warn] D:\timo-pi: unknown tool \`ghost\``。
+- 三条新闸门逐个变异验红（去掉 `!self.no_session`、把过滤换成空集、把 append 循环换成空文本），对应测试各自转红后逐字节还原并复核 sha。
+- 本轮补的出口缺口：无头 `-p` 路径原先不调用资源告警打印，`--tools` 未命中在子代理场景里静默；现由 `print::run` 收尾统一出口（失败提前 return 也会打印）。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。
@@ -86,7 +93,8 @@
 - **每轮 usage 行只显示最后一次请求**（Phase 1 既有行为）：一轮里发生工具调用时，`[usage]` 是最后一条 assistant 消息的读数；整轮/会话合计以 `/session` 为准。本阶段未改这一语义。
 - **费用依赖费率配置**：`models.json` 未写 `cost` 时费用恒为 0；不重新计价是设计选择，需在配置里给费率。
 - **缓存统计只在 CLI `/session` 呈现**，桌面暂无 cache 行；桌面状态栏的费用已含缓存计价，不新增面板（设计 05 §3.3）。
-- `target/` 无 sccache 时不做全清；当前 20.5GiB（incremental 4.4），阶段收尾需跑 `clean-build`。
+- `target/` 无 sccache 时不做全清；当前 23.2GiB（incremental 5.2），阶段收尾需跑 `clean-build`。
+- **无头 stderr 混入技能告警噪音**：`--no-session -p` 一次运行会打出项目 `.agents/skills/` 里 8 条 frontmatter 告警（README 与 ponytail 等非技能文件被扫）。资源告警本身是要出口的，但子代理场景里父进程会把 stderr 原文贴进结果，噪音挤掉有效信息。处置方向（未定）：`-p`/`--mode json` 下只出口与本次请求相关的告警，或把非技能 md 排除出扫描面——随 P2 信任与资源治理一起定。
 
 ## 下一步
 

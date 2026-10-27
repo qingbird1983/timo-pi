@@ -91,6 +91,91 @@ async fn cache_stats_read_the_session_entries() {
 }
 
 #[tokio::test]
+async fn no_session_writes_nothing_to_disk() {
+    let data = std::env::temp_dir().join(format!("timo-kernel-nosession-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let work = data.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let mut kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data.clone()),
+        work_dir: Some(work.clone()),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("test-key".into()),
+        no_session: true,
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+
+    kernel.start_session().expect("start_session is a no-op");
+    assert_eq!(kernel.session_id(), None);
+    let sessions = Kernel::sessions_dir(Some(&data)).unwrap();
+    let entries = std::fs::read_dir(&sessions)
+        .map(|dir| dir.count())
+        .unwrap_or_default();
+    assert_eq!(entries, 0, "--no-session 不能落任何会话文件");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test]
+async fn tool_allowlist_hides_the_rest_and_warns_on_strays() {
+    let data = std::env::temp_dir().join(format!("timo-kernel-tools-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let work = data.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let mut kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data.clone()),
+        work_dir: Some(work),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("test-key".into()),
+        tool_allowlist: Some(vec!["read".into(), "nope".into()]),
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+
+    let names: Vec<String> = kernel
+        .tools()
+        .await
+        .iter()
+        .map(|t| t.name.clone())
+        .collect();
+    assert_eq!(names, ["read"], "只声明允许列表里的工具");
+    let stray = kernel
+        .resource_warnings()
+        .iter()
+        .find(|w| w.kind == crate::WarningKind::UnknownTool)
+        .expect("stray warning");
+    assert_eq!(stray.message, "unknown tool `nope`");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test]
+async fn appended_prompt_text_lands_in_the_system_prompt() {
+    let data = std::env::temp_dir().join(format!("timo-kernel-append-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    let work = data.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::write(data.join("APPEND_SYSTEM.md"), "File rule.").unwrap();
+    let mut kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data.clone()),
+        work_dir: Some(work),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("test-key".into()),
+        append_system_prompt: vec!["Flag rule.".into(), String::new()],
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+    kernel.tools().await;
+    let prompt = kernel.system_prompt().to_string();
+    let file_at = prompt.find("File rule.").expect("file section present");
+    let flag_at = prompt.find("Flag rule.").expect("flag text appended");
+    assert!(file_at < flag_at, "命令行文本接在文件之后");
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test]
 async fn manual_compact_needs_a_session_and_content() {
     let data = std::env::temp_dir().join(format!("timo-kernel-compact-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);

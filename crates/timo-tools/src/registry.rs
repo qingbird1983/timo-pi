@@ -3,8 +3,19 @@
 use std::collections::BTreeMap;
 
 use crate::Result;
-use crate::definition::{ToolDefinition, ToolOutput};
+use crate::definition::{Exposure, ToolDefinition, ToolOutput};
 use crate::error::ToolError;
+
+/// `--tools` 列表项匹配：整名相等，或含一个 `*` 的前后缀模式（`mcp__radius__*`）。
+pub fn pattern_matches(pattern: &str, name: &str) -> bool {
+    if pattern == "*" || pattern == name {
+        return true;
+    }
+    match pattern.split_once('*') {
+        Some((head, tail)) => name.starts_with(head) && name.ends_with(tail),
+        None => false,
+    }
+}
 
 /// 工具注册表：Phase 1 持内置 + MCP 工具；Phase 2 扩展工具同样入表。
 ///
@@ -52,6 +63,22 @@ impl ToolRegistry {
     #[must_use]
     pub fn all(&self) -> Vec<&ToolDefinition> {
         self.tools.values().collect()
+    }
+
+    /// 按 `--tools` 允许列表收敛声明面（设计 08 §4.2）：命中的保持原 exposure，
+    /// 未命中的置 [`Exposure::Hidden`]；注册表本身不变，只是不再声明给模型。
+    ///
+    /// 返回一个工具都没命中的列表项，由调用方逐条告警。
+    pub fn hide_unlisted(&mut self, allowlist: &[String]) -> Vec<String> {
+        let mut unmatched = allowlist.to_vec();
+        for def in self.tools.values_mut() {
+            let before = unmatched.len();
+            unmatched.retain(|pattern| !pattern_matches(pattern, &def.name));
+            if unmatched.len() == before {
+                def.exposure = Exposure::Hidden;
+            }
+        }
+        unmatched
     }
 
     /// 统一执行入口：校验参数 → 执行（MCP/内置同一条管线，architecture/02 §4）。
@@ -103,6 +130,33 @@ mod tests {
                 })
             }),
         }
+    }
+
+    #[test]
+    fn hide_unlisted_keeps_matches_and_reports_strays() {
+        let mut reg = ToolRegistry::new();
+        for name in ["read", "grep", "mcp__radius__search", "mcp__other__run"] {
+            reg.register(dummy(name));
+        }
+        let stray = reg.hide_unlisted(&["read".into(), "mcp__radius__*".into()]);
+        let declared: Vec<String> = reg.declared().iter().map(|d| d.name.clone()).collect();
+        assert_eq!(declared, ["mcp__radius__search", "read"]);
+        assert_eq!(reg.all().len(), 4, "注册表不变，只改声明面");
+        assert!(stray.is_empty(), "每个列表项都命中过就不该报未知");
+        assert_eq!(
+            reg.hide_unlisted(&["nope".into()]),
+            ["nope".to_string()],
+            "一个都没命中的列表项要报回去"
+        );
+    }
+
+    #[test]
+    fn pattern_matches_covers_exact_star_and_affixes() {
+        assert!(pattern_matches("read", "read"));
+        assert!(pattern_matches("*", "anything"));
+        assert!(pattern_matches("mcp__radius__*", "mcp__radius__search"));
+        assert!(!pattern_matches("mcp__radius__*", "mcp__other__search"));
+        assert!(!pattern_matches("re", "read"));
     }
 
     #[tokio::test]

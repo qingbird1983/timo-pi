@@ -1,17 +1,18 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-27（会话主题：**Phase 3.5 P0：提示、技能、命令与用量**）
+- 更新：2026-10-27（会话主题：**Phase 3.5 P0：提示、技能、命令与用量**）。同日另有审查会话：代码—文档一致性审查 → 审查收债立项（见「下一步」4 与 [H-010](handoff/H-010-audit-debt.md)）。
 
 ## 当前阶段与状态
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；D6（subagent）详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md) 定稿，实现四批中 ① 已落，②③④ 待开工；P2 待定稿。
+- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；D6（subagent）详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md) 定稿，实现四批中 ①② 已落，③④ 待开工；P2 待定稿。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
+- **D6 批②（内核/CLI 三参数）**：`KernelOptions` 加 `no_session`/`tool_allowlist`/`append_system_prompt`，CLI 对应 `--no-session`、`--tools a,b,*`、`--append-system-prompt <text|@path>`（可重复；`@path` 读不到 → 退出码 2；`--tools` 全空 → 退出码 2；与 `resume` 互斥）。会话闸门收成 `Kernel::ensure_session()` 一处（run 与 `start_session` 共用，不留平行分支）；工具过滤在 MCP + 扩展注册完之后统一 `registry.hide_unlisted()`，未命中项进 `resource_warnings`（新 `WarningKind::UnknownTool`）。**修掉一个真缺口**：无头 `-p` 路径原先不打印资源告警，`unknown tool` 在子代理场景静默——现 `print::run` 收尾统一出口（含失败早退路径）。真机 DeepSeek：首行 `session_id:null` 且会话目录零文件、`--tools read` 下模型答 `NO_TOOL`、追加暗号被答对；三条闸门逐个变异验红。体量闸拦下 519/601 行两文件，按既有惯例拆出 `kernel/ext_api.rs`、`printer.rs`、`sessions_cmd.rs`（未加豁免）。
 - **D6 批①（宿主文件读取 + 并发执行）**：`pi.readFile`/`pi.listDir` 落地 `fs.read` 强制点——保护路径先拒（`.git`/`.ssh`/`.env`/密钥文件 `E404`）、无授权 `E401`、范围外 `E403`、超 1 MiB 标 `[truncated]`；`pi.execParallel` ≤8 任务 / 4 并发、结果按提交序返回、超时或取消 kill 子进程。踩坑与修法：kill 外壳后孙进程仍握着输出管道，`JoinHandle::join()` 白等 30 秒——改有界收尾（`mpsc` + `recv_timeout` 0.8 秒）并 reap 直接子进程，超时用例 29.4s → 1.8s。新增 9 个测试（fs_scope 5 + permissions 3 + host 1）。
 - **D6 标尺详设（08-subagent）定稿**：以 pi 官方 subagent 示例为行为蓝本（只读不抄），核对出四道缺口并定补齐方案——宿主 `pi.readFile`/`pi.listDir`（落地 `fs.read` 强制点，E401/E403/E404）、CLI `--no-session`/`--tools`/`--append-system-prompt`、`ToolOutput.usage` → `ToolResultMessage.usage` 进 `Tools/summaries` 桶、宿主 `pi.execParallel`（≤8 任务、4 并发）。偏离 D51~D56 逐项登记（实时进度与 workflow 预设如实延后）。
 - **P1 验收与阶段报告**：D3（自动/手动压缩 + 重启恢复）、D5（text/JSONL/退出码）、D4 缓存半场（`/session` 的 cache/warming 行）写入 `docs/design/phase-3.5/report.md` 与看板；如实登记 Ctrl+C 130 未手工触发、DeepSeek 无 TTL 时预热停用。
@@ -22,13 +23,14 @@
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
 - **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
 - **验收中修复**：桌面把 `/skill:` 原文发给模型 → 展开收进 `Kernel::run`（`85527d4`）。
-- **门禁**：fmt / clippy / workspace tests（304）/ check-size 全绿；`target/` 21.5GiB（incremental 4.8GiB），阶段收尾跑 `scripts/clean-build`。
+- **门禁**：fmt / clippy / workspace tests（313）/ check-size 全绿；`target/` 23.2GiB（incremental 5.2GiB），阶段收尾跑 `scripts/clean-build`。
 
 ## 下一步（按优先级）
 
-1. D6 实现剩余三批（详设 08）：② 内核/CLI `--no-session`/`--tools`/`--append-system-prompt`（§4.2）；③ `ToolOutput.usage` → `ToolResultMessage.usage` 进 `Tools/summaries` 桶（§4.3）；④ `examples/extensions/subagent` + 示例代理 `scout`/`reviewer` + 真机 DeepSeek 验收（含中止用例）。每批跑四门禁并单独提交；之后 P2 详设 → 实现 → `clean-build` + tag。
+1. D6 实现剩余两批（详设 08）：③ `ToolOutput.usage` → `ToolResultMessage.usage` 进 `Tools/summaries` 桶（§4.3）；④ `examples/extensions/subagent` + 示例代理 `scout`/`reviewer` + 真机 DeepSeek 验收（含中止用例）。每批跑四门禁并单独提交；之后 P2 详设 → 实现 → `clean-build` + tag。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
-3. `target/` 当前 21.5GiB（软 15 / 硬 25，incremental 4.8GiB）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 实测 77 篇，整合评审待办（删除面需所有者确认）。
+3. `target/` 当前 23.2GiB（软 15 / 硬 25，incremental 5.2GiB）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 实测 77 篇，整合评审待办（删除面需所有者确认）。
+4. **审查收债**（前置：Phase 3.5 收口）：按 [docs/roadmap/audit-debt.md](../docs/roadmap/audit-debt.md) 清偿 2026-10-27 三路审查发现——**A1 会话半行拼接缺陷最先**（[P-012](pitfalls/P-012-session-half-line-append.md)，唯一会丢数据），B1 桌面壳穿透门面次之，其余排序见台账 §4。架构文档的文档侧偏差已于本轮回填。
 
 > 施工顺序唯一来源：当前阶段设计文档；设计错误先改文档再写码。
 
@@ -36,7 +38,8 @@
 
 - NSH 渲染/热更仍为人工验收（设计 03 §8 允许），CI 只跑“未签名拒绝”。
 - 生产签名密钥分发策略未定，留 Phase 4 ADR。
-- `target/` 当前 21.5GiB（软 15 / 硬 25，incremental 4.8GiB），阶段收尾再清；无 sccache，未做全清；分类读数与清扫统一用 `scripts/target-size` / `clean-build`。
+- `target/` 当前 23.2GiB（软 15 / 硬 25，incremental 5.2GiB），阶段收尾再清；无 sccache，未做全清；分类读数与清扫统一用 `scripts/target-size` / `clean-build`。
+- **无头 stderr 噪音**（D6 批② 发现，已登记 report 已知问题）：`-p` 一次运行会打 8 条 `.agents/skills/` 的 frontmatter 告警，父代理贴 stderr 时噪音挤掉有效信息；处置方向随 P2 资源治理定。
 - 桌面壳遗留：模型热切换、设置·扩展页、会话搜索、超大 diff 外部编辑器、trace 全文入口、审阅开关不重放（roadmap phase-3 §6）。
 
 ## 关键提醒

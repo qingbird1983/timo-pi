@@ -63,6 +63,7 @@ await pi.listDir(path)   // → [{ name, isDir }]，不递归，不排除隐藏�
 - `--no-session`：不建会话文件，`session_id` 为 None；JSON 首行 `"session_id": null`，其余事件不变；与 `/export`、`resume` 互斥（同时给出 → 用法错误 2）。
 - `--tools`：列出的名字保持原 exposure，未列出的置 `Exposure::Hidden`（注册表不变，只是不声明给模型）。未知名 → stderr 逐条 `[warn] unknown tool \`x\``，不影响其余；`--tools ""` → 用法错误 2。
 - `--append-system-prompt`：文本作为最后的附加节接在系统提示尾部（与 `APPEND_SYSTEM.md` 同一节实现）；`@path` 读不到 → stderr 报错退出 2；空文本 → 忽略并警告。
+- 资源告警在无头路径也必须出口（`-p`/`--mode json` 收尾打印，失败提前返回同样打印）：父代理只能看到子进程的 stderr，静默等于把缺陷藏起来。
 
 ### 4.3 工具用量回报
 

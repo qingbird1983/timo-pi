@@ -22,14 +22,8 @@ impl JsonWriter {
     }
 
     /// 首行会话头（恒为第一行）。
-    pub fn header(&mut self, session_id: &str, cwd: &str, model: &str) {
-        self.emit(json!({
-            "type": "session_header",
-            "v": 1,
-            "session_id": session_id,
-            "cwd": cwd,
-            "model": model,
-        }));
+    pub fn header(&mut self, session_id: Option<&str>, cwd: &str, model: &str) {
+        self.emit(session_header(session_id, cwd, model));
     }
 
     /// 映射并写出一条内核事件（映射不到的类型丢弃）。
@@ -48,6 +42,18 @@ impl JsonWriter {
         let _ = writeln!(self.out, "{value}");
         let _ = self.out.flush();
     }
+}
+
+/// 会话头一行：`--no-session` 时 `session_id` 为 null（设计 08 §4.2）。
+#[must_use]
+pub fn session_header(session_id: Option<&str>, cwd: &str, model: &str) -> Value {
+    json!({
+        "type": "session_header",
+        "v": 1,
+        "session_id": session_id,
+        "cwd": cwd,
+        "model": model,
+    })
 }
 
 /// 最终回答的正文字符串（只取 text 块，按顺序拼接）。
@@ -219,6 +225,20 @@ mod tests {
 
     fn text(value: &str) -> Content {
         Content::Text { text: value.into() }
+    }
+
+    #[test]
+    fn session_header_carries_id_or_null() {
+        let saved = session_header(Some("s-1"), "/work", "deepseek/deepseek-chat").to_string();
+        assert_eq!(
+            saved,
+            r#"{"type":"session_header","v":1,"session_id":"s-1","cwd":"/work","model":"deepseek/deepseek-chat"}"#
+        );
+        let ephemeral = session_header(None, "/work", "m").to_string();
+        assert!(
+            ephemeral.contains(r#""session_id":null"#),
+            "--no-session 首行要写出 null：{ephemeral}"
+        );
     }
 
     #[test]

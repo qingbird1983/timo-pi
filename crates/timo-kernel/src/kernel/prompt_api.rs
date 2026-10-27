@@ -22,13 +22,24 @@ impl Kernel {
         warnings.extend(skill_set.warnings);
         let skills = skill_set.skills;
         let custom = prompt::custom_prompt(&self.data_dir, &self.work_dir);
-        let append = prompt::append_system_prompt(&self.data_dir, &self.work_dir);
+        let mut append =
+            prompt::append_system_prompt(&self.data_dir, &self.work_dir).unwrap_or_default();
+        // `--append-system-prompt` 的命令行文本接在同一节尾部（设计 08 §4.2 / D52）。
+        for extra in &self.append_prompt {
+            if extra.is_empty() {
+                continue;
+            }
+            if !append.is_empty() {
+                append.push_str("\n\n");
+            }
+            append.push_str(extra);
+        }
         let declared: Vec<&ToolDefinition> = self.registry.declared();
         let docs = docs_dir();
         let inputs = prompt::PromptInputs {
             cwd: &self.work_dir,
             custom_prompt: custom.as_deref(),
-            append_system_prompt: append.as_deref(),
+            append_system_prompt: (!append.is_empty()).then_some(append.as_str()),
             tools: &declared,
             prompt_guidelines: &[],
             context_files: &context_files,

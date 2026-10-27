@@ -8,6 +8,7 @@ use std::time::Duration;
 use clap::{Args, ValueEnum};
 use timo_kernel::{AssistantMessage, Kernel, KernelEvent, StopReason};
 
+use crate::commands::print_resource_warnings;
 use crate::json_mode::{JsonWriter, assistant_text, last_assistant};
 use crate::{Common, build_options};
 
@@ -58,19 +59,22 @@ pub(crate) async fn run(args: PrintArgs) -> i32 {
         eprintln!("[error] {error}");
         return 1;
     }
-    let session_id = kernel.session_id().unwrap_or_default().to_string();
+    let session_id = kernel.session_id().map(str::to_string);
     let model = kernel.model_label();
     let mut writer = (mode == PrintMode::Json).then(JsonWriter::new);
     if let Some(writer) = writer.as_mut() {
-        writer.header(&session_id, &cwd, &model);
+        writer.header(session_id.as_deref(), &cwd, &model);
     }
+    let mut code = 0;
     for prompt in &args.prompts {
-        let code = prompt_once(&mut kernel, prompt, writer.as_mut()).await;
+        code = prompt_once(&mut kernel, prompt, writer.as_mut()).await;
         if code != 0 {
-            return code;
+            break;
         }
     }
-    0
+    // 资源告警（含 `--tools` 未命中）在无头模式也要出口：子代理没人替它看交互命令。
+    print_resource_warnings(&kernel);
+    code
 }
 
 /// 一条 prompt：消费事件（json 模式写出，text 模式忽略），按终止原因给退出码。

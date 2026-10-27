@@ -22,6 +22,7 @@ use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
 
 mod cache_api;
 mod compaction_api;
+mod ext_api;
 mod options;
 mod prompt_api;
 mod sessions;
@@ -57,6 +58,12 @@ pub struct Kernel {
     ext_running: Arc<AtomicBool>,
     ext: Option<ExtensionRuntime>,
     tool_review: Option<Arc<dyn timo_tools::ToolReview>>,
+    /// 不落会话文件（`--no-session`）。
+    no_session: bool,
+    /// 工具允许列表（`--tools`）；`None` = 不过滤。
+    tool_allowlist: Option<Vec<String>>,
+    /// 追加到系统提示尾部的命令行文本（`--append-system-prompt`）。
+    append_prompt: Vec<String>,
     /// 当前渲染的系统提示（装配后有效）。
     prompt_text: String,
     /// 上下文装载告警。
@@ -178,6 +185,9 @@ impl Kernel {
             ext_running: Arc::new(AtomicBool::new(false)),
             ext: None,
             tool_review: options.tool_review,
+            no_session: options.no_session,
+            tool_allowlist: options.tool_allowlist,
+            append_prompt: options.append_system_prompt,
             prompt_text: String::new(),
             prompt_warnings: Vec::new(),
             skills: Vec::new(),
@@ -220,9 +230,7 @@ impl Kernel {
         self.warmer.cancel("context changed");
         self.ensure_ready().await;
         let prompt = self.expand_input(prompt);
-        if self.session.is_none() {
-            self.open_new_session()?;
-        }
+        self.ensure_session()?;
         self.ext_abort.store(false, Ordering::SeqCst);
         self.ext_running.store(true, Ordering::SeqCst);
         // 克隆而不是 take：run 前置失败（空 prompt / 已有 run）时不能丢掉已恢复的历史。
@@ -288,6 +296,12 @@ impl Kernel {
             }
             self.ext = Some(runtime);
         }
+        // `--tools`：内置 + MCP + 扩展全部注册完再收敛声明面（设计 08 §4.2）。
+        let stray = self
+            .tool_allowlist
+            .clone()
+            .map(|allowlist| self.registry.hide_unlisted(&allowlist))
+            .unwrap_or_default();
         if self.agent.is_none() {
             let (hooks, provider_hooks) =
                 match self.ext.as_ref().and_then(|runtime| runtime.hooks.clone()) {
@@ -299,6 +313,13 @@ impl Kernel {
                 };
             let (system_prompt, skills, warnings) = self.build_prompt();
             self.prompt_warnings = warnings;
+            for stray in &stray {
+                self.prompt_warnings.push(prompt::ResourceWarning {
+                    kind: prompt::WarningKind::UnknownTool,
+                    message: format!("unknown tool `{stray}`"),
+                    path: self.work_dir.clone(),
+                });
+            }
             self.skills = skills;
             let agent = AgentHandle::with_parts(
                 timo_agent::LoopConfig {
@@ -358,7 +379,15 @@ impl Kernel {
     /// # Errors
     /// 会话文件创建失败 → [`KernelError::Session`]。
     pub fn start_session(&mut self) -> Result<()> {
-        if self.session.is_none() {
+        self.ensure_session()
+    }
+
+    /// 会话闸门：`--no-session` 时 run 与 `start_session` 都不落任何文件（设计 08 §4.2）。
+    ///
+    /// # Errors
+    /// 会话文件创建失败 → [`KernelError::Session`]。
+    fn ensure_session(&mut self) -> Result<()> {
+        if self.session.is_none() && !self.no_session {
             self.open_new_session()?;
         }
         Ok(())
@@ -376,55 +405,6 @@ impl Kernel {
     #[must_use]
     pub fn abort_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.ext_abort)
-    }
-
-    /// 扩展诊断报告（`timo ext doctor` / 会话开头摘要）。
-    #[must_use]
-    pub fn extension_report(&self) -> Option<&timo_ext::DiagnosticReport> {
-        self.ext.as_ref().map(|runtime| &runtime.report)
-    }
-
-    /// 扩展诊断 JSON（未装载时为 None）。
-    #[must_use]
-    pub fn extension_report_json(&self) -> Option<String> {
-        self.ext
-            .as_ref()
-            .map(|runtime| runtime.report.to_json_pretty().unwrap_or_default())
-    }
-
-    /// 已注册扩展命令名（含 `plugin_<id>_` 前缀）。
-    #[must_use]
-    pub fn extension_commands(&self) -> Vec<String> {
-        self.ext
-            .as_ref()
-            .map(|runtime| runtime.commands.clone())
-            .unwrap_or_default()
-    }
-
-    /// 执行扩展命令。
-    ///
-    /// # Errors
-    /// 未装载/命令缺失/执行失败 → [`KernelError::Extension`]。
-    pub fn run_extension_command(&self, name: &str, args: serde_json::Value) -> Result<()> {
-        let runtime = self
-            .ext
-            .as_ref()
-            .ok_or_else(|| KernelError::Extension("extensions are not loaded".into()))?;
-        runtime
-            .host
-            .as_ref()
-            .ok_or_else(|| KernelError::Extension("extension host is not available".into()))?
-            .run_command(name, args)
-            .map(|_| ())
-            .map_err(|error| KernelError::Extension(error.to_string()))
-    }
-
-    /// 扩展诊断人读表。
-    #[must_use]
-    pub fn extension_report_human(&self) -> Option<String> {
-        self.ext
-            .as_ref()
-            .map(|runtime| runtime.report.render_human())
     }
 
     /// 中止句柄（首次 [`Kernel::tools`] 装配 agent 后可取；供 run 借出期间拦截信号）。
