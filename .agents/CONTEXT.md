@@ -6,7 +6,7 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 已立项（草案，ADR-0013）**：内核深化；前置已满足（Phase 3 验收通过），下一步是设计定稿，定稿前禁止写实现代码。
+- **Phase 3.5 设计进行中（ADR-0013）**：R1 调查已定稿（`docs/research/06-pi-interaction-logic.md`）；下一步写 `design/phase-3.5/00-overview.md` 与 P0 详设，定稿前禁止写实现代码。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
@@ -21,7 +21,7 @@
 
 ## 下一步（按优先级）
 
-1. Phase 3.5 设计定稿（research/06 完成 → 00~0N 设计稿），然后按批次实现；施工顺序以 3.5 设计文档为准。
+1. Phase 3.5 设计定稿（R1 已完成 → 00 总览 + P0 详设 → P1/P2 详设），然后按批次实现；施工顺序以 3.5 设计文档为准。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. `target/` 已按新版 §7 清到 14GiB；后续每阶段收尾跑 `scripts/clean-build`（40.6 → 14.0，释放 26.6GiB）。sccache 到位后再把硬限收紧到 15GiB。docs 总数 65 超软限 60，Phase 3.5 开工前做整合评审。
 
