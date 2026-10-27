@@ -1,6 +1,6 @@
 # 设计 00：Phase 3.5 总览与跨模块决策
 
-- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批）
+- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批；P1 详设 04~07 于同日补定稿）
 - 关联：roadmap/phase-3.5；ADR-0011/0013；research/06；design/phase-1/02~05
 - 行为蓝本：pi 1.4.0（本地只读，不复制；铁律 7）
 
@@ -26,8 +26,12 @@
 | `timo-config/src/settings.rs` | `skills` / `prompts` / `enableSkillCommands` 键 | P0 | 01/02 |
 | `timo-agent` | 不改：系统提示仍是整段字符串（K2） | — | — |
 | `apps/timo-cli` / `apps/timo-desktop` | 消费命令清单与用量读数 | P0 末 | 02/03 |
+| `timo-agent/src/compaction/` | 估算、切点、序列化、摘要请求；循环内请求前接入 | P1 | 04 |
+| `timo-session`（投影/导出/分区） | 压缩 entry 投影、会话目录编码、JSONL 导出 | P1 | 04/07 |
+| `timo-kernel/src/cache_stats.rs`、`warmer.rs` | 缓存 miss 统计、按 TTL 预热与用量记录 | P1 | 05 |
+| `apps/timo-cli/src/json_mode.rs` | `-p` / `--mode json` 无头输出 | P1 | 06 |
 
-后续批次（P1/P2）：`compaction/`、`cache.rs`、`headless`（mode json）、会话按项目分区、`session-export`、`prompt_templates`、`provider-composer`、`nested-tool-calls`、`trust`。各自详设编号在开工前补，不在本文预设签名。
+后续批次（P2）：`prompt_templates`、`provider-composer`、`nested-tool-calls`、`trust`。各自详设编号在开工前补，不在本文预设签名。
 
 ## 4. 批次与提交序列
 
@@ -36,7 +40,7 @@
 3. skills + 命令注册面（单测：发现规则、校验告警、冲突先到先得、隐藏技能、`/skill:` 展开）。
 4. 用量聚合（单测：分桶键、成本、缺失字段、工具/摘要桶）。
 5. CLI 与桌面接线（命令菜单列出技能；状态区显示用量；D1 的桌面半场可验）。
-6. P1 详设定稿 → 实现（压缩、缓存统计与预热、无头模式、会话分区与导出）。
+6. P1 详设 04~07 定稿 → 实现（压缩、缓存统计与预热、无头模式、会话分区与导出）。
 7. P2 详设定稿 → 实现（模板、路由、codemode、信任）。
 8. 验收 D1~D7 → `report.md` → 看板/CHANGELOG → tag `phase-3.5.end`。
 
@@ -71,6 +75,15 @@
 | D36 | 工作树嵌套去重留 P2 | d（范围收敛） | P0 只按真实路径去重（符号链接共享一份）；主仓与嵌套 worktree 各有一份 `AGENTS.md` 时可能重复注入，登记为已知偏差 |
 | D37 | 技能发现不读 `.fdignore` | d（依赖能力） | 复用工作区既有 `ignore` crate：读 `.gitignore` 与 `.ignore`，跳过隐藏项与 `node_modules`；`.fdignore` 不在其能力内 |
 | D38 | 技能 frontmatter 只解析单层标量 | a（无 YAML 依赖） | 只取 `name`/`description`/`disable-model-invocation`；嵌套、多行块、锚点忽略并告警；描述含冒号按首个冒号切分 |
+| D39 | 压缩只在 user 消息处切分，不做 turn-prefix 摘要 | d（范围收敛） | 保留量可能略多于预算；上下文永远从完整轮次开始（04） |
+| D40 | 摘要请求仍写 prompt cache | a（无 retention 开关） | 一次性摘要会付一次缓存写费用（04） |
+| D41 | 缓存统计从会话 entry 现算 | b（只增不改） | 不新增落盘字段；压缩/预热 entry 参与扫描（05） |
+| D42 | 预热需模型声明 `cache_ttl_seconds` | c（目录数据不全） | 只给 Anthropic 目录补 300 秒；自动缓存网关不预热（05） |
+| D43 | thinking 非 Off 时不预热 | a（适配器约束） | `max_tokens=1` 与 thinking 预算冲突（05） |
+| D44 | 预热与摘要的用量暂不计入 `/session` 总量 | d（范围收敛） | entry 已落盘，P2 统一并入（05） |
+| D45 | 会话按 cwd 分区但列表仍跨分区 | c（桌面既有体验） | 只改落盘位置，不改侧栏范围（07） |
+| D46 | 旧平铺会话不迁移 | b（只增不改） | 读取兼容，新写入进分区（07） |
+| D47 | 导出保留原始 entry 与 parent_id | a（自有会话格式） | 线性链原样输出（07） |
 
 ## 7. 接缝核对（architecture/03）
 
@@ -97,7 +110,7 @@
 ## 9. 体量预算
 
 - 新增代码文件遵守 500 行上限；`prompt/` 按职责拆三个文件，单测与实现同文件或独立 `tests/`。
-- docs 总数已超软限（65 > 60）：本阶段新增设计稿属于硬流程交付物，按 standards/08 登记豁免；**整合评审**仍排在实现开工前，先出候选清单再动删除（删除面需所有者确认）。
+- docs 总数已超软限（当前 73 > 60）：本阶段新增设计稿属于硬流程交付物，按 standards/08 登记豁免；**整合评审**仍待办，先出候选清单再动删除（删除面需所有者确认）。
 - 无新增依赖预期；若 `skills` 需要 glob/ignore 语义，优先用标准库手写的最小匹配（与 ext discovery 同风格），不引入 `ignore` crate 除非必要。
 
 ## 10. 未决问题
@@ -106,3 +119,5 @@
 - **项目技能信任**：P0 按 D33 无门控；P2 的 trust-manager 定稿时回调本决策。
 - **命令注册面的模板接缝**：P0 先留接口，模板与技能共用"名称 → 展开"两步；P2 的实现不得改这两步的顺序。
 - **提示缓存冷启动**：提示结构升级会让每台机器首轮缓存失效一次，属预期影响，不设兼容层。
+- **缓存预热元数据**：`cache_ttl_seconds` 目前只给 Anthropic 内置目录（300 秒）；自定义模型需用户在 `models.json` 写；P1 实现时不猜默认值。
+- **无头 JSON 线协议**：字段名跟随本项目 `KernelEvent` 的 snake_case，不承诺与 pi 逐字段一致（D5 只要求可解析的事件流）；D6 的扩展按本协议编写。

@@ -39,6 +39,7 @@ docs/
 | research/05-reference-pi-flash.md | 定稿 | 参考项目 pi-flash（GPUI 桌面壳/插件系统）的做法与教训 |
 | research/06-pi-interaction-logic.md | 定稿 | pi 交互逻辑/数据流向/提示词工程调查（Phase 3.5 R1 产出：提示词合同、数据流图、17 条交互对照） |
 | research/07-ui-references.md | **草稿** | 桌面壳 UI 参考清单（三类产品图链+设计语言笔记；视觉精修批次前置素材，随时增补） |
+| research/08-zcode-desktop-study.md | **草稿** | ZCode 桌面端交互逻辑与数据流源码调查（Apache-2.0 同类实现，330 篇设计文档库；分三批执行） |
 | adr/ADR-0001 ~ 0013 | 定稿 | 13 项重大决策（见各文件；0013 = 内核深化阶段立项） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
 | architecture/02-kernel.md | 定稿 | 内核模块划分与关键设计 |
@@ -72,6 +73,10 @@ docs/
 | design/phase-3.5/01-system-prompt.md | 定稿 | 提示分节装配、项目上下文发现、SYSTEM/APPEND 文件、重载与测试 |
 | design/phase-3.5/02-skills-and-commands.md | 定稿 | 技能发现/校验/注入/展开、命令注册面与输入分发 |
 | design/phase-3.5/03-usage.md | 定稿 | 用量与成本聚合、分桶规则与内核 API |
+| design/phase-3.5/04-compaction.md | 定稿 | 阈值触发、切点与摘要、`session.compaction` entry 与恢复投影 |
+| design/phase-3.5/05-cache.md | 定稿 | 缓存 miss 统计、预热调度、经济阈值与模型 TTL 元数据 |
+| design/phase-3.5/06-headless.md | 定稿 | `-p` / `--mode json` 线协议、退出码与取消语义 |
+| design/phase-3.5/07-session-storage.md | 定稿 | 会话按 cwd 分区、跨分区查找与 JSONL 导出 |
 | design/phase-3.5/report.md | 草稿（P0） | Phase 3.5 进度报告：P0 批 1~5、D1/D2/D4/D7 真机验收与体量核对 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |

@@ -6,6 +6,18 @@
 
 ---
 
+## [0.1.60] - 2026-10-27
+
+### 设计：Phase 3.5 P1 详设定稿（04~07）
+
+- 04 compaction：请求前按"窗口 − reserve"判断；在 user 消息处切分；固定摘要格式 + 文件操作清单；`session.compaction` entry；恢复投影为"摘要 + 保留尾部"；失败不写 entry。
+- 05 缓存：miss 统计（噪声地板 1024、压缩/预热重置基线）；预热按 TTL 90% 调度、$0.05 经济阈值、thinking 非 Off 不预热；模型目录新增 `cache_ttl_seconds`。
+- 06 无头：`-p` 可重复 + `--mode text|json`；JSONL 首行会话头、`agent_start`/`agent_end` 首尾保证；退出码 0/1/2，Ctrl+C=130。
+- 07 会话存储：`sessions/--<encoded-cwd>--/` 分区、旧平铺兼容、跨分区查找；`/export` 原子导出 JSONL。
+- 00 总览补 D39~D47；看板/README/阶段文档同步；docs 73 篇（软限 60，登记豁免）。
+
+---
+
 ## [0.1.42] - 2026-10-27
 
 ### 验收：Phase 3.5 P0 真机通过（D1/D2/D4/D7）
