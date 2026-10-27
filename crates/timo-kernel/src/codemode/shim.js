@@ -111,7 +111,9 @@
   );
 
   globalThis.__timo_describe_error = function (error) {
-    if (!error) return String(error);
+    if (error === null || error === undefined) {
+      return "InternalError: the sandbox ran out of memory (or the script threw null)";
+    }
     var head = error.message
       ? (error.name ? error.name + ": " + error.message : String(error.message))
       : String(error);

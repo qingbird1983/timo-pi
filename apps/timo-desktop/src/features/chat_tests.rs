@@ -71,6 +71,34 @@ fn stream_updates_assistant_text() {
 }
 
 #[test]
+fn codemode_progress_updates_accumulate_in_the_trace() {
+    let mut chat = ChatState::default();
+    chat.apply(&KernelEvent::AgentStarted);
+    chat.apply(&KernelEvent::TurnStarted);
+    chat.apply(&KernelEvent::ToolCallStarted {
+        tool_call_id: "c1".into(),
+        tool_name: "codemode".into(),
+        args: Arc::new(serde_json::json!({"code": "await tools.bash({});"})),
+    });
+    for line in ["→ tools.bash", "← bash ok"] {
+        chat.apply(&KernelEvent::ToolCallUpdate {
+            tool_call_id: "c1".into(),
+            tool_name: "codemode".into(),
+            partial: Arc::new(timo_kernel::ToolOutput::text(line)),
+        });
+    }
+    let RowKind::Assistant(row) = &chat.rows[0].kind else {
+        panic!("expected assistant row");
+    };
+    assert_eq!(row.trace.len(), 1);
+    assert_eq!(row.trace[0].status, TraceStatus::Running);
+    assert_eq!(
+        row.trace[0].output.as_deref(),
+        Some("→ tools.bash\n← bash ok")
+    );
+}
+
+#[test]
 fn tool_lifecycle_merges_into_one_trace_entry() {
     let mut chat = ChatState::default();
     chat.apply(&KernelEvent::AgentStarted);

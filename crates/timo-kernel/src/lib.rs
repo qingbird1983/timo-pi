@@ -50,7 +50,7 @@ pub use timo_ai::{
 };
 pub use timo_config::ThinkingLevel;
 pub use timo_session::SessionInfo;
-pub use timo_tools::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
+pub use timo_tools::{ReviewDecision, ReviewKind, ToolOutput, ToolReview, ToolReviewRequest};
 pub use usage::{UsageBucket, UsageSummary, UsageTotals};
 pub use warmer::WarmingState;
 

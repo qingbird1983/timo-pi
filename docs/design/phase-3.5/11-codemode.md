@@ -164,7 +164,7 @@ pub trait NestedToolHost: Send + Sync {
 - 每个脚本一条**独立 OS 线程**（`std::thread`，不用 `spawn_blocking`：runtime 关闭会等待卡死的阻塞任务），线程内建 `Runtime`：`set_memory_limit(256 MiB)` + 中断处理器（deadline 或父取消 → 中断）。Rust → JS 的 settle 回调在该线程内调用。脚本线程的完成经 oneshot 交回异步侧；中断后最多等 5 秒（`THREAD_STOP_GRACE`）兜底返回，避免中断处理器失效时调用无界挂起。内存/输出/worker 等限制做成结构体传入、缺省取蓝本值，测试用较小值，避免真分配 256 MiB。
 - worker 准入：进程级 `Semaphore(2)`（`OnceLock`）；permit 随线程结束释放；等待上界 `min(timeout, 60s)`；拿不到时给出与蓝本同义的失败文案（"No codemode worker became free within 60 seconds..."）。
 - 输出计数在 shim 里做（字符与调用次数），越界抛错；截断在 Rust 侧做（头 50% + 尾 50%），全文写 `std::env::temp_dir()` 下的 `timo-codemode-*.txt`，结果附 `[Full output: <path> (read with offset/limit)]`。
-- 取消：父令牌 → 中断 JS + 取消所有子调用；未 settle 的 Promise 丢弃；已发生的工具调用不回滚。
+- 取消：父令牌 → 中断 JS + 取消所有子调用；未 settle 的 Promise 丢弃；已发生的工具调用不回滚。超时/结束后的顺序是"先取消子调用、最多等 2 秒让它们清理（例如杀进程树）、再 abort 仍未结束的任务"；子调用用独立派生令牌，超时不会被误报成父取消。`null` 错误值按"多半是沙箱内存上限"给出提示。
 
 ### 4.5 事件、可见性与用量
 
@@ -185,6 +185,8 @@ pub trait NestedToolHost: Send + Sync {
 批 A 已于 2026-10-27 落地：workspace **380 tests**（+10），**11 条变异全红**且逐条确认为断言失败；本批无真机读数（尚无脚本沙箱）。
 
 批 B 已于 2026-10-28 落地：workspace **406 tests**（+26），**19 条变异全红**且逐条确认编译通过、断言失败、改后逐字节还原；本批无真机读数（脚本面接线与真机在批 C）。实现与本文的两处校正：脚本线程用 `std::thread`（见 §4.4）；原生函数名以 `__timo_post`/`__timo_settle`/`__timo_pending_count`/`__timo_take_output` 为准。
+
+批 C 已于 2026-10-28 落地：CLI `run`/交互路径按行缩进打印 `ToolCallUpdate` 的文本块，桌面把同一部分结果按行累积进 trace（上限 400 字符）；`-p` text 模式仍只出终答（既有语义，JSON 模式早已转发事件）。真机 DeepSeek 三场景读数见报告；workspace **413 tests**（+7），批 B 的 19 条加本批 7 条共 **26/26 变异全红**，逐条确认编译通过、断言失败、改后逐字节还原。本批无新增用户手册：脚本语法已由 `codemode` 工具描述覆盖。真机还修掉三处缺陷：Windows 把 `System32\bash.exe`（WSL）误当原生 bash、`Promise.all` 续体未排空即判状态、嵌套超时直接 abort 绕过杀进程树（详见 §4.4 与报告）。
 
 ## 6. 验收
 
@@ -211,7 +213,7 @@ pub trait NestedToolHost: Send + Sync {
 
 1. 让模型用 codemode 并行跑两条 `bash`（各自打印时间戳）并返回合并结果：断言会话里只有一条 codemode tool result、嵌套调用两条、两条时间戳几乎相同、`usage` 大于零、CLI 只打印一条顶层工具行。
 2. 让脚本先 `text("before")` 再调用不存在的工具：结果 `Script failed`、保留 `before`、清单列出已发生的调用；退出码不受影响（工具错误不是进程错误）。
-3. 选项行 `timeout_ms: 1000` + 死循环：1 秒量级内返回 `Script timed out`，进程不残留。
+3. 选项行 `timeout_ms: 1000` + 长命令（`sleep 30`；模型拒绝写死循环，改用可确定复现的死等命令）：1 秒量级内返回 `Script timed out`，嵌套调用标记取消，前后 `tasklist` 均无 `sleep.exe` 残留。
 
 ### 6.3 变异（每条必须实测变红，且确认是断言失败）
 

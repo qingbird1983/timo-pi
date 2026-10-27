@@ -286,7 +286,18 @@ impl ChatState {
                     .and_then(|row| row.trace.iter_mut().find(|e| e.call_id == *tool_call_id))
                 {
                     entry.status = TraceStatus::Running;
-                    entry.output = Some(clip(&text_of(&partial.content), 400));
+                    // 追加而不是覆盖：codemode 会连续发"→ tools.x / ← x ok"，
+                    // 并行嵌套调用的事件也会交错，覆盖会让界面只剩最后一行。
+                    let line = text_of(&partial.content);
+                    let line = line.trim();
+                    if !line.is_empty() {
+                        let mut combined = entry.output.take().unwrap_or_default();
+                        if !combined.is_empty() {
+                            combined.push('\n');
+                        }
+                        combined.push_str(line);
+                        entry.output = Some(clip(&combined, 400));
+                    }
                 }
             }
             KernelEvent::ToolCallFinished {

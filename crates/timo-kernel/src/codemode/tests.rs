@@ -2,6 +2,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod limits;
+
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -21,6 +23,7 @@ struct FakeHost {
     records: Mutex<Vec<NestedCallRecord>>,
     next: AtomicU64,
     hold: Option<Arc<tokio::sync::Notify>>,
+    cancelled: std::sync::atomic::AtomicBool,
 }
 
 impl FakeHost {
@@ -30,6 +33,7 @@ impl FakeHost {
             records: Mutex::new(Vec::new()),
             next: AtomicU64::new(1),
             hold: None,
+            cancelled: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -67,6 +71,15 @@ impl NestedToolHost for FakeHost {
                 },
                 "fail" => ToolOutput::error_text("boom tool"),
                 "hold" => ToolOutput::text("held"),
+                "cancellable" => {
+                    tokio::select! {
+                        _ = call.cancel.cancelled() => {
+                            self.cancelled.store(true, Ordering::SeqCst);
+                            ToolOutput::error_text("cancelled")
+                        }
+                        _ = tokio::time::sleep(Duration::from_secs(30)) => ToolOutput::text("late"),
+                    }
+                }
                 other => ToolOutput::error_text(format!("no such tool {other}")),
             };
             let number = self.next.fetch_add(1, Ordering::SeqCst);
@@ -125,6 +138,7 @@ fn host() -> Arc<FakeHost> {
         callable("hold", None),
         callable("obj", Some(json!({"type": "object"}))),
         callable("mcp__docs.search", None),
+        callable("cancellable", None),
         lazy,
     ]))
 }
@@ -243,6 +257,26 @@ async fn sanitized_names_reach_the_real_tool() {
 }
 
 #[tokio::test]
+async fn parallel_tool_calls_resolve_through_promise_all() {
+    let host = host();
+    let output = run(
+        &host,
+        r#"
+const [a, b] = await Promise.all([
+  tools.echo({text: "a"}),
+  tools.echo({text: "b"}),
+]);
+text(a + "|" + b);
+"#,
+        Limits::default(),
+    )
+    .await;
+    let body = text(&output);
+    assert!(!output.is_error, "{body}");
+    assert!(body.contains("a|b"), "{body}");
+}
+
+#[tokio::test]
 async fn failure_keeps_partial_output_and_lists_completed_calls() {
     let host = host();
     let output = run(
@@ -263,118 +297,6 @@ async fn failure_keeps_partial_output_and_lists_completed_calls() {
 }
 
 #[tokio::test]
-async fn output_limits_abort_the_script() {
-    let host = host();
-    let small = Limits {
-        max_output_chars: 10,
-        ..Limits::default()
-    };
-    let output = run(&host, r#"text("x".repeat(20))"#, small).await;
-    assert!(output.is_error, "{}", text(&output));
-    assert!(
-        text(&output).contains("Script output limit exceeded (10 characters)"),
-        "{}",
-        text(&output)
-    );
-
-    let few = Limits {
-        max_output_calls: 1,
-        ..Limits::default()
-    };
-    let output = run(&host, "text(1); text(2);", few).await;
-    assert!(
-        text(&output).contains("Script output limit exceeded (1 output calls)"),
-        "{}",
-        text(&output)
-    );
-}
-
-#[tokio::test]
-async fn timeout_and_cancel_interrupt_a_busy_script() {
-    let host = host();
-    let output = run(
-        &host,
-        "// @options: {\"timeout_ms\": 100}\nwhile (true) {}",
-        Limits::default(),
-    )
-    .await;
-    assert!(output.is_error, "{}", text(&output));
-    assert!(
-        text(&output).contains("Script timed out: execution timed out after 100 ms"),
-        "{}",
-        text(&output)
-    );
-
-    let cancel = CancellationToken::new();
-    let (ctx, rx) = ctx(
-        Arc::clone(&host) as Arc<dyn NestedToolHost>,
-        "while (true) {}",
-        cancel.clone(),
-    );
-    let catalog = host.catalog();
-    let task = tokio::spawn(sandbox::execute(
-        ctx,
-        Arc::new(catalog),
-        Arc::new(Limits::default()),
-    ));
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    cancel.cancel();
-    let output = tokio::time::timeout(BOUND, task)
-        .await
-        .expect("cancel must be bounded")
-        .unwrap()
-        .unwrap();
-    drop(rx);
-    assert!(output.is_error, "{}", text(&output));
-    assert!(
-        text(&output).contains("Script aborted: execution aborted"),
-        "{}",
-        text(&output)
-    );
-}
-
-#[tokio::test]
-async fn memory_limit_surfaces_as_a_script_error() {
-    let host = host();
-    let tiny = Limits {
-        memory_bytes: 4 * 1024 * 1024,
-        ..Limits::default()
-    };
-    let output = run(
-        &host,
-        "const a = []; while (true) { a.push(\"x\".repeat(4096)); }",
-        tiny,
-    )
-    .await;
-    assert!(output.is_error, "{}", text(&output));
-    assert!(
-        text(&output).to_lowercase().contains("memory"),
-        "{}",
-        text(&output)
-    );
-}
-
-#[tokio::test]
-async fn a_busy_worker_pool_fails_fast_instead_of_queueing_forever() {
-    // 占满进程级 worker（默认 2 个），让新脚本在 worker 等待上超时。
-    let permits = sandbox::workers(2).acquire_many_owned(2).await.unwrap();
-    let host = host();
-    let output = run(
-        &host,
-        "// @options: {\"timeout_ms\": 100}\ntext(1)",
-        Limits::default(),
-    )
-    .await;
-    drop(permits);
-    assert!(output.is_error, "{}", text(&output));
-    assert!(
-        text(&output).contains("while waiting for a free codemode worker"),
-        "{}",
-        text(&output)
-    );
-}
-
-#[tokio::test]
 async fn all_tools_and_describe_tool_expose_the_declared_set() {
     let host = host();
     let output = run(
@@ -385,7 +307,9 @@ async fn all_tools_and_describe_tool_expose_the_declared_set() {
     .await;
     let body = text(&output);
     assert!(
-        body.contains("echo,fail,hold,obj,mcp__docs.search,lazy|echo() -> string: echo tool"),
+        body.contains(
+            "echo,fail,hold,obj,mcp__docs.search,cancellable,lazy|echo() -> string: echo tool"
+        ),
         "{body}"
     );
 }

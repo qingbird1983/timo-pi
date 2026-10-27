@@ -4,8 +4,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use rquickjs::promise::{Promise, PromiseState};
-use rquickjs::{Context, Function, Runtime};
 use serde_json::{Value, json};
 use timo_tools::{CallableTool, NestedCall, ToolCallCtx, ToolOutput};
 use tokio::sync::Semaphore;
@@ -14,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use super::format::{self, ScriptRun};
 use super::{Limits, describe};
 
-const SHIM: &str = include_str!("shim.js");
+mod worker;
 
 /// 中断后等待脚本线程收尾的上界（兜底；正常路径远小于此）。
 const THREAD_STOP_GRACE: Duration = Duration::from_secs(5);
@@ -48,12 +46,6 @@ struct ScriptInput {
     deadline: Option<Instant>,
     timeout_ms: Option<u64>,
     memory_bytes: usize,
-}
-
-struct Taken {
-    items: Vec<String>,
-    console: Vec<String>,
-    error: Option<String>,
 }
 
 /// 执行一段脚本（工具定义的 execute 入口）。
@@ -130,6 +122,9 @@ pub(super) async fn execute(
         .timeout_ms
         .map(|ms| started + Duration::from_millis(ms));
     let script_cancel = ctx.cancel.child_token();
+    // 子调用用另一个派生令牌：超时后取消子调用清理，但不把"脚本自身"标成父取消，
+    // 否则超时会被误报成 Script aborted。
+    let children_cancel = script_cancel.child_token();
     let parent_id = ctx.tool_call_id.clone();
     let updates = ctx.updates.clone();
     let by_name: HashMap<String, CallableTool> = callable
@@ -175,7 +170,7 @@ pub(super) async fn execute(
     if let Err(error) = std::thread::Builder::new()
         .name("timo-codemode".into())
         .spawn(move || {
-            let _ = done_tx.send(run_blocking(input));
+            let _ = done_tx.send(worker::run_blocking(input));
         })
     {
         return Ok(format::failure_output(
@@ -200,7 +195,7 @@ pub(super) async fn execute(
                 let host = Arc::clone(&host);
                 let sender = settle_tx.clone();
                 let by_name = by_name.clone();
-                let cancel = script_cancel.clone();
+                let cancel = children_cancel.clone();
                 let parent_id = parent_id.clone();
                 let updates = updates.clone();
                 tasks.spawn(async move {
@@ -248,9 +243,16 @@ pub(super) async fn execute(
             result = &mut done => break Some(result),
         }
     };
-    // 脚本结束（正常或中断）：停掉未完成的嵌套调用并让脚本线程收尾。
-    script_cancel.cancel();
-    tasks.abort_all();
+    // 脚本结束（正常或中断）：先取消子调用，给它们一个清理窗口（杀进程树等），
+    // 再兜底 abort 仍在跑的调用。
+    children_cancel.cancel();
+    let drained = tokio::time::timeout(Duration::from_secs(2), async {
+        while tasks.join_next().await.is_some() {}
+    })
+    .await;
+    if drained.is_err() {
+        tasks.abort_all();
+    }
     drop(settle_tx);
     let result = match outcome {
         Some(result) => result,
@@ -275,224 +277,4 @@ pub(super) async fn execute(
         started,
         source.max_output_tokens,
     ))
-}
-
-fn run_blocking(input: ScriptInput) -> ScriptRun {
-    let runtime = match Runtime::new() {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            return ScriptRun {
-                items: Vec::new(),
-                console: Vec::new(),
-                error: Some(format!("Script sandbox failed: {error}")),
-            };
-        }
-    };
-    runtime.set_memory_limit(input.memory_bytes);
-    let ScriptInput {
-        body,
-        decls_json,
-        limits_json,
-        request_tx,
-        settle_rx,
-        cancel,
-        deadline,
-        timeout_ms,
-        ..
-    } = input;
-    {
-        let cancel = cancel.clone();
-        runtime.set_interrupt_handler(Some(Box::new(move || {
-            cancel.is_cancelled() || deadline.is_some_and(|at| Instant::now() >= at)
-        })));
-    }
-    let context = match Context::full(&runtime) {
-        Ok(context) => context,
-        Err(error) => {
-            return ScriptRun {
-                items: Vec::new(),
-                console: Vec::new(),
-                error: Some(format!("Script sandbox failed: {error}")),
-            };
-        }
-    };
-    let result = context.with(|ctx| {
-        let install = (|| -> rquickjs::Result<()> {
-            let post = Function::new(ctx.clone(), move |json: String| {
-                let Ok(value) = serde_json::from_str::<Value>(&json) else {
-                    return;
-                };
-                let (Some(id), Some(name)) = (
-                    value.get("id").and_then(Value::as_u64),
-                    value.get("name").and_then(Value::as_str),
-                ) else {
-                    return;
-                };
-                let _ = request_tx.send(PostRequest {
-                    id,
-                    name: name.to_string(),
-                    args: value.get("args").cloned().unwrap_or(Value::Null),
-                });
-            })?;
-            ctx.globals().set("__timo_decls_json", decls_json)?;
-            ctx.globals().set("__timo_limits_json", limits_json)?;
-            ctx.globals().set("__timo_post", post)?;
-            ctx.eval::<(), _>(SHIM)?;
-            Ok(())
-        })();
-        if let Err(error) = install {
-            return ScriptRun {
-                items: Vec::new(),
-                console: Vec::new(),
-                error: Some(format!("Script sandbox failed: {error}")),
-            };
-        }
-        let wrapper = format!(
-            "globalThis.__timo_main = async function() {{ try {{ const value = await (async function() {{\n{body}\n}}).call(globalThis); if (value !== undefined) text(value); }} catch (error) {{ if (!(error && error.__timo_exit)) {{ globalThis.__timo_error = __timo_describe_error(error); }} }} }};"
-        );
-        if let Err(error) = ctx.eval::<(), _>(wrapper) {
-            let taken = take_output(&ctx).unwrap_or(Taken {
-                items: Vec::new(),
-                console: Vec::new(),
-                error: None,
-            });
-            return ScriptRun {
-                items: taken.items,
-                console: taken.console,
-                error: Some(format!("SyntaxError: {error}")),
-            };
-        }
-        let outcome = (|| -> Result<(), String> {
-            let value: rquickjs::Value<'_> = ctx
-                .eval("__timo_main()")
-                .map_err(|error| error.to_string())?;
-            let promise = value
-                .into_promise()
-                .ok_or_else(|| "script did not return a promise".to_string())?;
-            pump(&ctx, &promise, &settle_rx, &cancel, deadline, timeout_ms)
-        })();
-        let taken = take_output(&ctx).unwrap_or(Taken {
-            items: Vec::new(),
-            console: Vec::new(),
-            error: None,
-        });
-        let error = match outcome {
-            Ok(()) => taken.error,
-            Err(stopped) => {
-                let stopped_reason = stop_reason(&cancel, deadline, timeout_ms);
-                Some(stopped_reason.unwrap_or(stopped))
-            }
-        };
-        ScriptRun {
-            items: taken.items,
-            console: taken.console,
-            error,
-        }
-    });
-    runtime.set_interrupt_handler(None);
-    result
-}
-
-fn pump(
-    ctx: &rquickjs::Ctx<'_>,
-    promise: &Promise<'_>,
-    settle_rx: &std::sync::mpsc::Receiver<Settled>,
-    cancel: &CancellationToken,
-    deadline: Option<Instant>,
-    timeout_ms: Option<u64>,
-) -> Result<(), String> {
-    loop {
-        while ctx.execute_pending_job() {}
-        loop {
-            match settle_rx.try_recv() {
-                Ok(settled) => settle(ctx, settled)?,
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    return Err(stop_reason(cancel, deadline, timeout_ms)
-                        .unwrap_or_else(|| "Script sandbox stopped".to_string()));
-                }
-            }
-        }
-        match promise.state() {
-            PromiseState::Resolved => return Ok(()),
-            PromiseState::Rejected => {
-                return Err(promise
-                    .result::<rquickjs::Value<'_>>()
-                    .map(|value| format!("{value:?}"))
-                    .unwrap_or_else(|| "script promise rejected".to_string()));
-            }
-            PromiseState::Pending => {}
-        }
-        if let Some(reason) = stop_reason(cancel, deadline, timeout_ms) {
-            return Err(reason);
-        }
-        let pending: i64 = ctx.eval("__timo_pending_count()").unwrap_or(0);
-        if pending == 0 {
-            return Err("Script promise did not settle (no timers in the sandbox)".to_string());
-        }
-        let wait = deadline.map_or(Duration::from_secs(86_400), |at| {
-            at.saturating_duration_since(Instant::now())
-        });
-        match settle_rx.recv_timeout(wait) {
-            Ok(settled) => settle(ctx, settled)?,
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(stop_reason(cancel, deadline, timeout_ms)
-                    .unwrap_or_else(|| "Script sandbox stopped".to_string()));
-            }
-        }
-    }
-}
-
-fn settle(ctx: &rquickjs::Ctx<'_>, settled: Settled) -> Result<(), String> {
-    let function: Function<'_> = ctx
-        .globals()
-        .get("__timo_settle")
-        .map_err(|error| error.to_string())?;
-    function
-        .call((settled.id, settled.ok, settled.payload))
-        .map_err(|error| error.to_string())
-}
-
-fn stop_reason(
-    cancel: &CancellationToken,
-    deadline: Option<Instant>,
-    timeout_ms: Option<u64>,
-) -> Option<String> {
-    if cancel.is_cancelled() {
-        return Some("Script aborted: execution aborted".to_string());
-    }
-    if deadline.is_some_and(|at| Instant::now() >= at) {
-        return Some(format!(
-            "Script timed out: execution timed out after {} ms",
-            timeout_ms.unwrap_or(0)
-        ));
-    }
-    None
-}
-
-fn take_output(ctx: &rquickjs::Ctx<'_>) -> Option<Taken> {
-    let json: String = ctx.eval("__timo_take_output()").ok()?;
-    let value: Value = serde_json::from_str(&json).ok()?;
-    let strings = |key: &str| -> Vec<String> {
-        value
-            .get(key)
-            .and_then(Value::as_array)
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
-    Some(Taken {
-        items: strings("items"),
-        console: strings("console"),
-        error: value
-            .get("error")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-    })
 }

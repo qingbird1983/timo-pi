@@ -152,10 +152,26 @@
 - gate：fmt / clippy `-D warnings` / workspace **406 tests**（+26）/ `check-size` OK（target 24.2GiB 软限 WARN，阶段收尾统一 `clean-build`）。
 - **变异 19/19 承重**（每条确认断言失败、编译通过、改后逐字节还原）：自过滤、Hidden 目录过滤、选项行、截断头尾、`is_error` 映射、字符与调用次数上限、中断处理器（恒假时 5.1 秒有界红，由 5 秒兜底收尾）、名字消毒、worker 上限、`--tools`/设置激活、默认隐藏、描述预算、失败清单、落盘路径、`exit` 成功语义、进度详情、`Deferred` 不列。
 - **实现取舍**：脚本线程用 `std::thread` 而非 `spawn_blocking`（runtime 关闭会等待卡死的阻塞任务）；完成经 oneshot 交回异步侧，中断后最多等 5 秒。参数声明按名字排序，不依赖 JSON Map 遍历顺序。
-- 如实登记：真机 DeepSeek 两场景（并行 bash、失败脚本、超时）留批 C；CLI/桌面嵌套进度呈现也在批 C。
+- 如实登记：真机 DeepSeek 三场景（并行 bash、失败脚本、超时）留批 C；CLI/桌面嵌套进度呈现也在批 C。
 - 体量：`describe.rs` 418、`format.rs` 476、`sandbox.rs` 498、`tests.rs` 454、`tool_tests.rs` 82、`mod.rs` 75、`tool.rs` 45；`kernel.rs` 500 行（激活逻辑移到 `kernel/codemode_api.rs`），无超 500 行文件。
 
+### P2 第三题·批 C 读数：进度呈现、外壳修正与真机验收（2026-10-28）
+
+- **落地**：CLI `Printer` 把 `ToolCallUpdate` 的文本行缩进打印（`run`/交互路径）；桌面把同一部分结果按行累积进 trace（换行连接，超 400 字符截断）。`-p` text 模式仍只出终答（既有语义）；JSON 模式本就逐事件转发。
+- **真机 DeepSeek（临时数据目录 `target/codemode-accept/`，密钥只用环境变量）**：
+  - 场景 1（`Promise.all` 跑两条 `sleep 0.8; date +%s%3N`）：会话只有一条 `codemode` tool result；脚本墙钟 999~1103 ms（串行约 1.6 s），两个时间戳相差 1~2 ms；`run` 输出 4 行嵌套进度（两条 `→ tools.bash`、两条 `← bash ok`）、`codemode done (995~1103 ms)`，随后 assistant usage>0。
+  - 场景 2（`text("before")` + 未知名工具）：`codemode failed`（120 ms），结果保留 `before`，嵌套 `bash` 先成功、随后报 `Unknown tool "definitely_missing"`；进程 exit=0，工具错误不升级成进程错误。
+  - 场景 3（`// @options: {"timeout_ms":1000}` + `sleep 30`）：1171 ms 返回 `Script timed out`，嵌套调用标 `bash error`（cancelled）；运行前后 `tasklist` 均无 `sleep.exe` 残留。
+- gate：fmt / clippy `-D warnings` / workspace **413 tests**（+7）/ `check-size` OK（`clean-build` 后 14.0 GiB，软限 15 GiB）。
+- **变异 26/26 承重**：批 B 的 19 条复跑 + 本批 7 条（CLI 进度行被丢弃、桌面覆盖而非累积、WSL 启动器未跳过、Windows 原生 bash 被忽略、settle 续体未排空就判状态、子调用先 abort 不给清理窗口、OOM 提示丢失），每条确认编译通过、断言失败、改后逐字节还原。
+- **实现取舍**：超时/结束后先取消子令牌并最多等 2 秒让嵌套调用清理（例如杀进程树），再 abort 剩余任务；子调用用独立派生令牌，超时不会误报成父取消。
+- 体量：新增 `sandbox/worker.rs` 304、`tests/limits.rs` 136、`shell_kind.rs` 115；`sandbox.rs` 280；无超 500 行文件。
+
 ## 本轮发现并修复的问题
+
+- **Windows 上 `bash` 静默变成 WSL**：`Command::new("bash")` 命中 `System32\bash.exe`，一次 echo 要 13~20 秒且行为不同。改为按 PATH 解析绝对候选、跳过 System32/WindowsApps、用 `uname -s` 确认 MINGW/MSYS/CYGWIN，未命中再回退 PowerShell；echo 耗时回到 0.3 s。
+- **`Promise.all` 续体被误报"未 settle"**：多个 settle 在同一轮到达后，Promise 续体 job 还没执行就判了状态。改为收完结果先清空 job 队列再判状态，并补一条确定性 worker 单元测试。
+- **嵌套超时留下孤儿进程**：结束时直接 `abort_all` 绕过了 shell 自己的杀进程树。改为子令牌取消 + 最多 2 秒排空，再 abort；真机 `sleep 30` 用例前后均无残留。
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。
 - **测试文件越线**：`app_tests.rs` 因新增用例达到 512 行。按既有"窗口级测试按功能拆分"先例，面板相关 3 条用例移到 `features/palette_tests.rs`，原文件回到 500 行内。
@@ -163,12 +179,11 @@
 
 ## 体量核对（standards/08）
 
-- docs/：当前 76 篇（软上限 60，超 16）。P1 新增 `design/phase-3.5/04~07` 四篇；阶段设计稿与详设属硬流程交付物，登记豁免；整合评审仍待办（删除面需所有者确认）。
+- docs/：当前 81 篇（软上限 120，ADR-0014）。阶段设计稿与详设属硬流程交付物；整合评审仍待办（删除面需所有者确认）。
 - .agents/：文件 51（不含 vendored 技能为 17，上限 40）；`CONTEXT.md` 57 行（上限 150）。
 - 代码：最大文件 500 行（`timo-kernel/src/kernel.rs`，含拆分后的边界），无超 500 行文件；最大 crate `timo-desktop` 5,661 行（上限 15,000 触发评审）。
-- 依赖：无新增第三方依赖；`timo-cli` 增 `serde_json` 边、`timo-kernel` 增 `async-trait` dev-dep，均已在 workspace 中。
-- 构建产物：P0 收尾 `clean-build` 到 14.0GiB；P1 开发后 20.5GiB（incremental 4.4 / deps 14.9），阶段收尾需再跑。
-- 豁免登记：docs 总数软上限 +16。
+- 依赖：无新增第三方 crate；`codemode` 使用 workspace 既有的 `rquickjs`、`tempfile`。
+- 构建产物：本批前 25.2 GiB（incremental 3.0 / deps 21.0），`clean-build` 后 14.0 GiB（incremental 3.0 / deps 9.8）；阶段收尾再跑。
 
 ## 已知问题与风险
 
@@ -184,7 +199,7 @@
 ## 下一步
 
 1. D6 标尺：以 pi 官方 subagent 示例为行为蓝本，自研等价扩展（经无头模式跑子进程、.md 代理定义、用量回报）。
-2. P2：prompt 模板、provider composer、codemode、信任门控。
+2. P2：信任门控（prompt 模板、provider composer、codemode 均已全批完成）。
 3. 桌面视觉精修（并行线）：research/07 → 设计稿 → 批次实现；与内核零冲突。
 4. 阶段收尾：D6 验收 → 本报告补全 → `clean-build` → tag `phase-3.5.end`。
 

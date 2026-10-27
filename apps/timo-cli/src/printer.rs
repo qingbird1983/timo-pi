@@ -43,6 +43,16 @@ impl Printer {
                     duration_ms.unwrap_or(0)
                 );
             }
+            KernelEvent::ToolCallUpdate { partial, .. } => {
+                let lines = update_lines(&partial.content);
+                if !lines.is_empty() {
+                    self.ensure_newline();
+                    for line in lines {
+                        println!("  {line}");
+                    }
+                    let _ = std::io::stdout().flush();
+                }
+            }
             KernelEvent::Error { context } => {
                 self.ensure_newline();
                 eprintln!("[error] {context}");
@@ -95,4 +105,38 @@ fn last_usage(messages: &[Message]) -> Option<&Usage> {
         Message::Assistant(a) => Some(&a.usage),
         _ => None,
     })
+}
+
+/// 工具部分结果里的文本行（图片等非文本块不打印）。
+fn update_lines(content: &[Content]) -> Vec<&str> {
+    content
+        .iter()
+        .filter_map(|block| match block {
+            Content::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_lines_keep_text_and_skip_images() {
+        let content = vec![
+            Content::Text {
+                text: "→ tools.bash".into(),
+            },
+            Content::Image {
+                data: "abcd".into(),
+                mime_type: "image/png".into(),
+            },
+            Content::Text {
+                text: "← bash ok".into(),
+            },
+        ];
+        assert_eq!(update_lines(&content), ["→ tools.bash", "← bash ok"]);
+    }
 }

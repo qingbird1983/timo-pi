@@ -1,0 +1,304 @@
+//! QuickJS 脚本线程：建 Runtime、安装 shim、驱动 Promise 泵（内部模块）。
+
+use std::time::{Duration, Instant};
+
+use rquickjs::promise::{Promise, PromiseState};
+use rquickjs::{Context, Function, Runtime};
+use serde_json::Value;
+use tokio_util::sync::CancellationToken;
+
+use super::{PostRequest, ScriptInput, Settled};
+use crate::codemode::format::ScriptRun;
+
+const SHIM: &str = include_str!("../shim.js");
+
+struct Taken {
+    items: Vec<String>,
+    console: Vec<String>,
+    error: Option<String>,
+}
+
+pub(super) fn run_blocking(input: ScriptInput) -> ScriptRun {
+    let runtime = match Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return ScriptRun {
+                items: Vec::new(),
+                console: Vec::new(),
+                error: Some(format!("Script sandbox failed: {error}")),
+            };
+        }
+    };
+    runtime.set_memory_limit(input.memory_bytes);
+    let ScriptInput {
+        body,
+        decls_json,
+        limits_json,
+        request_tx,
+        settle_rx,
+        cancel,
+        deadline,
+        timeout_ms,
+        ..
+    } = input;
+    {
+        let cancel = cancel.clone();
+        runtime.set_interrupt_handler(Some(Box::new(move || {
+            cancel.is_cancelled() || deadline.is_some_and(|at| Instant::now() >= at)
+        })));
+    }
+    let context = match Context::full(&runtime) {
+        Ok(context) => context,
+        Err(error) => {
+            return ScriptRun {
+                items: Vec::new(),
+                console: Vec::new(),
+                error: Some(format!("Script sandbox failed: {error}")),
+            };
+        }
+    };
+    let result = context.with(|ctx| {
+        let install = (|| -> rquickjs::Result<()> {
+            let post = Function::new(ctx.clone(), move |json: String| {
+                let Ok(value) = serde_json::from_str::<Value>(&json) else {
+                    return;
+                };
+                let (Some(id), Some(name)) = (
+                    value.get("id").and_then(Value::as_u64),
+                    value.get("name").and_then(Value::as_str),
+                ) else {
+                    return;
+                };
+                let _ = request_tx.send(PostRequest {
+                    id,
+                    name: name.to_string(),
+                    args: value.get("args").cloned().unwrap_or(Value::Null),
+                });
+            })?;
+            ctx.globals().set("__timo_decls_json", decls_json)?;
+            ctx.globals().set("__timo_limits_json", limits_json)?;
+            ctx.globals().set("__timo_post", post)?;
+            ctx.eval::<(), _>(SHIM)?;
+            Ok(())
+        })();
+        if let Err(error) = install {
+            return ScriptRun {
+                items: Vec::new(),
+                console: Vec::new(),
+                error: Some(format!("Script sandbox failed: {error}")),
+            };
+        }
+        let wrapper = format!(
+            "globalThis.__timo_main = async function() {{ try {{ const value = await (async function() {{\n{body}\n}}).call(globalThis); if (value !== undefined) text(value); }} catch (error) {{ if (!(error && error.__timo_exit)) {{ globalThis.__timo_error = __timo_describe_error(error); }} }} }};"
+        );
+        if let Err(error) = ctx.eval::<(), _>(wrapper) {
+            let taken = take_output(&ctx).unwrap_or(Taken {
+                items: Vec::new(),
+                console: Vec::new(),
+                error: None,
+            });
+            return ScriptRun {
+                items: taken.items,
+                console: taken.console,
+                error: Some(format!("SyntaxError: {error}")),
+            };
+        }
+        let outcome = (|| -> Result<(), String> {
+            let value: rquickjs::Value<'_> = ctx
+                .eval("__timo_main()")
+                .map_err(|error| error.to_string())?;
+            let promise = value
+                .into_promise()
+                .ok_or_else(|| "script did not return a promise".to_string())?;
+            pump(&ctx, &promise, &settle_rx, &cancel, deadline, timeout_ms)
+        })();
+        let taken = take_output(&ctx).unwrap_or(Taken {
+            items: Vec::new(),
+            console: Vec::new(),
+            error: None,
+        });
+        let error = match outcome {
+            Ok(()) => taken.error,
+            Err(stopped) => {
+                let stopped_reason = stop_reason(&cancel, deadline, timeout_ms);
+                Some(stopped_reason.unwrap_or(stopped))
+            }
+        };
+        ScriptRun {
+            items: taken.items,
+            console: taken.console,
+            error,
+        }
+    });
+    runtime.set_interrupt_handler(None);
+    result
+}
+
+fn pump(
+    ctx: &rquickjs::Ctx<'_>,
+    promise: &Promise<'_>,
+    settle_rx: &std::sync::mpsc::Receiver<Settled>,
+    cancel: &CancellationToken,
+    deadline: Option<Instant>,
+    timeout_ms: Option<u64>,
+) -> Result<(), String> {
+    loop {
+        while ctx.execute_pending_job() {}
+        if drain_ready_settles(ctx, settle_rx)? {
+            return Err(stop_reason(cancel, deadline, timeout_ms)
+                .unwrap_or_else(|| "Script sandbox stopped".to_string()));
+        }
+        match promise.state() {
+            PromiseState::Resolved => return Ok(()),
+            PromiseState::Rejected => {
+                return Err(promise
+                    .result::<rquickjs::Value<'_>>()
+                    .map(|value| format!("{value:?}"))
+                    .unwrap_or_else(|| "script promise rejected".to_string()));
+            }
+            PromiseState::Pending => {}
+        }
+        if let Some(reason) = stop_reason(cancel, deadline, timeout_ms) {
+            return Err(reason);
+        }
+        let pending: i64 = ctx.eval("__timo_pending_count()").unwrap_or(0);
+        if pending == 0 {
+            return Err("Script promise did not settle (no timers in the sandbox)".to_string());
+        }
+        let wait = deadline.map_or(Duration::from_secs(86_400), |at| {
+            at.saturating_duration_since(Instant::now())
+        });
+        match settle_rx.recv_timeout(wait) {
+            Ok(settled) => settle(ctx, settled)?,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(stop_reason(cancel, deadline, timeout_ms)
+                    .unwrap_or_else(|| "Script sandbox stopped".to_string()));
+            }
+        }
+    }
+}
+
+/// 收干已就绪的 settle，并立刻跑完它们排入的续体（`Promise.all` 等）。
+/// 返回发送端是否已关闭（脚本线程据此收尾）。
+fn drain_ready_settles(
+    ctx: &rquickjs::Ctx<'_>,
+    settle_rx: &std::sync::mpsc::Receiver<Settled>,
+) -> Result<bool, String> {
+    let mut any = false;
+    let mut disconnected = false;
+    loop {
+        match settle_rx.try_recv() {
+            Ok(settled) => {
+                settle(ctx, settled)?;
+                any = true;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => break,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                disconnected = true;
+                break;
+            }
+        }
+    }
+    if any {
+        while ctx.execute_pending_job() {}
+    }
+    Ok(disconnected)
+}
+
+fn settle(ctx: &rquickjs::Ctx<'_>, settled: Settled) -> Result<(), String> {
+    let function: Function<'_> = ctx
+        .globals()
+        .get("__timo_settle")
+        .map_err(|error| error.to_string())?;
+    function
+        .call((settled.id, settled.ok, settled.payload))
+        .map_err(|error| error.to_string())
+}
+
+fn stop_reason(
+    cancel: &CancellationToken,
+    deadline: Option<Instant>,
+    timeout_ms: Option<u64>,
+) -> Option<String> {
+    if cancel.is_cancelled() {
+        return Some("Script aborted: execution aborted".to_string());
+    }
+    if deadline.is_some_and(|at| Instant::now() >= at) {
+        return Some(format!(
+            "Script timed out: execution timed out after {} ms",
+            timeout_ms.unwrap_or(0)
+        ));
+    }
+    None
+}
+
+fn take_output(ctx: &rquickjs::Ctx<'_>) -> Option<Taken> {
+    let json: String = ctx.eval("__timo_take_output()").ok()?;
+    let value: Value = serde_json::from_str(&json).ok()?;
+    let strings = |key: &str| -> Vec<String> {
+        value
+            .get(key)
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    Some(Taken {
+        items: strings("items"),
+        console: strings("console"),
+        error: value
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn draining_ready_settles_runs_promise_continuations() {
+        let runtime = Runtime::new().unwrap();
+        let context = Context::full(&runtime).unwrap();
+        context.with(|ctx| {
+            ctx.eval::<(), _>(
+                r#"
+globalThis.__timo_settle = function (id, ok, payload) {
+  (id === 1 ? globalThis.r1 : globalThis.r2)(JSON.parse(payload));
+};
+globalThis.p = Promise.all([
+  new Promise(function (resolve) { globalThis.r1 = resolve; }),
+  new Promise(function (resolve) { globalThis.r2 = resolve; }),
+]).then(function (values) { globalThis.out = values.join(","); });
+"#,
+            )
+            .unwrap();
+            let (tx, rx) = std::sync::mpsc::channel();
+            tx.send(Settled {
+                id: 1,
+                ok: true,
+                payload: "\"a\"".into(),
+            })
+            .unwrap();
+            tx.send(Settled {
+                id: 2,
+                ok: true,
+                payload: "\"b\"".into(),
+            })
+            .unwrap();
+            assert!(!drain_ready_settles(&ctx, &rx).unwrap());
+            let out: String = ctx
+                .eval("globalThis.out")
+                .expect("Promise.all continuation must run after settling");
+            assert_eq!(out, "a,b");
+        });
+    }
+}

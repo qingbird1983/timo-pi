@@ -16,6 +16,10 @@ use crate::error::ToolError;
 use crate::review::{ReviewKind, ToolReviewRequest, ask};
 use crate::truncate::truncate_tail;
 
+mod shell_kind;
+
+use shell_kind::{ShellKind, resolve_shell};
+
 /// timeout 上限（毫秒，2^31−1）。
 const MAX_TIMEOUT_MS: u64 = 2_147_483_647;
 
@@ -86,64 +90,6 @@ pub fn powershell_definition(cwd: Arc<Path>) -> ToolDefinition {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ShellKind {
-    Bash,
-    PowerShell,
-}
-
-impl ShellKind {
-    fn program(self) -> &'static str {
-        match self {
-            Self::Bash => "bash",
-            Self::PowerShell => "powershell",
-        }
-    }
-}
-
-/// PATH 探测（Windows bash 可得性）。
-fn on_path(program: &str) -> bool {
-    let exe = if cfg!(windows) {
-        format!("{program}.exe")
-    } else {
-        program.to_string()
-    };
-    std::env::var("PATH")
-        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(&exe).is_file()))
-        .unwrap_or(false)
-}
-
-/// Windows 上可用的 `bash` 必须是原生 POSIX 层（Git Bash/MSYS/Cygwin）。
-///
-/// System32 里的 `bash.exe` 是 WSL 启动器：它不认 Windows 工作目录，
-/// 会把命令跑在 Linux 侧（或直接失败），因此视为不可用、回退 PowerShell。
-fn windows_bash_usable() -> bool {
-    static CACHE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *CACHE.get_or_init(|| {
-        if !on_path("bash") {
-            return false;
-        }
-        let out = std::process::Command::new("bash")
-            .args(["-c", "uname -s"])
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .output();
-        match out {
-            Ok(o) if o.status.success() => {
-                is_native_bash_uname(&String::from_utf8_lossy(&o.stdout))
-            }
-            _ => false,
-        }
-    })
-}
-
-/// `uname -s` 是否来自 Git Bash/MSYS/Cygwin（纯函数，便于测试）。
-fn is_native_bash_uname(uname: &str) -> bool {
-    let s = uname.to_ascii_lowercase();
-    s.contains("mingw") || s.contains("msys") || s.contains("cygwin")
-}
-
 async fn run_shell(ctx: ToolCallCtx, cwd: Arc<Path>, kind: ShellKind) -> Result<ToolOutput> {
     let _ = ctx.updates; // 进度节流为 Phase 1 不做（roadmap 不做清单）
     let command = crate::tools::write::str_param(&ctx.params, "command")?.to_string();
@@ -154,11 +100,7 @@ async fn run_shell(ctx: ToolCallCtx, cwd: Arc<Path>, kind: ShellKind) -> Result<
         .min(MAX_TIMEOUT_MS);
     // Windows 上无原生 bash（缺失或只有 WSL 启动器）时按 D1 白名单以 PowerShell 执行
     let tool_name = kind.program();
-    let kind = if kind == ShellKind::Bash && cfg!(windows) && !windows_bash_usable() {
-        ShellKind::PowerShell
-    } else {
-        kind
-    };
+    let (kind, program) = resolve_shell(kind);
     // 审阅在 spawn 之前：拒绝/取消时不会创建子进程。
     ask(
         ctx.review.as_ref(),
@@ -174,17 +116,18 @@ async fn run_shell(ctx: ToolCallCtx, cwd: Arc<Path>, kind: ShellKind) -> Result<
         },
     )
     .await?;
-    execute_process(&command, &cwd, kind, timeout_ms, &ctx.cancel).await
+    execute_process(&command, &cwd, kind, &program, timeout_ms, &ctx.cancel).await
 }
 
 async fn execute_process(
     command: &str,
     cwd: &Path,
     kind: ShellKind,
+    program: &Path,
     timeout_ms: u64,
     cancel: &CancellationToken,
 ) -> Result<ToolOutput> {
-    let mut cmd = tokio::process::Command::new(kind.program());
+    let mut cmd = tokio::process::Command::new(program);
     match kind {
         ShellKind::Bash => {
             cmd.arg("-c").arg(command);
@@ -344,14 +287,6 @@ mod tests {
     use crate::review::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
     use std::sync::Arc;
 
-    #[test]
-    fn native_bash_detection() {
-        assert!(is_native_bash_uname("MINGW64_NT-10.0-19045\n"));
-        assert!(is_native_bash_uname("MSYS_NT-10.0"));
-        assert!(is_native_bash_uname("CYGWIN_NT-10.0"));
-        assert!(!is_native_bash_uname("Linux\n"));
-    }
-
     fn review_ctx(
         cwd: Arc<Path>,
         review: Option<Arc<dyn ToolReview>>,
@@ -442,33 +377,26 @@ mod tests {
 
     #[tokio::test]
     async fn timeout_errors() {
-        let kind = shell_kind();
+        let (kind, program) = resolve_shell(ShellKind::Bash);
         let cmd = match kind {
             ShellKind::PowerShell => "Start-Sleep -Seconds 30",
             ShellKind::Bash => "sleep 30",
         };
         let dir = std::env::temp_dir();
-        let res = execute_process(cmd, &dir, kind, 1500, &CancellationToken::new()).await;
+        let res = execute_process(cmd, &dir, kind, &program, 1500, &CancellationToken::new()).await;
         match res {
             Err(ToolError::Timeout { seconds }) => assert!(seconds >= 1),
             other => panic!("timeout expected, got {other:?}"),
         }
     }
 
-    /// 与产品路径同一判定：Windows 上无原生 bash 时用 PowerShell。
-    fn shell_kind() -> ShellKind {
-        if cfg!(windows) && !windows_bash_usable() {
-            ShellKind::PowerShell
-        } else {
-            ShellKind::Bash
-        }
-    }
-
     async fn run_kind(cmd: &str) -> (String, bool) {
+        let (kind, program) = resolve_shell(ShellKind::Bash);
         let out = execute_process(
             cmd,
             &std::env::temp_dir(),
-            shell_kind(),
+            kind,
+            &program,
             30_000,
             &CancellationToken::new(),
         )
