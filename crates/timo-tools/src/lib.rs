@@ -25,7 +25,7 @@ pub use nested::{
     CallableTool, NestedCall, NestedCallRecord, NestedCallStatus, NestedCallSummary, NestedOutcome,
     NestedToolHost, limits, merge_usage, output_text,
 };
-pub use registry::ToolRegistry;
+pub use registry::{ToolRegistry, pattern_matches};
 pub use review::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
 pub use truncate::{
     GREP_MAX_LINE, MAX_BYTES, MAX_LINES, truncate_head, truncate_middle, truncate_tail,

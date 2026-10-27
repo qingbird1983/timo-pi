@@ -2,7 +2,7 @@
 
 - 日期：2026-10-27
 - 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计、compaction、缓存、无头模式——装进内核，并让 CLI 与桌面共用同一份能力。
-- 状态：**P0、P1、D6 完成；P2 第一题完成，第二题 B1~B3 全部落地，余 codemode / 信任门控待定稿**
+- 状态：**P0、P1、D6 完成；P2 第一题完成，第二题 B1~B3 落地，第三题批 A/B 落地（批 C 与信任门控待做）**
 
 ## 完成了什么
 
@@ -145,6 +145,15 @@
 - **变异 11/11 承重**：before/after 钩子、id 前缀、串行锁、用量合并、记录条数与参数字节上限、取消检查、Hidden 目录过滤、审阅传递、错误状态映射；每条都确认是断言失败而非编译错误，改后逐字节还原。
 - 如实登记：本批只做接缝，**没有脚本沙箱**，因此没有真机读数；codemode 工具与脚本面在批 B。
 - 体量：新增 `timo-tools/src/nested.rs` 232 行、`timo-agent/src/run/nested.rs` 278 行；测试拆 `tests/nested.rs`（248）+ `tests/nested_limits.rs`（222）+ `tests/common/mod.rs`（267），无超 500 行文件。
+
+### P2 第三题·批 B 读数：codemode 沙箱与工具面（2026-10-28）
+
+- **落地**：`timo-kernel/src/codemode/{mod,tool,describe,format,sandbox}.rs` + `shim.js`；`codemode` 内核内置（`ModelOnly`，默认关；`+codemode` 或 `--tools codemode` 激活；占位注册先于 allowlist、最终按注册表重建）。脚本全局 `tools/text/console/return/exit/ALL_TOOLS/describeTool`；选项行（`max_output_tokens`/`timeout_ms`）；输出编号/console 块/截断落盘；`Deferred` 进 `ALL_TOOLS` 但默认不占描述预算；worker 进程级 2、等待上界 60 秒；256 MiB 内存、16 MiB/10 万次输出上限。
+- gate：fmt / clippy `-D warnings` / workspace **406 tests**（+26）/ `check-size` OK（target 24.2GiB 软限 WARN，阶段收尾统一 `clean-build`）。
+- **变异 19/19 承重**（每条确认断言失败、编译通过、改后逐字节还原）：自过滤、Hidden 目录过滤、选项行、截断头尾、`is_error` 映射、字符与调用次数上限、中断处理器（恒假时 5.1 秒有界红，由 5 秒兜底收尾）、名字消毒、worker 上限、`--tools`/设置激活、默认隐藏、描述预算、失败清单、落盘路径、`exit` 成功语义、进度详情、`Deferred` 不列。
+- **实现取舍**：脚本线程用 `std::thread` 而非 `spawn_blocking`（runtime 关闭会等待卡死的阻塞任务）；完成经 oneshot 交回异步侧，中断后最多等 5 秒。参数声明按名字排序，不依赖 JSON Map 遍历顺序。
+- 如实登记：真机 DeepSeek 两场景（并行 bash、失败脚本、超时）留批 C；CLI/桌面嵌套进度呈现也在批 C。
+- 体量：`describe.rs` 418、`format.rs` 476、`sandbox.rs` 498、`tests.rs` 454、`tool_tests.rs` 82、`mod.rs` 75、`tool.rs` 45；`kernel.rs` 500 行（激活逻辑移到 `kernel/codemode_api.rs`），无超 500 行文件。
 
 ## 本轮发现并修复的问题
 

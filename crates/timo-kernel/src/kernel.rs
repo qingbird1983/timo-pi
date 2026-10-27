@@ -20,6 +20,7 @@ use crate::prompt;
 use crate::resolve::{CatalogDispatch, ResolvedModel, load_catalog, resolve_model};
 
 mod cache_api;
+mod codemode_api;
 mod compaction_api;
 mod ext_api;
 mod options;
@@ -68,6 +69,8 @@ pub struct Kernel {
     no_session: bool,
     /// 工具允许列表（`--tools`）；`None` = 不过滤。
     tool_allowlist: Option<Vec<String>>,
+    /// 设置里的默认激活集是否包含 `codemode`（`--tools` 可另行激活）。
+    codemode_active: bool,
     /// 追加到系统提示尾部的命令行文本（`--append-system-prompt`）。
     append_prompt: Vec<String>,
     /// 当前渲染的系统提示（装配后有效）。
@@ -213,6 +216,7 @@ impl Kernel {
             tool_review: options.tool_review,
             no_session: options.no_session,
             tool_allowlist: options.tool_allowlist,
+            codemode_active: active.iter().any(|name| name == "codemode"),
             append_prompt: options.append_system_prompt,
             prompt_text: String::new(),
             prompt_warnings: Vec::new(),
@@ -297,6 +301,8 @@ impl Kernel {
     /// 因此订阅先于首个事件）。
     async fn ensure_ready(&mut self) {
         let ext_events = self.bus.subscribe();
+        // 占位注册（`Hidden`）：让 `--tools codemode` 不被当成未知工具；allowlist 收敛后再按最终注册表重建。
+        self.register_codemode(false);
         if !self.mcp_loaded {
             self.mcp_loaded = true;
             for server in self.mcp.enabled_servers() {
@@ -336,6 +342,7 @@ impl Kernel {
             .clone()
             .map(|allowlist| self.registry.apply_allowlist(&allowlist))
             .unwrap_or_default();
+        self.apply_codemode_activation();
         if self.agent.is_none() {
             let (hooks, provider_hooks) =
                 match self.ext.as_ref().and_then(|runtime| runtime.hooks.clone()) {

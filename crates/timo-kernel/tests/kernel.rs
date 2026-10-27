@@ -217,6 +217,81 @@ async fn session_draft_history_and_delete_api() {
     assert!(outside.exists());
 }
 
+#[tokio::test]
+async fn codemode_is_hidden_until_activated() {
+    let mut kernel = Kernel::new(KernelOptions {
+        data_dir: Some(temp_dir("codemode-off")),
+        work_dir: Some(temp_dir("codemode-off-work")),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("k".into()),
+        no_extensions: true,
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+    let declared: Vec<String> = kernel
+        .tools()
+        .await
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect();
+    assert!(
+        !declared.iter().any(|name| name == "codemode"),
+        "{declared:?}"
+    );
+}
+
+#[tokio::test]
+async fn codemode_activates_from_settings_and_from_tools_flag() {
+    let data = temp_dir("codemode-settings");
+    std::fs::write(
+        data.join("settings.json"),
+        r#"{"default_tools":["+codemode"]}"#,
+    )
+    .unwrap();
+    let mut from_settings = Kernel::new(KernelOptions {
+        data_dir: Some(data),
+        work_dir: Some(temp_dir("codemode-settings-work")),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("k".into()),
+        no_extensions: true,
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+    let tools = from_settings.tools().await;
+    let codemode = tools
+        .iter()
+        .find(|tool| tool.name == "codemode")
+        .expect("settings default_tools activates codemode");
+    assert_eq!(codemode.exposure, timo_tools::Exposure::ModelOnly);
+    assert!(
+        codemode.description.contains("### `read`"),
+        "{}",
+        codemode.description
+    );
+
+    let mut from_flag = Kernel::new(KernelOptions {
+        data_dir: Some(temp_dir("codemode-flag")),
+        work_dir: Some(temp_dir("codemode-flag-work")),
+        model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("k".into()),
+        no_extensions: true,
+        tool_allowlist: Some(vec!["read".into(), "codemode".into()]),
+        ..Default::default()
+    })
+    .await
+    .expect("assemble");
+    let mut declared: Vec<String> = from_flag
+        .tools()
+        .await
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect();
+    declared.sort();
+    assert_eq!(declared, ["codemode", "read"]);
+}
+
 /// 测试专用：直接引用 timo-session 的错误类型做匹配（避免门面重导出膨胀）。
 mod timo_session_shim {
     pub use timo_session::SessionError;

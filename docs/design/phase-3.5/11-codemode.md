@@ -140,7 +140,7 @@ pub trait NestedToolHost: Send + Sync {
 - **描述**：`prompt_snippet = "codemode(code): run JavaScript that calls other tools"`；一条 guideline 说明"批量/串联/过滤大结果优先用它"；`description` 由注册表快照按与运行时 `catalog()` 同源的可调视图渲染：
   - 头部：脚本形态、`await tools.<name>({...})` 的解析规则、选项行；
   - `Globals:` 每行一个全局；
-  - `Nested tools:` 按命名空间分组（`Deferred` 默认不列），每个工具一节：``### `id` `` + `name(arg: type, opt?: type) -> result`；
+  - `Nested tools:` 按命名空间分组（`Deferred` 默认不列，但仍可调），每个工具一节：``### `id` `` + `name(arg: type, opt?: type) -> result`（参数按名字排序，声明不依赖 JSON Map 的遍历顺序）；
   - 结果类型：`output_schema` 是对象 → 一层字段 `{ a, b? }`，否则 `string`；
   - 预算：估计 token = 字符/4，默认 3,000；无命名空间的组先上，其后按命名空间轮转、每组每轮放最便宜的一个，放不下则该组退出；未列出的工具仍可调，描述末尾注明"用 ALL_TOOLS/describeTool 查未列出的工具"。
 - **可调集合**：宿主 `catalog()` 已去掉 `Hidden`；codemode 再从里面去掉自己。名字消毒后冲突按注册表序先到先得（冲突的名字在描述里标注，代理里只保留先者）。
@@ -148,11 +148,11 @@ pub trait NestedToolHost: Send + Sync {
 
 ### 4.3 脚本运行时
 
-- 包装：`globalThis.__timo_main = async function(){ try { const v = await (async function(){ <code> })(); if (v !== undefined) text(v); return {ok:true}; } catch (e) { return {ok:false, error: String(e && e.stack || e)}; } }`；`exit()` 置宿主"已退出"标志并抛哨兵错误，泵在脚本结束后**优先看标志**——即使用户 `try/catch` 接住哨兵，也按成功结束。
+- 包装：`globalThis.__timo_main = async function(){ try { const v = await (async function(){ <code> })(); if (v !== undefined) text(v); } catch (e) { if (!(e && e.__timo_exit)) globalThis.__timo_error = describeError(e); } }`；错误文本 = `name: message` + 栈；`exit()` 的哨兵被接住也不写错误（按成功结束）；泵在 promise settle 后取回输出/错误/console。
 - 选项行：只认第一行；非首行出现 `// @options:` → 不执行脚本直接失败；值必须是对象，`max_output_tokens` 为正整数，`timeout_ms` 为正整数（未给则不设 deadline）。
 - 调用协议（JS 侧只排队，不阻塞）：
-  1. `tools.x(args)` 生成 `{id, name, args}`，登记 deferred 的 `resolve/reject`，调用原生 `__timo_codemode_post(json)` 后立即返回 Promise；参数无法 JSON 序列化（如循环引用）→ 直接 reject，不发请求；
-  2. Rust 泵把排队请求交给异步侧并发执行（顺序规则见 4.1），完成后调用 `__timo_codemode_settle(id, ok, payloadJson)` 收敛 Promise；
+  1. `tools.x(args)` 生成 `{id, name, args}`，登记 deferred 的 `resolve/reject`，调用原生 `__timo_post(json)` 后立即返回 Promise；参数无法 JSON 序列化（如循环引用）→ 直接 reject，不发请求；
+  2. Rust 泵把排队请求交给异步侧并发执行（顺序规则见 4.1），完成后调用原生 `__timo_settle(id, ok, payloadJson)` 收敛 Promise；
   3. JS 线程在"跑完一轮 JS job 且没有新结果"时阻塞等结果（带 deadline/取消上界），再继续驱动 job。
 - 全局（第一版）：`tools`、`text`、`console.*`、`return`、`exit`、`ALL_TOOLS`（`{name, description}`，`description` 即声明）、`describeTool(name)`（接受原名或消毒名）；`image`/`store`/`load`/`searchTools`/`describeNamespace`/`models` 不存在（D73~D76）。
 - 输出：`text()` 按序；`console` 在全部文本之后合成一个块；多个文本项加 `==> text N/M <==`；`return` 值按 `text()` 规则追加。
@@ -161,7 +161,7 @@ pub trait NestedToolHost: Send + Sync {
 
 ### 4.4 线程与资源
 
-- 每个脚本一条 OS 线程（`spawn_blocking`），线程内建 `Runtime`：`set_memory_limit(256 MiB)` + 中断处理器（deadline 或父取消 → 中断）。Rust → JS 的 settle 回调在该线程内调用。内存/输出/worker 等限制做成结构体传入、缺省取蓝本值，测试用较小值，避免真分配 256 MiB。
+- 每个脚本一条**独立 OS 线程**（`std::thread`，不用 `spawn_blocking`：runtime 关闭会等待卡死的阻塞任务），线程内建 `Runtime`：`set_memory_limit(256 MiB)` + 中断处理器（deadline 或父取消 → 中断）。Rust → JS 的 settle 回调在该线程内调用。脚本线程的完成经 oneshot 交回异步侧；中断后最多等 5 秒（`THREAD_STOP_GRACE`）兜底返回，避免中断处理器失效时调用无界挂起。内存/输出/worker 等限制做成结构体传入、缺省取蓝本值，测试用较小值，避免真分配 256 MiB。
 - worker 准入：进程级 `Semaphore(2)`（`OnceLock`）；permit 随线程结束释放；等待上界 `min(timeout, 60s)`；拿不到时给出与蓝本同义的失败文案（"No codemode worker became free within 60 seconds..."）。
 - 输出计数在 shim 里做（字符与调用次数），越界抛错；截断在 Rust 侧做（头 50% + 尾 50%），全文写 `std::env::temp_dir()` 下的 `timo-codemode-*.txt`，结果附 `[Full output: <path> (read with offset/limit)]`。
 - 取消：父令牌 → 中断 JS + 取消所有子调用；未 settle 的 Promise 丢弃；已发生的工具调用不回滚。
@@ -183,6 +183,8 @@ pub trait NestedToolHost: Send + Sync {
 每批门禁四连不变：fmt / clippy `-D warnings` / workspace tests / `scripts/check-size`；真机密钥不打印。
 
 批 A 已于 2026-10-27 落地：workspace **380 tests**（+10），**11 条变异全红**且逐条确认为断言失败；本批无真机读数（尚无脚本沙箱）。
+
+批 B 已于 2026-10-28 落地：workspace **406 tests**（+26），**19 条变异全红**且逐条确认编译通过、断言失败、改后逐字节还原；本批无真机读数（脚本面接线与真机在批 C）。实现与本文的两处校正：脚本线程用 `std::thread`（见 §4.4）；原生函数名以 `__timo_post`/`__timo_settle`/`__timo_pending_count`/`__timo_take_output` 为准。
 
 ## 6. 验收
 
