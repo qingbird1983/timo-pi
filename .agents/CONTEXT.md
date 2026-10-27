@@ -6,12 +6,13 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；**D6（subagent）四批全部落地并真机验收**（详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md)）；**P2 第一题（prompt 模板）完成**（详设 [09](../docs/design/phase-3.5/09-prompt-templates.md)，D56 workflow 预设真机跑通）；**第二题进行中**（[10](../docs/design/phase-3.5/10-provider-composer.md)：配置面批 A 已落地，虚拟模型 B1~B3 待做）；余 codemode / 信任门控待定稿。
+- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；**D6（subagent）四批全部落地并真机验收**（详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md)）；**P2 第一题（prompt 模板）完成**（详设 [09](../docs/design/phase-3.5/09-prompt-templates.md)，D56 workflow 预设真机跑通）；**第二题进行中**（[10](../docs/design/phase-3.5/10-provider-composer.md)：配置面批 A 与虚拟模型 B1（目录条目）已落地，B2/B3 待做）；余 codemode / 信任门控待定稿。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
+- **P2 第二题·批 B1（虚拟模型目录条目）**：`ApiKind::Virtual`（`pi-virtual`）+ `Model::is_virtual()`（判据与蓝本 `isVirtualModel` 同源，不另设 kind）+ `Model::virtual_entry`；`api_with_transport(Virtual)` 返回拒绝式适配器（流内 `Start` → 终态 `Error`，蓝本文案，绝不碰传输层）；解析层显式选中即报 `ModelMustBeRouted`，自动兜底只挑物理模型；models.json 可声明 `api: pi-virtual`，`--model` 与桌面清单可见。gate 348 tests，变异 6/6；真机两条选择路径都只得到拒绝且不建会话目录。摸底登记 B2 前置：现 `route_model` 直接改写循环模型、adapter 装配期固定，需先拆"选中 / 请求 / adapter"。
 - **P2 第二题·批 A（provider 配置面）**：`models.json` 新增 `auth_header`（供应商级；`None` = 照旧发）、模型级 `headers`、模型级 `compat` 三开关；头合并收进 `timo_ai::merge_headers`（同名覆盖，顺带修掉同名头发两遍的旧行为），两个 adapter 各自抽 `base_headers` 按 `send_auth_header` 决定认证头。变异 5/5 全红；adapter 组装行实测无单测入口（换空表 38 条仍绿），由真机回归补"缺省没变"。虚拟模型 B1~B3 未开始。
 - **P2 第一题（prompt 模板，批 A）**：`.md` 即 `/命令`，占位 `$1`/`$@`/`${2:-默认}`/`${@:2:3}` 与 bash 分词照蓝本实现；目录约定与技能共用新抽的 `prompt/resources.rs`（skills 从 482 行降到 370）；`Kernel::expand_input` 变成 `/skill:` → 模板 → 原样，模板在 `Kernel::new` 装载（首轮输入就要能认出，不能等首次 run）；CLI 加 `--prompt-template`/`--no-prompt-templates`，兜底分支命中模板即按普通提示发出；清单新增 `CommandSource::Template`。D56 收口：`examples/prompts/` 三个 workflow 模板 + 缺的 `agents/planner.md`、`worker.md`。**真机**：无头 `/implement` 让 worker 真改了沙盒文件，REPL `/scout-and-plan` chain 跑 14.9 s、`Tools/summaries tokens=55310 $0.0027`，`--no-prompt-templates` 同一行报 unknown command。**真机抓到 G8**：`fs.read` 的 `**` 按 cwd 解析，用户级 `<data_dir>/agents` 读不到（E403）→ 装机补 `<data_dir>/**`（`timo_ext::dir_scope`）。变异 9/9 + dir_scope 2 条全红；CLI 兜底那一行实测无单测入口，由真机放行/报错对照覆盖。
 - **D6 批④（subagent 扩展 + 真机验收）**：`examples/extensions/subagent/source/index.ts`（single / parallel≤8 / chain `{previous}`，24 KB 截断，聚合 usage）+ `examples/agents/scout.md`、`reviewer.md`（frontmatter 两种 tools 写法各用一次）+ `examples/README.md`（安装与授权提醒）。真机 DeepSeek 三模式各跑一轮：`/session` 的 `Tools/summaries tokens=6926 $0.0007` 与工具结果 usage 逐字对上——**批③ 登记的适配器缺口已用跨进程读数补证**；7 个会话文件 = 7 次主会话（9 次子进程一个没落）；失败即停与超时 kill 各有读数（`Get-Process timo` 为 0）。**真机纠了两处口径**：① 子进程命令把 `-p` 当开关（我们的 `-p` 取值）→ 子进程只打用法错误；② `--tools` 只做减法 → scout 的 `grep/find` 拿不到，按 pi 正向 enable 语义改成"列出的即最终允许集合"（`apply_allowlist`）。同时把 `pi.exec` 并进 `execParallel` 同一条执行路径（原 `Command::output()` 不认超时也 kill 不掉）、装机探测建议 `fs.read`、`--model` 支持裸 id（目录唯一才可用，歧义列候选）。偏离新增 D57（bin/timeout 走 `--ext-flag`，沙箱无 `process.env`）、D58（`pi.getAgentDir()`，沙箱无 `os.homedir`）。
@@ -27,11 +28,11 @@
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
 - **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
 - **验收中修复**：桌面把 `/skill:` 原文发给模型 → 展开收进 `Kernel::run`（`85527d4`）。
-- **门禁**：fmt / clippy `-D warnings` / workspace tests（**344**）/ check-size 全绿（软限 WARN：`target/` 15.8GiB，incremental 1.6GiB，收尾前跑 `scripts/clean-build`）。
+- **门禁**：fmt / clippy `-D warnings` / workspace tests（**348**）/ check-size 全绿（软限 WARN：`target/` 16.0GiB，incremental 1.6GiB，收尾前跑 `scripts/clean-build`）。
 
 ## 下一步（按优先级）
 
-1. **P2 第二题续：虚拟模型 B1~B3**（目录条目 → route 契约与 loop 内 reason → 会话状态与分支选择，见 [10](../docs/design/phase-3.5/10-provider-composer.md) §5）；其后 codemode（11）、信任门控（12）。四题都收口才谈阶段收尾（`report.md` 补全 + `clean-build` + tag `phase-3.5.end`，tag 只在所有者要求时打）。
+1. **P2 第二题续：虚拟模型 B2/B3**（B1 目录条目已完成 → route 契约与 loop 内 reason → 会话状态与分支选择，见 [10](../docs/design/phase-3.5/10-provider-composer.md) §5）；其后 codemode（11）、信任门控（12）。四题都收口才谈阶段收尾（`report.md` 补全 + `clean-build` + tag `phase-3.5.end`，tag 只在所有者要求时打）。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. 体量读数只在「门禁」行登记；sccache 到位后再收紧硬限。docs 实测 79 篇，整合评审待办（删除面需所有者确认）。
 4. **审查收债**（前置：Phase 3.5 收口）：按 [docs/roadmap/audit-debt.md](../docs/roadmap/audit-debt.md) 清偿 2026-10-27 三路审查发现——**A1 会话半行拼接缺陷最先**（[P-012](pitfalls/P-012-session-half-line-append.md)，唯一会丢数据），B1 桌面壳穿透门面次之，其余排序见台账 §4。架构文档的文档侧偏差已于本轮回填。

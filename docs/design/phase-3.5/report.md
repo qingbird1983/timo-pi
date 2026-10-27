@@ -108,7 +108,15 @@
 - **落地**：`models.json` 新增 `auth_header`（供应商级，不写 = 照旧发认证头）、模型级 `headers`、模型级 `compat`（`max_tokens_field` / `supports_usage_in_streaming` / `supports_finish_reason`，未写的项沿用默认）。头合并统一到一个 `merge_headers`（同名大小写不敏感、后者覆盖），顺带修掉"供应商级与模型级同名头会被发两遍"的旧行为。设计见 [10](10-provider-composer.md) §4.1。
 - gate：fmt / clippy `-D warnings` / workspace **344 tests**（+5）/ `check-size` OK。变异 5/5 全红（模型级头不参与合并、`auth_header` 缺省翻成不发、未声明 compat 项翻成 false、同名头只追加不覆盖、openai 认证头开关反转），每条都确认 `Compiling` 行。
 - **一处无测试入口，实测证明**：把 openai adapter 里 `let headers = base_headers(...)` 换成空表，`timo-ai` 38 条测试仍全绿——`base_headers` 函数本身有单测，**调用点没有**。真机回归覆盖：带供应商级 + 模型级同名自定义头、`compat.max_tokens_field=true`、`auth_header` 缺省，DeepSeek 正常回答（RC=0）。`auth_header=false` 的"不发认证头"只有单测（无自建网关可抓请求），如实登记。
-- **未做**：`oauth` / `refreshModels` / `thinkingLevelMap` / `samplingParams`（D68，另一条能力线）；虚拟模型（B1~B3）。
+- **未做**：`oauth` / `refreshModels` / `thinkingLevelMap` / `samplingParams`（D68，另一条能力线）；虚拟模型 B2/B3（B1 见下）。
+
+### P2 第二题·批 B1 读数：虚拟模型目录条目（2026-10-27）
+
+- **落地**：`ApiKind::Virtual`（规范名 `pi-virtual`）+ `Model::is_virtual()`（判据与蓝本 `isVirtualModel` 同源，不另设 kind 字段）+ `Model::virtual_entry`。`api_with_transport(Virtual)` 返回拒绝式适配器：流内 `Start` → 终态 `Error`，文案对齐蓝本 `Virtual model <provider>/<id> must be routed before streaming`，**从不触碰传输层**。解析层显式选中虚拟条目即报同名错误（`KernelError::ModelMustBeRouted`），自动兜底只从物理模型里挑（目录序里虚拟条目排在前面也不会被选中）。`models.json` 可声明 `"api": "pi-virtual"` 条目，`--model` 与桌面供应商清单都能列出（桌面清单本就按 models.json 全量列 id）。设计见 [10](10-provider-composer.md) §4.2。
+- gate：fmt / clippy `-D warnings` / workspace **348 tests**（+4）/ `check-size` OK（target 16.0GiB 超软限，与上批同型，阶段收尾统一 `clean-build`）。
+- **变异 6/6 承重**（每条都确认 `Compiling` 行与 FAILED 命中）：`is_virtual` 恒假、显式选择跳过拒绝、兜底失去虚拟过滤、虚拟条目接到真实 adapter（这条同时让"传输层计数为 0"报红）、流内终态丢 `Error`、`parse` 忘掉 `pi-virtual`。
+- **真机**（临时数据目录 + models.json 声明 `router/auto`）：`timo run "hi" --provider router --model auto` 与裸 `--model auto` 都 RC=1，stderr 一行即蓝本文案；数据目录里除 models.json 外一个文件都没多——失败发生在解析期，早于会话创建与任何请求。如实登记：真机侧只能证明"解析期失败"，"不发网络"由单测的计数传输层（断言 0 次）证明。
+- **留给 B2 的两个实现约束**（本批只读摸底，未改）：① 循环里已有 `LoopHooks::route_model`（D23，同 provider），但它直接改写 `self.model`——虚拟路由要求"选中模型（可为虚拟）"与"本轮请求模型（物理）"分开，否则会话记录会丢掉虚拟名；② `LoopConfig.api` 在装配期固定，路由到物理模型后必须按请求模型的 api 取 adapter，否则虚拟条目会被送进上面的拒绝式适配器。
 
 ## 本轮发现并修复的问题
 

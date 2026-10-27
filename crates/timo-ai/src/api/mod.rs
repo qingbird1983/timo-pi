@@ -4,6 +4,7 @@ pub mod anthropic;
 pub mod http;
 pub mod openai;
 pub mod sse;
+pub mod virtual_model;
 
 pub use http::{ByteStream, ReqwestTransport, SseRequest, SseTransport};
 
@@ -45,5 +46,6 @@ pub fn api_with_transport(kind: ApiKind, transport: Arc<dyn SseTransport>) -> Ar
     match kind {
         ApiKind::AnthropicMessages => Arc::new(anthropic::AnthropicApi::with_transport(transport)),
         ApiKind::OpenaiCompletions => Arc::new(openai::OpenAiApi::with_transport(transport)),
+        ApiKind::Virtual => Arc::new(virtual_model::VirtualApi),
     }
 }

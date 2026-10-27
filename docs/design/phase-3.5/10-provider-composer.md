@@ -69,7 +69,7 @@
 
 ### 4.2 批 B：虚拟模型
 
-- **目录条目**：`Model.kind = Physical | Virtual`；虚拟条目 `api` 记为 `ApiKind::Virtual`，`cost` 全 0，`thinking_levels` 记录可选档位。`catalog.get(provider, id)` 可命中；`ListModels`/`--model` 能选中。
+- **目录条目**：虚拟条目的判据是 `api == ApiKind::Virtual`（`Model::is_virtual()`，与蓝本 `isVirtualModel` 同一判据；不另设 kind 字段，避免同一判据存两处）；`cost` 全 0、`base_url` 空。`catalog.get(provider, id)` 可命中，models.json 声明后 `--model` 与桌面供应商清单可见；可选 thinking 档位图随 B2 路由契约一起进条目。
 - **不可直接请求**：任何把虚拟条目送到 adapter 的路径返回 `ModelMustBeRouted`（文案对齐蓝本）。
 - **路由契约（Rust 侧）**：
 
@@ -102,7 +102,7 @@ pub struct RouteChoice {
 |---|---|---|
 | A | 4.1 配置面 | 单测覆盖合并顺序与 `auth_header` 两个方向；真机 DeepSeek 无回归 |
 | B1 | 目录与画像（`kind`、`ApiKind::Virtual`、不可直接请求、清单可见） | 选中虚拟模型不路由时报出蓝本文案 |
-| B2 | 路由契约 + loop 内 reason 判定 + 扩展注册（`registerVirtualModel` 实装） | 扩展注册一个"按 reason 换模型"的虚拟模型，真机两次请求落到不同物理模型 |
+| B2 | 路由契约 + loop 内 reason 判定 + 扩展注册（`registerVirtualModel` 实装）；先把"选中模型（可为虚拟）/本轮请求模型（物理）/adapter"三者拆开（现 `route_model` 直接改写循环模型，adapter 装配期固定） | 扩展注册一个"按 reason 换模型"的虚拟模型，真机两次请求落到不同物理模型 |
 | B3 | 状态与分支选择（`virtual_model_state` / `model_change` entry、恢复语义） | 重启后选择与路由状态可复现 |
 
 ## 6. 验收

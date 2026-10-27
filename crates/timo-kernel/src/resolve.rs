@@ -27,7 +27,7 @@ pub fn load_catalog(custom: &[CustomProvider]) -> Result<Catalog> {
         let api = match p.api.as_deref().map(ApiKind::parse) {
             Some(None) => {
                 return Err(KernelError::ModelNotFound(format!(
-                    "provider {}: unknown api `{}` (phase 1: anthropic-messages | openai-completions)",
+                    "provider {}: unknown api `{}` (known: anthropic-messages | openai-completions | pi-virtual)",
                     p.name,
                     p.api.as_deref().unwrap_or_default()
                 )));
@@ -116,13 +116,19 @@ pub async fn resolve_model(
                 .ok_or_else(|| KernelError::ModelNotFound(format!("{provider}/{id}")))?
                 .clone()
         };
-        return Ok(finish(catalog, model, settings, explicit_key, custom));
+        return Ok(finish(
+            catalog,
+            reject_virtual(model)?,
+            settings,
+            explicit_key,
+            custom,
+        ));
     }
     // 2. settings 默认（凭证可用才采纳）
     if let (Some(dp), Some(dm)) = (&settings.default_provider, &settings.default_model)
         && let Some(m) = catalog.get(dp, dm)
     {
-        let model = m.clone();
+        let model = reject_virtual(m.clone())?;
         let auth = build_auth(catalog, &model, explicit_key, custom);
         if auth.resolve().await.is_ok() {
             return Ok(finish_with(model, settings, auth));
@@ -130,7 +136,7 @@ pub async fn resolve_model(
     }
     // 3. 首个有凭证的供应商（anthropic 先于 openai，目录序；自定义供应商殿后）
     for provider in builtin_provider_order(custom) {
-        if let Some(m) = catalog.by_provider(&provider).into_iter().next().cloned() {
+        if let Some(m) = first_physical(catalog, &provider) {
             let auth = build_auth(catalog, &m, explicit_key, custom);
             if auth.resolve().await.is_ok() {
                 return Ok(finish_with(m, settings, auth));
@@ -166,6 +172,26 @@ fn finish_with(
             .unwrap_or(ThinkingLevel::Medium),
         auth,
     }
+}
+
+/// 显式选中的虚拟条目在路由实装前一律拒绝（设计 10 §4.2；文案对齐蓝本）。
+fn reject_virtual(model: Model) -> Result<Model> {
+    if model.is_virtual() {
+        return Err(KernelError::ModelMustBeRouted(format!(
+            "{}/{}",
+            model.provider, model.id
+        )));
+    }
+    Ok(model)
+}
+
+/// 自动兜底只从物理模型里挑：虚拟模型必须先路由，不能被自动选中。
+fn first_physical(catalog: &Catalog, provider: &str) -> Option<Model> {
+    catalog
+        .by_provider(provider)
+        .into_iter()
+        .find(|m| !m.is_virtual())
+        .cloned()
 }
 
 /// 内置供应商顺序 + 自定义供应商（去重）。
@@ -239,6 +265,58 @@ mod tests {
         assert!(!model.compat.supports_usage_in_streaming);
         assert!(model.compat.supports_finish_reason, "未声明的项沿用默认");
         assert!(!model.compat.send_auth_header);
+    }
+
+    #[tokio::test]
+    async fn a_virtual_entry_is_listed_but_rejects_direct_requests() {
+        let providers = vec![custom(serde_json::json!({
+            "name": "router",
+            "api": "pi-virtual",
+            "models": [{ "id": "auto", "name": "Auto" }]
+        }))];
+        let catalog = load_catalog(&providers).expect("catalog");
+        let entry = catalog.get("router", "auto").expect("virtual entry");
+        assert!(entry.is_virtual());
+        assert_eq!(entry.name, "Auto");
+        assert_eq!(
+            (entry.cost.input, entry.cost.output),
+            (0.0, 0.0),
+            "虚拟条目不携带费率"
+        );
+        assert!(entry.base_url.is_empty());
+
+        let err = resolve_model(
+            &catalog,
+            &Settings::default(),
+            Some(&("router".to_string(), "auto".to_string())),
+            Some("k"),
+            &providers,
+        )
+        .await
+        .err()
+        .expect("virtual model must be rejected");
+        assert_eq!(
+            err.to_string(),
+            "Virtual model router/auto must be routed before streaming"
+        );
+    }
+
+    #[test]
+    fn auto_selection_never_picks_a_virtual_entry() {
+        let providers = vec![custom(serde_json::json!({
+            "name": "gw",
+            "models": [{ "id": "m" }]
+        }))];
+        let mut catalog = load_catalog(&providers).expect("catalog");
+        // 目录序里 `a` 排在 `m` 前面：兜底必须跳过虚拟条目。
+        catalog.upsert(Model::virtual_entry("gw", "a", "A"));
+        assert_eq!(first_physical(&catalog, "gw").expect("physical").id, "m");
+
+        catalog.upsert(Model::virtual_entry("router", "auto", "Auto"));
+        assert!(
+            first_physical(&catalog, "router").is_none(),
+            "只有虚拟条目的供应商不能被自动选中"
+        );
     }
 
     #[test]

@@ -15,6 +15,9 @@ pub enum KernelError {
     /// 模型解析未命中。
     #[error("model not found: {0}")]
     ModelNotFound(String),
+    /// 选中了未路由的虚拟模型（设计 10 §4.2；参数为 `provider/id`）。
+    #[error("Virtual model {0} must be routed before streaming")]
+    ModelMustBeRouted(String),
     /// agent 前置错误。
     #[error("agent: {0}")]
     Agent(#[from] timo_agent::AgentError),

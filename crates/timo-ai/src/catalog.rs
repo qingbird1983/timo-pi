@@ -19,6 +19,9 @@ pub enum ApiKind {
     AnthropicMessages,
     /// OpenAI Chat Completions API。
     OpenaiCompletions,
+    /// 虚拟模型标记（设计 10 §4.2）：请求前必须先路由到物理模型。
+    #[serde(rename = "pi-virtual")]
+    Virtual,
 }
 
 impl ApiKind {
@@ -28,6 +31,7 @@ impl ApiKind {
         match self {
             Self::AnthropicMessages => "anthropic-messages",
             Self::OpenaiCompletions => "openai-completions",
+            Self::Virtual => "pi-virtual",
         }
     }
 
@@ -37,6 +41,7 @@ impl ApiKind {
         match s {
             "anthropic-messages" => Some(Self::AnthropicMessages),
             "openai-completions" => Some(Self::OpenaiCompletions),
+            "pi-virtual" => Some(Self::Virtual),
             _ => None,
         }
     }
@@ -102,6 +107,34 @@ pub struct Model {
     /// openai-completions 行为开关。
     #[serde(default)]
     pub compat: Compat,
+}
+
+impl Model {
+    /// 是否虚拟条目（判据唯一：api 标记，对齐蓝本 `isVirtualModel`）。
+    #[must_use]
+    pub fn is_virtual(&self) -> bool {
+        self.api == ApiKind::Virtual
+    }
+
+    /// 构造虚拟条目（设计 10 §4.2）：零费率、无端点，真实模型由路由决定。
+    #[must_use]
+    pub fn virtual_entry(provider: &str, id: &str, name: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            provider: provider.to_string(),
+            api: ApiKind::Virtual,
+            base_url: String::new(),
+            reasoning: false,
+            input: vec!["text".to_string()],
+            cost: RateCard::default(),
+            context_window: 0,
+            max_tokens: 0,
+            headers: vec![],
+            cache_ttl_seconds: None,
+            compat: Compat::default(),
+        }
+    }
 }
 
 /// 费率卡（含阶梯；对齐 pi cost.tiers）。

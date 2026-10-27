@@ -34,6 +34,14 @@ pub enum AiError {
     /// 调用到 Phase 1 未实现面（如 OAuth）。
     #[error("not supported in phase 1: {0}")]
     Unsupported(String),
+    /// 虚拟模型未经路由就被请求（设计 10 §4.2；文案对齐蓝本）。
+    #[error("Virtual model {provider}/{id} must be routed before streaming")]
+    ModelMustBeRouted {
+        /// 供应商 id。
+        provider: String,
+        /// 模型 id。
+        id: String,
+    },
     /// 上游配置错误透传。
     #[error(transparent)]
     Config(#[from] timo_config::ConfigError),

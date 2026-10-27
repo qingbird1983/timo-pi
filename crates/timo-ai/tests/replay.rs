@@ -56,6 +56,7 @@ fn model(kind: ApiKind) -> timo_ai::Model {
     let (provider, id) = match kind {
         ApiKind::AnthropicMessages => ("anthropic", "claude-sonnet-4-5"),
         ApiKind::OpenaiCompletions => ("openai", "gpt-4"),
+        other => panic!("no catalog fixture for {other:?}"),
     };
     Catalog::builtin()
         .get(provider, id)
@@ -82,6 +83,7 @@ async fn replay(
     let api_name = match kind {
         ApiKind::AnthropicMessages => "anthropic",
         ApiKind::OpenaiCompletions => "openai",
+        other => panic!("no fixture dir for {other:?}"),
     };
     let raw = read_fixture(api_name, case, "sse");
     let transport = Arc::new(ReplayTransport {
@@ -185,6 +187,7 @@ async fn run_case(kind: ApiKind, case: &str, hold_open: bool, cancel: bool) {
     let api_name = match kind {
         ApiKind::AnthropicMessages => "anthropic",
         ApiKind::OpenaiCompletions => "openai",
+        other => panic!("no fixture dir for {other:?}"),
     };
     let events = replay(kind, case, hold_open, cancel).await;
     assert_expected(&events, api_name, case);
