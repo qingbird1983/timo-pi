@@ -239,6 +239,7 @@ fn handle(
         provider_hooks: None,
         review: None,
         dispatch,
+        route_state: Default::default(),
     })
 }
 
@@ -480,6 +481,7 @@ async fn an_unrouted_virtual_selection_is_rejected_without_network() {
         provider_hooks: None,
         review: None,
         dispatch: None,
+        route_state: Default::default(),
     });
     let out = agent.run("hi".into(), vec![], None).await.unwrap();
     let Message::Assistant(message) = out.last().unwrap() else {

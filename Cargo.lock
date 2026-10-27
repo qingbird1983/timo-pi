@@ -10381,6 +10381,7 @@ dependencies = [
  "async-trait",
  "futures",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "timo-ai",
  "timo-config",

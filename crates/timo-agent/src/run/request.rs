@@ -97,8 +97,15 @@ impl Ctx<'_> {
                 Ok(Some((model, thinking, state))) => {
                     self.model = model;
                     self.thinking_level = thinking;
-                    if reason != RouteReason::Direct {
-                        self.route_state = state;
+                    if let Some(state) = state
+                        && self.route_state.as_ref() != Some(&state)
+                    {
+                        // 先落会话再发请求（蓝本同序）。`Direct` 不经过这里：
+                        // 压缩摘要只取路由结果，不落状态（设计 10 §4.2）。
+                        if self.selection.is_virtual() {
+                            self.write_virtual_state(&state).await;
+                        }
+                        self.store_route_state(state);
                     }
                 }
                 Ok(None) => {
@@ -152,5 +159,27 @@ impl Ctx<'_> {
                 _ = tokio::time::sleep(delay) => {}
             }
         }
+    }
+
+    /// 把新状态写进共享槽（下一次 run 直接读到；设计 10 §4.2）。
+    fn store_route_state(&mut self, state: serde_json::Value) {
+        self.route_state = Some(state.clone());
+        if let Ok(mut slot) = self.config.route_state.lock() {
+            *slot = Some(state);
+        }
+    }
+
+    /// 追加 `session.virtual_model_state`（只增不改）。
+    async fn write_virtual_state(&self, state: &serde_json::Value) {
+        let Some(sink) = &self.session else {
+            return;
+        };
+        let payload = serde_json::json!({
+            "provider": self.selection.provider,
+            "model_id": self.selection.id,
+            "state": state,
+        });
+        let mut writer = sink.lock().await;
+        let _ = writer.append_raw(timo_session::kinds::VIRTUAL_MODEL_STATE, payload);
     }
 }

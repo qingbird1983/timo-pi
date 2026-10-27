@@ -109,8 +109,8 @@ pi.unregisterVirtualModel(provider, id);
   - 目录条目仍由 `models.json` 声明（D69）；扩展注册只提供路由函数，`thinkingLevels`/limits/input 仅注册期校验用，不改变条目数据（D70）。
   - 路由目标的凭证**不在路由期预检**，由本请求的适配器装配解析；缺失时本次请求以错误终态结束（模型名记路由结果）。这与蓝本"路由期即校验凭证"略有先后差异，行为结果一致（不发请求）。
 - **reason 判定点**（loop 内）：用户消息后的首个请求 = `User`；工具结果后的续轮 = `Continuation`；重试（含压缩后重试）= `Retry`；压缩摘要与扩展旁路调用 = `Direct`。判定与蓝本同源：最后一条 assistant 之后有 user 消息（含 steering/follow-up）= `User`，否则 `Continuation`。
-- **状态与恢复**：新 entry `session.virtual_model_state {provider, model_id, state}`，只增不改；按分支取最后一条同 `(provider, model_id)` 的记录；`Direct` 不写。B2 先在 run 内传递状态，B3 落会话。
-- **分支选择**：恢复会话时，若分支上最后一条 `session.model_change` 指向仍注册的虚拟模型，则保持该选择；否则退回最后一条助手消息记录的物理模型。我们目前没有 `model_change` 条目，批 B3 一并加（`session.model_change {provider, model_id, at}`）。
+- **状态与恢复**：新 entry `session.virtual_model_state {provider, model_id, state}`，只增不改；按分支取最后一条同 `(provider, model_id)` 的记录；`Direct` 不写。状态在请求发出前落盘（与蓝本同序），失败也保留；同值不重复写（D71）。跨 run 用共享槽传递，进程重启从会话分支读回。
+- **分支选择**：恢复会话时，若分支上最后一条 `model.change`（既有类型，architecture/05）指向仍注册且目录可解析的虚拟模型，则保持该选择；否则退回最后一条成功响应记录的物理模型。命令行显式 `--provider/--model` 优先于会话恢复；显式虚拟选择与分支记录不同时补一条 `model.change`。虚拟选择在新建会话时也写一条（响应只记物理模型，恢复靠它认回选择）。
 
 ## 5. 批次切分（每批独立门禁 + 提交）
 
@@ -152,8 +152,9 @@ pi.unregisterVirtualModel(provider, id);
 |---|---|---|---|
 | D64 | 不做声明式路由，route 只能由扩展的 JS 函数提供 | a（对齐蓝本） | 蓝本 route 就是函数；我们把它实装到扩展通道（§4.2） |
 | D65 | 只支持 chat 类虚拟模型 | d（范围收敛） | 我们只有 chat 通道；image/classifier 模型类型不在本阶段 |
-| D66 | 会话 entry 用 `session.virtual_model_state` / `session.model_change` | a（自有会话格式） | 沿用本项目 `session.*` 前缀（设计 05） |
+| D66 | 路由状态用新 entry `session.virtual_model_state`；选择复用既有 `model.change` | a（自有会话格式） | 状态是新增语义，用 `session.*` 前缀；模型切换已有格式（architecture/05），不另造同义类型 |
 | D67 | 分支选择按线性链实现 | b（实现更简） | 我们的会话是线性链（D47 同源），"最后一条 model_change 胜"退化为倒序查找 |
 | D68 | `oauth` / `refreshModels` / `thinkingLevelMap` / `samplingParams` 不做 | d（范围收敛） | 我们是自有 adapter，OAuth 与动态刷新属另一条能力线；按需再立题 |
 | D69 | 虚拟条目的目录数据只来自 `models.json`；`registerVirtualModel` 只注册路由函数 | b（实现更简） | 蓝本注册同时创建目录条目；我们的目录在装配期定型（无运行期可变目录面），选模型又发生在扩展装载之前 |
 | D70 | `thinkingLevels` / `contextWindow` / `maxTokens` / `input` 只做注册期校验，不写入目录条目 | d（范围收敛） | 条目数据以 `models.json` 为准；limits 的"首个响应前生效"语义未做 |
+| D71 | 路由状态按 JSON 值比较去重，而非蓝本的引用同一性 | b（实现更简） | 状态跨 JS/JSON 边界后没有引用同一性；路由返回 `undefined`/省略 `state` 仍表示"保持不变" |

@@ -11,7 +11,6 @@ use timo_agent::{
     AgentHandle, EventBus, KernelEvent, PendingMessageQueue, SessionSink, ToolExecutionMode,
 };
 use timo_config::Clock;
-use timo_session::SessionWriter;
 use timo_tools::{ToolDefinition, ToolRegistry};
 
 use crate::Result;
@@ -38,6 +37,10 @@ pub struct Kernel {
     /// 装配期目录 + 请求期模型装配（扩展目录快照 / 路由换模型）。
     catalog: timo_ai::Catalog,
     dispatch: Arc<dyn timo_agent::ModelDispatch>,
+    /// 虚拟模型路由状态（会话分支的当前值；run 内由 agent 更新）。
+    route_state: Arc<std::sync::Mutex<Option<serde_json::Value>>>,
+    /// 模型是否由命令行显式指定（显式优先于会话恢复，设计 10 §4.2）。
+    selection_explicit: bool,
     bus: EventBus,
     mcp: Arc<timo_mcp::McpRuntime>,
     sessions_dir: PathBuf,
@@ -123,6 +126,7 @@ impl Kernel {
         )?;
         let custom = timo_config::load_custom_providers(&models_path)?;
         let catalog = load_catalog(&custom)?;
+        let selection_explicit = options.model_override.is_some();
         let dispatch: Arc<dyn timo_agent::ModelDispatch> = Arc::new(CatalogDispatch::new(
             catalog.clone(),
             custom.clone(),
@@ -179,6 +183,8 @@ impl Kernel {
             resolved,
             catalog,
             dispatch,
+            route_state: Arc::new(std::sync::Mutex::new(None)),
+            selection_explicit,
             bus: EventBus::new(),
             mcp,
             sessions_dir,
@@ -367,6 +373,7 @@ impl Kernel {
                     provider_hooks,
                     review: self.tool_review.clone(),
                     dispatch: Some(Arc::clone(&self.dispatch)),
+                    route_state: Arc::clone(&self.route_state),
                 },
                 self.bus.clone(),
                 Arc::clone(&self.steering),
@@ -375,26 +382,6 @@ impl Kernel {
             self.prompt_text = system_prompt;
             self.agent = Some(agent);
         }
-    }
-
-    fn open_new_session(&mut self) -> Result<()> {
-        let dir = timo_config::session_dir_for(&self.sessions_dir, &self.work_dir);
-        let writer = SessionWriter::create(
-            &dir,
-            &self.work_dir.display().to_string(),
-            Some(&format!(
-                "{}/{}",
-                self.resolved.model.provider, self.resolved.model.id
-            )),
-            Arc::clone(&self.clock),
-            Arc::new(timo_session::IdGen::new()),
-        )?;
-        self.session_id = Some(writer.session_id().to_string());
-        self.session = Some(Arc::new(tokio::sync::Mutex::new(writer)));
-        if let Some(host) = self.ext.as_ref().and_then(|runtime| runtime.host.as_ref()) {
-            host.notify_event("session_start", serde_json::json!({ "reason": "new" }));
-        }
-        Ok(())
     }
 
     /// 当前会话 id（未开跑为 None）。
@@ -480,6 +467,12 @@ impl Kernel {
             "{}/{}",
             self.resolved.model.provider, self.resolved.model.id
         )
+    }
+
+    /// 当前分支的虚拟模型路由状态（无则 None；设计 10 §4.2）。
+    #[must_use]
+    pub fn route_state(&self) -> Option<serde_json::Value> {
+        self.route_state.lock().ok().and_then(|state| state.clone())
     }
 
     /// 思考档位。

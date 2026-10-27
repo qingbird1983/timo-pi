@@ -14,6 +14,7 @@ mod extensions;
 mod kernel;
 mod prompt;
 mod resolve;
+mod session_route;
 mod usage;
 mod warmer;
 

@@ -26,6 +26,8 @@ pub mod kinds {
     pub const CUSTOM_MESSAGE: &str = "custom_message";
     /// 上下文压缩检查点（phase-3.5/04）。
     pub const COMPACTION: &str = "session.compaction";
+    /// 虚拟模型路由状态（phase-3.5/10 §4.2；只增不改，`Direct` 不写）。
+    pub const VIRTUAL_MODEL_STATE: &str = "session.virtual_model_state";
 }
 
 /// 压缩摘要消息的前缀（读端投影与写端共用；phase-3.5/04 §5）。

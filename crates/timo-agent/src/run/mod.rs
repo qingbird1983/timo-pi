@@ -73,6 +73,8 @@ pub struct LoopConfig {
     pub review: Option<std::sync::Arc<dyn timo_tools::ToolReview>>,
     /// 请求期模型装配（None = 单一 adapter/凭证，Phase 1/2 行为）。
     pub dispatch: Option<std::sync::Arc<dyn ModelDispatch>>,
+    /// 虚拟模型路由状态（跨 run 共享；Kernel 从会话分支初始化，设计 10 §4.2）。
+    pub route_state: std::sync::Arc<std::sync::Mutex<Option<serde_json::Value>>>,
 }
 
 /// 会话写入口（MessageAdded 落盘挂点；None = 无会话）。
@@ -146,7 +148,11 @@ pub async fn run_agent_loop(
         selected_thinking: config.thinking_level,
         model: config.model.clone(),
         thinking_level: config.thinking_level,
-        route_state: None,
+        route_state: config
+            .route_state
+            .lock()
+            .ok()
+            .and_then(|state| state.clone()),
         last_request: None,
     };
     for m in prompt {

@@ -3,9 +3,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use timo_ai::Catalog;
 use timo_session::{
-    SessionError, SessionInfo, SessionWriter, list_sessions, project_context, read_entries,
-    serialize_export,
+    Entry, SessionError, SessionInfo, SessionWriter, kinds, list_sessions, project_context,
+    read_entries, serialize_export,
 };
 
 use super::Kernel;
@@ -80,28 +81,134 @@ impl Kernel {
             .find_session_path(id)
             .ok_or_else(|| KernelError::Session(SessionError::NotFound(id.to_string())))?;
         let entries = read_entries(&path)?;
-        let writer = SessionWriter::open(
+        let mut writer = SessionWriter::open(
             &path,
             Arc::clone(&self.clock),
             Arc::new(timo_session::IdGen::new()),
         )?;
+        let selection_changed = self.restore_selection(&entries);
+        self.restore_route_state(&entries);
+        // 显式虚拟选择与分支记录不同时补一条 `model.change`，让下次恢复认回它。
+        if self.selection_explicit
+            && self.resolved.model.is_virtual()
+            && crate::session_route::last_model_change(&entries).as_ref()
+                != Some(&(
+                    self.resolved.model.provider.clone(),
+                    self.resolved.model.id.clone(),
+                ))
+        {
+            writer.append_raw(
+                kinds::MODEL_CHANGE,
+                serde_json::json!({
+                    "provider": self.resolved.model.provider,
+                    "model_id": self.resolved.model.id,
+                }),
+            )?;
+        }
         self.session_id = Some(id.to_string());
         self.history = Some(project_context(&entries));
         self.session = Some(Arc::new(tokio::sync::Mutex::new(writer)));
+        if selection_changed {
+            // 首次装配用的是命令行/设置的选中模型；恢复出另一个选择后重建 agent。
+            self.agent = None;
+            self.ensure_ready().await;
+        }
         if let Some(host) = self.ext.as_ref().and_then(|runtime| runtime.host.as_ref()) {
             host.notify_event("session_start", serde_json::json!({ "reason": "resume" }));
         }
         Ok(())
     }
 
+    /// 按分支恢复选中模型（显式命令行选择优先）；返回选择是否变化。
+    fn restore_selection(&mut self, entries: &[Entry]) -> bool {
+        if self.selection_explicit {
+            return false;
+        }
+        let registered: Vec<(String, String)> = self
+            .ext
+            .as_ref()
+            .and_then(|runtime| runtime.host.as_ref())
+            .map(|host| {
+                host.virtual_models()
+                    .into_iter()
+                    .map(|model| (model.provider, model.id))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let catalog: &Catalog = &self.catalog;
+        let Some(model) = crate::session_route::branch_selection(
+            entries,
+            |provider, id| registered.iter().any(|(p, m)| p == provider && m == id),
+            |provider, id| catalog.get(provider, id).cloned(),
+        ) else {
+            return false;
+        };
+        if self.resolved.model.provider == model.provider && self.resolved.model.id == model.id {
+            return false;
+        }
+        self.resolved.auth = self.dispatch.auth(&model);
+        self.resolved.model = model;
+        true
+    }
+
+    /// 按恢复后的选中模型取分支上最近的路由状态（物理选择没有状态）。
+    fn restore_route_state(&self, entries: &[Entry]) {
+        let state = crate::session_route::virtual_model_state(
+            entries,
+            &self.resolved.model.provider,
+            &self.resolved.model.id,
+        );
+        if let Ok(mut slot) = self.route_state.lock() {
+            *slot = state;
+        }
+    }
+
     /// 开始一个未落盘的会话草稿；首次 [`Kernel::run`] 才创建会话文件。
     ///
     /// 调用后当前会话 id 与历史都被清空（GUI“新建会话”）。
+    /// 新建会话并落 header（虚拟选择额外写一条 `model.change`）。
+    pub(super) fn open_new_session(&mut self) -> Result<()> {
+        let dir = timo_config::session_dir_for(&self.sessions_dir, &self.work_dir);
+        let mut writer = SessionWriter::create(
+            &dir,
+            &self.work_dir.display().to_string(),
+            Some(&format!(
+                "{}/{}",
+                self.resolved.model.provider, self.resolved.model.id
+            )),
+            Arc::clone(&self.clock),
+            Arc::new(timo_session::IdGen::new()),
+        )?;
+        // 虚拟选择必须落一条 `model.change`：响应只记物理模型，恢复时靠它认回选择。
+        if self.resolved.model.is_virtual() {
+            writer.append_raw(
+                timo_session::kinds::MODEL_CHANGE,
+                serde_json::json!({
+                    "provider": self.resolved.model.provider,
+                    "model_id": self.resolved.model.id,
+                }),
+            )?;
+        }
+        if let Ok(mut slot) = self.route_state.lock() {
+            *slot = None;
+        }
+        self.session_id = Some(writer.session_id().to_string());
+        self.session = Some(Arc::new(tokio::sync::Mutex::new(writer)));
+        if let Some(host) = self.ext.as_ref().and_then(|runtime| runtime.host.as_ref()) {
+            host.notify_event("session_start", serde_json::json!({ "reason": "new" }));
+        }
+        Ok(())
+    }
+
+    /// 开始一个未落盘的会话草稿；首次 run 才创建会话文件（GUI“新建会话”）。
     pub fn new_session(&mut self) {
         self.warmer.cancel("session changed");
         self.session = None;
         self.session_id = None;
         self.history = None;
+        if let Ok(mut slot) = self.route_state.lock() {
+            *slot = None;
+        }
     }
 
     /// 当前会话的投影上下文；草稿或尚无历史时为 `None`。

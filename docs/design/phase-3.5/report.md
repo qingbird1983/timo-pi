@@ -2,7 +2,7 @@
 
 - 日期：2026-10-27
 - 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计、compaction、缓存、无头模式——装进内核，并让 CLI 与桌面共用同一份能力。
-- 状态：**P0、P1、D6 完成；P2 第一题完成，第二题进行中（B1/B2 已落地，B3 待做），余 codemode / 信任门控待定稿**
+- 状态：**P0、P1、D6 完成；P2 第一题完成，第二题 B1~B3 全部落地，余 codemode / 信任门控待定稿**
 
 ## 完成了什么
 
@@ -125,6 +125,17 @@
 - **变异 13/13 承重**（拆分后重跑，逐条确认 `test result: FAILED` 且编译通过、文件按 sha 还原）：reason 二选一、重试原因、目录核对、跳过虚拟凭证、state 回存、previous 快照、终态档位回填、只路由已注册虚拟、注销生效、物理 id 冲突、虚拟不能作路由目标、按模型取 adapter、`modelRegistry.find`。
 - **真机 DeepSeek**（临时数据目录；`router/auto` 由 models.json 声明，扩展注册路由）：同一 run 内用户轮 `provider_request deepseek/deepseek-chat`、工具续轮 `deepseek/deepseek-reasoner`，终答 `VM_ROUTER_OK`，exit 0，`--no-session` 下零会话文件；`--no-extensions` 再选同一虚拟模型 → `Virtual model router/auto must be routed before streaming`、exit 1、零网络。
 - **真机顺带发现（未修，登记）**：把续轮目标换成 `deepseek-flash` 时 400——"The `reasoning_content` in the thinking mode must be passed back to the API"。同一历史改投 `deepseek-reasoner` 正常；说明该模型的思考模式在工具调用回放时要求 assistant 消息带 `reasoning_content`，我们的 openai 适配器未回传。与 B2 路由无关，见「已知问题」。
+
+
+### P2 第二题·批 B3 读数：状态与分支选择（2026-10-27）
+
+- **落地**：新 entry `session.virtual_model_state {provider, model_id, state}`（只增不改；`Direct` 不写；状态在请求发出前落盘，失败也保留；同值不重复写，D71）。路由状态跨 run 用共享槽传递；进程重启从会话分支读回。恢复选择：显式 `--provider/--model` 优先；否则最后一条 `model.change` 指向仍注册且目录可解析的虚拟模型时保持它，否则退回最后一条成功响应的物理模型。虚拟选择在新建会话与显式覆盖时写 `model.change`（响应只记物理模型）；恢复出另一个选择后重建 agent（首次装配用的是命令行/设置的选择）。
+- gate：fmt / clippy `-D warnings` / workspace **370 tests**（+9）/ `check-size` OK（`kernel.rs` 493 行；`open_new_session` 移入 `kernel/sessions.rs`；target 21.3GiB 超软限，阶段收尾 `clean-build`）。
+- **变异 12/12 承重**（逐条确认 `test result: FAILED`、编译通过、文件按 sha 还原）：Direct 状态落盘、同值重复写、状态不落盘、共享槽不更新、跨 run 不读槽、恢复选择、显式优先、恢复状态、虚拟必须已注册、跳过失败响应、新会话写选择、取最后一条状态。
+- **真机 DeepSeek**（两个独立会话各跑一次首轮，再分别恢复）：
+  - 首轮两请求：`deepseek-chat` thinking=low（用户轮）→ `deepseek-reasoner` thinking=high（工具续轮），会话里写了两条 `session.virtual_model_state`（seen 1 → 2）与一条 `model.change router/auto`。
+  - 带扩展恢复：助手消息 `deepseek-reasoner` thinking=**high**——说明选择恢复成虚拟模型，且 `request.state {seen:2}` 被读回并驱动路由；状态值未变化，未重复落盘（仍两条）。
+  - 不带扩展恢复：助手消息 `deepseek-reasoner` thinking=**off**——虚拟模型未注册，选择退回最后响应的物理模型，且用命令行档位；无新增状态 entry。若 agent 没按恢复后的选择重建，默认选择会落到 `deepseek-chat`。
 
 
 ## 本轮发现并修复的问题
