@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use timo_config::KEYCHAIN_SERVICE;
 use timo_kernel::{
     Kernel, KernelEvent, KernelOptions, Message, ReviewDecision, ReviewKind, SessionInfo,
-    ToolReview, ToolReviewRequest,
+    SlashCommand, ToolReview, ToolReviewRequest, UsageSummary,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
@@ -118,6 +118,10 @@ pub enum BridgeEvent {
     Running,
     /// 一次 run 结束。
     Finished,
+    /// 命令清单（内建 + 技能 + 扩展）。
+    Commands(Vec<SlashCommand>),
+    /// 累计用量（会话级）。
+    Usage(UsageSummary),
     /// 内核事件快照。
     Kernel(KernelEvent),
     /// 工具执行前审阅请求；UI 决定后经 `respond` 回传。
@@ -267,6 +271,10 @@ async fn run(
         model: kernel.model_label(),
         sessions,
     });
+    // 只建提示与技能（不触发 MCP 连接），让面板在首轮前就有命令可列。
+    kernel.reload_resources();
+    let _ = event_tx.send(BridgeEvent::Commands(kernel.slash_commands()));
+    let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
 
     while let Some(command) = commands.recv().await {
         match command {
@@ -277,6 +285,7 @@ async fn run(
                     id: None,
                     history: vec![],
                 });
+                let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
             }
             BridgeCommand::OpenSession(id) => match kernel.resume(&id).await {
                 Ok(()) => {
@@ -285,6 +294,7 @@ async fn run(
                         id: Some(id),
                         history,
                     });
+                    let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
                 }
                 Err(error) => {
                     let _ = event_tx.send(BridgeEvent::OpenFailed(error.to_string()));
@@ -294,6 +304,7 @@ async fn run(
                 Ok(()) => {
                     let _ = event_tx.send(BridgeEvent::Deleted(id));
                     send_sessions(&kernel, &event_tx);
+                    let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
                 }
                 Err(error) => {
                     let _ = event_tx.send(BridgeEvent::DeleteFailed(error.to_string()));
@@ -419,6 +430,7 @@ async fn run_once(
         }
     }
     send_sessions(kernel, event_tx);
+    let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
 }
 
 fn send_sessions(kernel: &Kernel, event_tx: &UnboundedSender<BridgeEvent>) {

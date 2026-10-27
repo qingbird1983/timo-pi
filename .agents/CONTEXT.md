@@ -1,27 +1,24 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-27（会话主题：**Phase 3 收尾：NSH PoC 与 C1~C6 验收**）
+- 更新：2026-10-27（会话主题：**Phase 3.5 P0：提示、技能、命令与用量**）
 
 ## 当前阶段与状态
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 设计进行中（ADR-0013）**：R1 调查已定稿（`docs/research/06-pi-interaction-logic.md`）；下一步写 `design/phase-3.5/00-overview.md` 与 P0 详设，定稿前禁止写实现代码。
+- **Phase 3.5 P0 实现完成（ADR-0013）**：R1 调查与 P0 详设定稿；批 2 提示/上下文、批 3 技能/命令、批 4 用量、批 5 桌面接线已提交。下一步 D1/D2/D4/D7 真机验收与 `report` 草稿，之后 P1 详设。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
-- **NSH 隔离层**（`features/nsh_poc/`，`nsh-poc` feature）：`verify_package` → 暂存第二个 `Entity<AppView>` → 1 秒健康检查 → `accept_package` 后交换；失败保留旧面板。`TrustStore` 持久化已接受构建，降级包被拒。
-- **预览页**：侧栏入口；v1/v2/崩溃/未签名/篡改、重置信任、停止；显示 id/version/build/sha 与状态；明暗跟随；主窗口 `inactive_frame_interval = None`。
-- **打包**：`scripts/build-nsh-poc` 只调官方 `nsh 0.3.0 (76fa8a7)` 的 `keygen/certify/publish/verify`；源码 `fixtures/nsh-poc/panel.tsx`；密钥与包只落数据目录。
-- **真机验收（DeepSeek，临时 `TIMO_AGENT_DIR`）**：C1 会话/工具/接受写 `proof.txt`/拒绝写 `rejected.txt`/强杀重开恢复；C2 diff 审阅；C3 沿用 H-008 钥匙串证据 + 本轮 `sk-` 扫描 0 命中；C4 热更与四类拒绝；C5 强杀恢复；C6 七条接缝 + `#[gpui_kit::test]`。
-- **修复**：`use gpui_kit::*` 把 gpui 的 `test` 宏带进子模块导致 `#[test]` 自递归（P-010）；`nsh_poc.rs` 667 行超 500，拆 `mod.rs` 409 + `page.rs` 268。
-- **测试**：默认 workspace 228 tests；`--features nsh-poc` 23 tests（含未签名拒绝）；fmt / clippy / check-size 通过。
+- **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
+- **测试**：窗口级面板测试移到 `features/palette_tests.rs`，`app_tests.rs` 回到 500 行内；新增事件到壳、插入动作与调色板关闭断言。
+- **门禁**：fmt / clippy / workspace tests / check-size 全绿；`clean-build` 后 `target/` 25.4 → 14.0GiB。
 
 ## 下一步（按优先级）
 
-1. Phase 3.5 P0 收口：桌面命令面板接新清单（批 5）→ D1/D2/D4/D7 真机验收 → `report` 草稿；之后 P1 详设（compaction/缓存/无头）。
+1. Phase 3.5 P0 收口：D1/D2/D4/D7 真机验收（CLI + 桌面，真实 DeepSeek）→ `docs/design/phase-3.5/report.md` 草稿；之后 P1 详设（compaction/缓存/无头）。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. `target/` 已按新版 §7 清到 14GiB；后续每阶段收尾跑 `scripts/clean-build`（40.6 → 14.0，释放 26.6GiB）。sccache 到位后再把硬限收紧到 15GiB。docs 总数 65 超软限 60，Phase 3.5 开工前做整合评审。
 

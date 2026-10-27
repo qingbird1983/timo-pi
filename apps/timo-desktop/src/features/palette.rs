@@ -4,6 +4,8 @@ use gpui_kit::component::command::{Command, CommandGroup, CommandItem};
 use gpui_kit::component::{ActiveTheme as _, IconName, v_flex};
 use gpui_kit::*;
 
+use timo_kernel::{CommandSource, CommandStatus};
+
 use crate::app::DesktopApp;
 use crate::features::settings_view::SettingsTab;
 
@@ -32,6 +34,14 @@ actions!(
 pub struct OpenSessionAction {
     /// 会话 id。
     pub id: String,
+}
+
+/// 把一段命令文本插入输入框（技能命令）。
+#[derive(Clone, PartialEq, Eq, Debug, Action)]
+#[action(namespace = timo_desktop, no_json)]
+pub struct InsertPromptAction {
+    /// 要插入的文本。
+    pub text: String,
 }
 
 impl DesktopApp {
@@ -90,11 +100,36 @@ impl DesktopApp {
                     .icon(IconName::Delete)
                     .action(Box::new(DeleteCurrentSessionAction)),
             );
+        let skills: Vec<CommandItem> = self
+            .slash_commands
+            .iter()
+            .filter(|command| {
+                command.source == CommandSource::Skill && command.status == CommandStatus::Ready
+            })
+            .map(|command| {
+                CommandItem::new()
+                    .label(format!("/{}", command.name))
+                    .icon(IconName::Bot)
+                    .action(Box::new(InsertPromptAction {
+                        text: format!("/{} ", command.name),
+                    }))
+            })
+            .collect();
         let palette = Command::new(&self.palette)
             .placeholder(t!("palette.placeholder").to_string())
             .max_h(px(360.))
             .bordered(false)
-            .group(session_group)
+            .group(session_group);
+        let palette = if skills.is_empty() {
+            palette
+        } else {
+            palette.group(
+                CommandGroup::new()
+                    .label(t!("palette.skills").to_string())
+                    .items(skills),
+            )
+        };
+        let palette = palette
             .group(
                 CommandGroup::new()
                     .label(t!("palette.run").to_string())
@@ -194,6 +229,21 @@ impl DesktopApp {
                     ),
             )
             .into_any_element()
+    }
+
+    /// 面板里选中技能：插入 `/skill:name ` 并聚焦输入框。
+    pub(crate) fn on_insert_prompt(
+        &mut self,
+        action: &InsertPromptAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.palette_open = false;
+        let text = action.text.clone();
+        self.input
+            .update(cx, |input, cx| input.insert(&text, window, cx));
+        self.focus_composer(window, cx);
+        cx.notify();
     }
 
     pub(crate) fn on_toggle_palette(
@@ -364,3 +414,7 @@ impl DesktopApp {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "palette_tests.rs"]
+mod tests;

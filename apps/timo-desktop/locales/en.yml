@@ -124,6 +124,7 @@ settings:
 palette:
   placeholder: Type a command…
   sessions: Sessions
+  skills: Skills
   new_session: New session
   delete_session: Delete current session
   run: Run

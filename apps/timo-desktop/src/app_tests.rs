@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use crate::bridge::{BridgeCommand, BridgeEvent};
 
 #[allow(clippy::type_complexity)]
-fn open(
+pub(crate) fn open(
     cx: &mut TestAppContext,
 ) -> (
     AnyWindowHandle,
@@ -284,64 +284,6 @@ fn escape_dismisses_review_as_reject(cx: &mut TestAppContext) {
         ReviewDecision::Reject { .. } => {}
         ReviewDecision::Allow => panic!("escape must reject"),
     }
-}
-
-#[gpui_kit::test]
-fn palette_toggles_with_shortcut(cx: &mut TestAppContext) {
-    cx.update(gpui_kit::init);
-    crate::i18n::init();
-    let (handle, app, events_tx, _commands) = open(cx);
-    events_tx
-        .send(BridgeEvent::Ready {
-            model: "deepseek/deepseek-chat".into(),
-            sessions: vec![],
-        })
-        .unwrap();
-    cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        app.update(cx, |app, cx| app.focus_composer(window, cx));
-        window.press("ctrl-k", cx);
-        window.render_frame(cx);
-        assert!(app.read(cx).palette_open);
-        assert!(window.try_find("palette-panel").is_some());
-        window.press("escape", cx);
-        window.render_frame(cx);
-        assert!(window.try_find("palette-panel").is_none());
-    })
-    .unwrap();
-}
-
-#[gpui_kit::test]
-fn palette_clears_query_on_reopen(cx: &mut TestAppContext) {
-    cx.update(gpui_kit::init);
-    crate::i18n::init();
-    let (handle, app, events_tx, _commands) = open(cx);
-    events_tx
-        .send(BridgeEvent::Ready {
-            model: "deepseek/deepseek-chat".into(),
-            sessions: vec![],
-        })
-        .unwrap();
-    cx.run_until_parked();
-    cx.update_window(handle, |_, window, cx| {
-        window.render_frame(cx);
-        app.update(cx, |app, cx| app.focus_composer(window, cx));
-        window.press("ctrl-k", cx);
-        window.render_frame(cx);
-        let palette = app.read(cx).palette.clone();
-        palette.update(cx, |state, cx| state.set_query("设置", window, cx));
-        window.render_frame(cx);
-        window.press("escape", cx);
-        window.render_frame(cx);
-        app.update(cx, |app, cx| app.focus_composer(window, cx));
-        window.press("ctrl-k", cx);
-        window.render_frame(cx);
-        assert!(app.read(cx).palette_open);
-        let query = app.read(cx).palette.read(cx).query(cx);
-        assert_eq!(query.as_ref(), "");
-    })
-    .unwrap();
 }
 
 #[gpui_kit::test]

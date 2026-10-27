@@ -11,7 +11,7 @@ use gpui_kit::component::{
     ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::*;
-use timo_kernel::{KernelEvent, KernelOptions, SessionInfo};
+use timo_kernel::{KernelEvent, KernelOptions, SessionInfo, SlashCommand, UsageSummary};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo};
@@ -39,6 +39,8 @@ pub struct DesktopApp {
     pub(crate) session_id: Option<String>,
     pub(crate) session_title: String,
     pub(crate) model: Option<String>,
+    pub(crate) slash_commands: Vec<SlashCommand>,
+    pub(crate) usage: UsageSummary,
     pub(crate) ready: bool,
     pub(crate) fatal: Option<String>,
     pub(crate) notice: Option<String>,
@@ -190,6 +192,8 @@ impl DesktopApp {
             session_id: None,
             session_title: t!("chat.empty_session").to_string(),
             model: None,
+            slash_commands: vec![],
+            usage: UsageSummary::default(),
             ready: false,
             fatal: None,
             notice: None,
@@ -230,6 +234,12 @@ impl DesktopApp {
             }
             BridgeEvent::Sessions(sessions) => {
                 self.sessions = sessions;
+            }
+            BridgeEvent::Commands(commands) => {
+                self.slash_commands = commands;
+            }
+            BridgeEvent::Usage(usage) => {
+                self.usage = usage;
             }
             BridgeEvent::Deleted(id) => {
                 if self.session_id.as_deref() == Some(id.as_str()) {
@@ -355,10 +365,17 @@ impl DesktopApp {
             .model
             .clone()
             .unwrap_or_else(|| t!("status.disconnected").to_string());
-        StatusBar::new()
-            .left(state)
-            .left(model)
-            .right(format!("v{}", env!("CARGO_PKG_VERSION")))
+        let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+        let right = if self.usage.totals.tokens() > 0 {
+            format!(
+                "{} tok · ${:.4} · {version}",
+                self.usage.totals.tokens(),
+                self.usage.totals.cost
+            )
+        } else {
+            version
+        };
+        StatusBar::new().left(state).left(model).right(right)
     }
 
     fn notice_bar(&self, cx: &Context<Self>) -> Option<AnyElement> {
@@ -465,6 +482,7 @@ impl Render for DesktopApp {
             .on_action(cx.listener(Self::on_toggle_locale))
             .on_action(cx.listener(Self::on_toggle_theme))
             .on_action(cx.listener(Self::on_open_session))
+            .on_action(cx.listener(Self::on_insert_prompt))
             .on_action(cx.listener(Self::on_accept_review))
             .on_action(cx.listener(Self::on_reject_review))
             .on_action(cx.listener(Self::on_close_overlay))
@@ -477,4 +495,4 @@ mod actions;
 
 #[cfg(test)]
 #[path = "app_tests.rs"]
-mod tests;
+pub(crate) mod tests;

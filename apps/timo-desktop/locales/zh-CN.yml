@@ -124,6 +124,7 @@ settings:
 palette:
   placeholder: 输入命令…
   sessions: 会话
+  skills: 技能
   new_session: 新建会话
   delete_session: 删除当前会话
   run: 运行
