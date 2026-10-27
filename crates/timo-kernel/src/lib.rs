@@ -19,6 +19,7 @@ pub use extensions::{
     permissions_path, remove_extension, split_command, summarize, trust_extension,
 };
 pub use kernel::{Kernel, KernelOptions};
+pub use prompt::{ResourceWarning, WarningKind};
 pub use timo_ext::{
     Capabilities, DiagnosticReport, ExtensionHost, GrantState, PermissionStore, Scope, discover,
 };

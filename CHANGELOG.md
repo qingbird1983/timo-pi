@@ -6,6 +6,19 @@
 
 ---
 
+## [0.1.34] - 2026-10-27
+
+### 实现：系统提示分节与项目上下文（Phase 3.5 P0 批 2）
+
+- 系统提示从平铺字符串升级为分节装配（`preamble`/`tools`/`rules`/`docs`/`addendum`/`project_context`/`skills`/`cwd` + 自定义节）；有自定义提示词时整段替换并跳过 `tools`/`rules`/`docs`。
+- 项目上下文：`AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md` 候选，全局在前、祖先从根到 cwd、去 BOM、按真实路径去重；`SYSTEM.md`/`APPEND_SYSTEM.md` 支持全局与项目两层。
+- 内核新增 `system_prompt()` / `resource_warnings()` / `reload_resources()`；节名非法时发 `Error` 事件并降级为身份行，不中止装配。
+- 设置新增 `skills` 与 `enable_skill_commands`（默认 true）；`kernel.rs` 拆出提示与静态会话助手，回到 500 行以内。
+- 测试：kernel 新增 13 条（含 golden 全文断言、顺序/BOM/去重、重载）；workspace 全绿，四门禁通过。
+- 体量：`target/` 21.6GiB 超软限（批次中，未清扫）；技能发现与命令面在下一批。
+
+---
+
 ## [0.1.33] - 2026-10-27
 
 ### 设计：Phase 3.5 P0 详设定稿（提示、技能、命令、用量）

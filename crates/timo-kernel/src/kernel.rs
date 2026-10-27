@@ -17,10 +17,11 @@ use timo_tools::{ToolDefinition, ToolRegistry};
 use crate::Result;
 use crate::error::KernelError;
 use crate::extensions::{self, ExtensionOptions, ExtensionRuntime};
-use crate::prompt::build_system_prompt;
+use crate::prompt;
 use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
 
 mod options;
+mod prompt_api;
 mod sessions;
 
 pub use options::KernelOptions;
@@ -52,26 +53,13 @@ pub struct Kernel {
     ext_running: Arc<AtomicBool>,
     ext: Option<ExtensionRuntime>,
     tool_review: Option<Arc<dyn timo_tools::ToolReview>>,
+    /// 当前渲染的系统提示（装配后有效）。
+    prompt_text: String,
+    /// 上下文装载告警。
+    prompt_warnings: Vec<prompt::ResourceWarning>,
 }
 
 impl Kernel {
-    /// 计算会话目录（与 [`Kernel::new`] 同一推导；`sessions` 命令无需模型凭证）。
-    ///
-    /// # Errors
-    /// 平台数据目录不可得 → [`KernelError::Config`]。
-    pub fn sessions_dir(data_dir: Option<&std::path::Path>) -> Result<PathBuf> {
-        match data_dir {
-            Some(d) => Ok(d.join("sessions")),
-            None => Ok(timo_config::sessions_dir(None)?),
-        }
-    }
-
-    /// 扫描会话目录（不装配内核；修改时间倒序）。
-    #[must_use]
-    pub fn list_sessions_at(dir: &std::path::Path) -> Vec<SessionInfo> {
-        list_sessions(dir)
-    }
-
     /// 装配内核：配置 → 目录 → 模型解析 → 内置工具注册表。
     ///
     /// MCP 仅读配置（不连接）；agent 在首次 [`Kernel::run`]/[`Kernel::tools`] 时装配。
@@ -175,6 +163,8 @@ impl Kernel {
             ext_running: Arc::new(AtomicBool::new(false)),
             ext: None,
             tool_review: options.tool_review,
+            prompt_text: String::new(),
+            prompt_warnings: Vec::new(),
         })
     }
 
@@ -282,7 +272,8 @@ impl Kernel {
                     ),
                     None => (None, None),
                 };
-            let system_prompt = build_system_prompt(&self.work_dir, &self.registry);
+            let (system_prompt, warnings) = self.build_prompt();
+            self.prompt_warnings = warnings;
             let agent = AgentHandle::with_parts(
                 timo_agent::LoopConfig {
                     model: self.resolved.model.clone(),
@@ -293,7 +284,7 @@ impl Kernel {
                     tool_execution: ToolExecutionMode::Parallel,
                     retry: self.retry.clone(),
                     cwd: Arc::from(self.work_dir.as_path()),
-                    system_prompt,
+                    system_prompt: system_prompt.clone(),
                     clock: Arc::clone(&self.clock),
                     max_turns: self.max_turns,
                     hooks,
@@ -304,6 +295,7 @@ impl Kernel {
                 Arc::clone(&self.steering),
                 Arc::clone(&self.follow_up),
             );
+            self.prompt_text = system_prompt;
             self.agent = Some(agent);
         }
     }

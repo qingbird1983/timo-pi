@@ -50,7 +50,7 @@ impl Default for ImageSettings {
 }
 
 /// 设置文件顶层结构（全局 + 项目深合并后的结果）。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     /// 默认供应商 id。
@@ -75,6 +75,30 @@ pub struct Settings {
     pub max_tokens: Option<u64>,
     /// 请求 temperature 覆盖。
     pub temperature: Option<f64>,
+    /// 显式技能路径（文件或目录；相对 cwd，phase-3.5/02）。
+    pub skills: Vec<String>,
+    /// 技能是否进入命令发现（手动 `/skill:` 不受影响）。
+    pub enable_skill_commands: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            default_provider: None,
+            default_model: None,
+            default_thinking_level: None,
+            default_tools: Vec::new(),
+            session_dir: None,
+            shell_path: None,
+            shell_command_prefix: None,
+            retry: RetrySettings::default(),
+            images: ImageSettings::default(),
+            max_tokens: None,
+            temperature: None,
+            skills: Vec::new(),
+            enable_skill_commands: true,
+        }
+    }
 }
 
 /// 递归合并两个 JSON 对象：`over` 胜出；数组整体替换。
@@ -186,6 +210,19 @@ mod tests {
         let s = Settings::default();
         assert!(s.retry.enabled && s.retry.max_retries == 3 && s.retry.base_delay_ms == 2000);
         assert!(s.images.auto_resize);
+        assert!(s.enable_skill_commands);
+        assert!(s.skills.is_empty());
+    }
+
+    #[test]
+    fn skill_keys_are_snake_case_and_mergeable() {
+        let s: Settings = serde_json::from_value(serde_json::json!({
+            "skills": ["/extras/skills"],
+            "enable_skill_commands": false
+        }))
+        .expect("parse");
+        assert_eq!(s.skills, vec!["/extras/skills".to_string()]);
+        assert!(!s.enable_skill_commands);
     }
 
     #[test]

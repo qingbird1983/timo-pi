@@ -56,7 +56,7 @@ pub(crate) struct PromptInputs<'a> {
 7. `project_context`：非空时，先写引导句（本项目自写："Project instructions found for this workspace:"），再对每个文件输出 `<project_instructions path="…">` 块。
 8. `skills`：技能非空且存在可读工具（read → bash → 间接）时生成（02 §4）。
 9. `cwd`：工作目录；反斜杠统一成正斜杠。
-10. `extra_sections`：按注册顺序；空内容跳过；名字校验失败 → `Err`（对齐 pi 的抛错行为），内核把它转成 `KernelError::Prompt` 并外显。
+10. `extra_sections`：按注册顺序；空内容跳过；名字校验失败 → `Err`（对齐 pi 的抛错行为）；内核发 `KernelEvent::Error` 并降级为身份行，不中止装配。
 
 节名规则：`^[a-z][a-z0-9_-]*$`，`preamble` 保留字（不得自定义）；`tools/rules/docs/addendum/project_context/skills/cwd` 为内置名。
 
@@ -126,7 +126,7 @@ pub(crate) fn discover_context_files(
 ## 7. 构建时机与重载
 
 - `ensure_ready()`：MCP 与扩展装载完、工具注册表冻结之后构建提示（顺序不能反，否则扩展工具的 snippet/guidelines 丢失）。
-- `Kernel::reload_resources()`（新增，公开）：重新发现上下文与技能 → 重建提示；渲染结果与当前 agent 的不同 → 用新提示重建 `AgentHandle`（复用同一事件总线与队列）。重建后旧的 `AbortHandle` 失效，`abort()` 走内核方法不受影响。
+- `Kernel::reload_resources()`（新增，公开）：重新发现上下文与技能 → 重建提示；渲染结果与当前 agent 的不同 → 将 agent 置空，下次 `run`/`tools` 用新提示重建（旧 `AbortHandle` 随之失效，`abort()` 走内核方法不受影响）。
 - CLI `/reload` 调它；桌面命令面板同一入口。
 - `Kernel::system_prompt()`（只读，诊断/测试），返回当前渲染文本。
 

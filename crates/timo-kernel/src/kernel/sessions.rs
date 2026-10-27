@@ -1,14 +1,33 @@
 //! 会话生命周期 API（resume / 草稿 / 历史 / 删除）。
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use timo_session::{SessionError, SessionWriter, project_context, read_entries};
+use timo_session::{
+    SessionError, SessionInfo, SessionWriter, list_sessions, project_context, read_entries,
+};
 
 use super::Kernel;
 use crate::Result;
 use crate::error::KernelError;
 
 impl Kernel {
+    /// 计算会话目录（与 [`Kernel::new`] 同一推导；`sessions` 命令无需模型凭证）。
+    ///
+    /// # Errors
+    /// 平台数据目录不可得 → [`KernelError::Config`]。
+    pub fn sessions_dir(data_dir: Option<&Path>) -> Result<PathBuf> {
+        match data_dir {
+            Some(d) => Ok(d.join("sessions")),
+            None => Ok(timo_config::sessions_dir(None)?),
+        }
+    }
+
+    /// 扫描会话目录（不装配内核；修改时间倒序）。
+    #[must_use]
+    pub fn list_sessions_at(dir: &Path) -> Vec<SessionInfo> {
+        list_sessions(dir)
+    }
     /// 恢复会话（投影历史；后续 run 追加到该文件）。
     ///
     /// # Errors
