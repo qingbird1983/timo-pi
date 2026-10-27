@@ -387,6 +387,7 @@ mod tests {
             updates: tx,
             cwd,
             review: Some(review),
+            nested: None,
         }
     }
 

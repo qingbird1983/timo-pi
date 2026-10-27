@@ -9,6 +9,7 @@
 mod definition;
 mod error;
 mod mutate;
+pub mod nested;
 mod registry;
 mod review;
 pub mod tools;
@@ -20,6 +21,10 @@ pub use definition::{
 };
 pub use error::ToolError;
 pub use mutate::with_file_mutation_queue;
+pub use nested::{
+    CallableTool, NestedCall, NestedCallRecord, NestedCallStatus, NestedCallSummary, NestedOutcome,
+    NestedToolHost, limits, merge_usage, output_text,
+};
 pub use registry::ToolRegistry;
 pub use review::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
 pub use truncate::{

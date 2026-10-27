@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use timo_ai::{Content, Message, ToolResultMessage};
+use timo_tools::NestedToolHost as _;
 
 use super::{Ctx, ToolExecutionMode};
 use crate::events::KernelEvent;
@@ -60,59 +61,29 @@ impl<'a> Ctx<'a> {
         self.bus.emit(KernelEvent::ToolCallRequested {
             call: Arc::new(call.clone()),
         });
-        let mut effective = call.clone();
-        let mut force_terminate = false;
-        if let Some(hooks) = &self.config.hooks
-            && let Some(decision) = hooks.before_tool_call(&effective).await
-        {
-            if let Some(reason) = decision.block {
-                let reason = format!("blocked by extension: {reason}");
-                self.bus.emit(KernelEvent::ToolCallStarted {
-                    tool_call_id: id.clone(),
-                    tool_name: name.clone(),
-                    args: tool_args(&effective),
-                });
-                let message = error_result_message(&id, &name, &reason, None, self.now_ms());
-                self.bus.emit(KernelEvent::ToolCallFinished {
-                    tool_call_id: id.clone(),
-                    tool_name: name.clone(),
-                    result: Arc::new(message.clone()),
-                    duration_ms: None,
-                });
-                return (message, false);
-            }
-            if let Some(args) = decision.args
-                && let Content::ToolCall {
-                    arguments,
-                    arguments_error,
-                    ..
-                } = &mut effective
-            {
-                *arguments = args;
-                *arguments_error = None;
-            }
-            force_terminate = decision.terminate;
-        }
+        let (effective, blocked, force_terminate) =
+            prepare_call(self.config.hooks.as_ref(), call).await;
         self.bus.emit(KernelEvent::ToolCallStarted {
             tool_call_id: id.clone(),
             tool_name: name.clone(),
             args: tool_args(&effective),
         });
+        if let Some(reason) = blocked {
+            let reason = format!("blocked by extension: {reason}");
+            let message = error_result_message(&id, &name, &reason, None, self.now_ms());
+            self.bus.emit(KernelEvent::ToolCallFinished {
+                tool_call_id: id.clone(),
+                tool_name: name.clone(),
+                result: Arc::new(message.clone()),
+                duration_ms: None,
+            });
+            return (message, false);
+        }
         let result = self.execute_validated(&effective).await;
         let duration = started.elapsed().as_millis() as u64;
         match result {
-            Ok(mut output) => {
-                if let Some(hooks) = &self.config.hooks
-                    && let Some(patch) = hooks
-                        .after_tool_call(&ToolOutcome {
-                            tool_call_id: &id,
-                            tool_name: &name,
-                            output: &output,
-                        })
-                        .await
-                {
-                    patch.apply(&mut output);
-                }
+            Ok(output) => {
+                let output = apply_after(self.config.hooks.as_ref(), &id, &name, output).await;
                 let message = Message::ToolResult(ToolResultMessage {
                     tool_call_id: id.clone(),
                     tool_name: name.clone(),
@@ -177,6 +148,10 @@ impl<'a> Ctx<'a> {
                 });
             }
         });
+        let nested = Arc::new(super::nested::AgentNestedHost::new(
+            self.config,
+            &self.cancel,
+        ));
         let ctx = timo_tools::ToolCallCtx {
             tool_call_id: id.clone(),
             params: arguments.clone(),
@@ -184,8 +159,19 @@ impl<'a> Ctx<'a> {
             updates: tx,
             cwd: self.config.cwd.clone(),
             review: self.config.review.clone(),
+            nested: Some(Arc::clone(&nested) as Arc<dyn timo_tools::NestedToolHost>),
         };
-        let out = self.config.tools.execute(name, ctx).await;
+        let mut out = self.config.tools.execute(name, ctx).await;
+        // 嵌套调用的用量并回父结果（设计 11 §4.1；未嵌套时为 None）。
+        if let Ok(output) = &mut out
+            && let Some(summary) = nested.take(&id)
+            && let Some(usage) = summary.usage
+        {
+            match &mut output.usage {
+                Some(total) => timo_tools::merge_usage(total, &usage),
+                None => output.usage = Some(usage),
+            }
+        }
         forwarder.abort();
         out
     }
@@ -211,4 +197,53 @@ impl<'a> Ctx<'a> {
         });
         message
     }
+}
+
+/// 工具调用前钩子：返回（有效调用, 阻止理由, 早停）；不发事件。
+pub(super) async fn prepare_call(
+    hooks: Option<&Arc<dyn crate::hooks::LoopHooks>>,
+    call: &Content,
+) -> (Content, Option<String>, bool) {
+    let mut effective = call.clone();
+    let mut force_terminate = false;
+    if let Some(hooks) = hooks
+        && let Some(decision) = hooks.before_tool_call(&effective).await
+    {
+        if let Some(reason) = decision.block {
+            return (effective, Some(reason), decision.terminate);
+        }
+        if let Some(args) = decision.args
+            && let Content::ToolCall {
+                arguments,
+                arguments_error,
+                ..
+            } = &mut effective
+        {
+            *arguments = args;
+            *arguments_error = None;
+        }
+        force_terminate = decision.terminate;
+    }
+    (effective, None, force_terminate)
+}
+
+/// 工具结果后钩子（字段级覆盖）；不发事件。
+pub(super) async fn apply_after(
+    hooks: Option<&Arc<dyn crate::hooks::LoopHooks>>,
+    id: &str,
+    name: &str,
+    mut output: timo_tools::ToolOutput,
+) -> timo_tools::ToolOutput {
+    if let Some(hooks) = hooks
+        && let Some(patch) = hooks
+            .after_tool_call(&ToolOutcome {
+                tool_call_id: id,
+                tool_name: name,
+                output: &output,
+            })
+            .await
+    {
+        patch.apply(&mut output);
+    }
+    output
 }

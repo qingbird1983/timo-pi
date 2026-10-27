@@ -48,6 +48,7 @@ async fn stdio_echo_server_roundtrip() {
         updates,
         cwd: Arc::from(dir.as_path()),
         review: None,
+        nested: None,
     };
     let out = registry
         .execute("mcp__echo__echo", ctx)

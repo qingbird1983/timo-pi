@@ -71,6 +71,7 @@ pub struct CallableTool {
     pub namespace: Option<Namespace>,
     pub prompt_guidelines: Vec<String>,
     pub execution_mode: ExecutionMode,
+    pub exposure: Exposure,         // Deferred 默认不进描述；Hidden 由宿主剔除
 }
 
 pub struct NestedCall {
@@ -120,6 +121,7 @@ pub trait NestedToolHost: Send + Sync {
 ```
 
 - `ToolCallCtx` 增 `pub nested: Option<Arc<dyn NestedToolHost>>`；既有构造点一律补 `None`（测试同型补齐，断言语义不动）。
+- `catalog()` 返回**除 `Hidden` 外的全部工具**（含 `codemode` 自身）；调用方自行去掉自己，宿主不写死任何工具名。
 - `timo-agent/src/run/nested.rs` 实现宿主：持注册表快照、钩子、父取消令牌、cwd、审阅器与"是否整批串行"。`execute` 复用 `run_one` 中抽出的管线段（before 钩子 → 审阅/校验/执行 → after 钩子），但**不发总线事件**、不产生 `Message`。
 - 失败语义：注册表错误 / 审阅拒绝 / 钩子阻止一律变成 `ToolOutput::error_text`（`is_error=true`），由脚本侧转成 `throw`；钩子阻止文案保持 `blocked by extension: <reason>`。
 - 顺序：`is_sequential()` 或目标工具 `execution_mode == Sequential` 时持有宿主内的一把 `tokio::sync::Mutex<()>` 再执行；并发由脚本泵侧调度（多个 `execute` future 同时进行），宿主不再另起任务。
@@ -141,7 +143,7 @@ pub trait NestedToolHost: Send + Sync {
   - `Nested tools:` 按命名空间分组（`Deferred` 默认不列），每个工具一节：``### `id` `` + `name(arg: type, opt?: type) -> result`；
   - 结果类型：`output_schema` 是对象 → 一层字段 `{ a, b? }`，否则 `string`；
   - 预算：估计 token = 字符/4，默认 3,000；无命名空间的组先上，其后按命名空间轮转、每组每轮放最便宜的一个，放不下则该组退出；未列出的工具仍可调，描述末尾注明"用 ALL_TOOLS/describeTool 查未列出的工具"。
-- **可调集合**：`registry.all()` 去掉 `codemode`、去掉 `Hidden`；名字消毒后冲突按注册表序先到先得（冲突的名字在描述里标注，代理里只保留先者）。
+- **可调集合**：宿主 `catalog()` 已去掉 `Hidden`；codemode 再从里面去掉自己。名字消毒后冲突按注册表序先到先得（冲突的名字在描述里标注，代理里只保留先者）。
 - **值映射**：`output_schema && structured_content` → 结构化值；否则文本块拼接；`is_error` 且无结构化值 → 错误文本；`Content::Image` 转占位文本（D79）。
 
 ### 4.3 脚本运行时
@@ -180,6 +182,8 @@ pub trait NestedToolHost: Send + Sync {
 
 每批门禁四连不变：fmt / clippy `-D warnings` / workspace tests / `scripts/check-size`；真机密钥不打印。
 
+批 A 已于 2026-10-27 落地：workspace **380 tests**（+10），**11 条变异全红**且逐条确认为断言失败；本批无真机读数（尚无脚本沙箱）。
+
 ## 6. 验收
 
 ### 6.1 断言级（分批落，不合并成"大测试"）
@@ -187,7 +191,7 @@ pub trait NestedToolHost: Send + Sync {
 | # | 断言 |
 |---|---|
 | T1 | 嵌套调用经过 before/after 钩子与审阅；被阻止时脚本收到 `blocked by extension: ...` |
-| T2 | id 严格 `<parent>/<n>` 递增；`codemode` 不在 catalog 里，`tools.codemode` 抛错 |
+| T2 | id 严格 `<parent>/<n>` 递增；`codemode` 不在脚本可调集合（`tools`/`ALL_TOOLS`/描述）里，`tools.codemode` 抛错 |
 | T3 | 串行工具在 `Promise.all` 下仍逐个执行（并发计数恒 1）；并行工具能达到 ≥2 并发 |
 | T4 | 父取消后嵌套调用与脚本都在有界时间内结束，结果标 cancelled |
 | T5 | 记录：257 次调用只留 256 条且 `complete=false`；参数 8 KiB/32 KiB、错误 500 字符边界 |

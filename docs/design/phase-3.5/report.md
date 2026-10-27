@@ -138,6 +138,14 @@
   - 不带扩展恢复：助手消息 `deepseek-reasoner` thinking=**off**——虚拟模型未注册，选择退回最后响应的物理模型，且用命令行档位；无新增状态 entry。若 agent 没按恢复后的选择重建，默认选择会落到 `deepseek-chat`。
 
 
+### P2 第三题·批 A 读数：嵌套工具接缝（2026-10-27）
+
+- **落地**：`timo_tools::nested`（`CallableTool`/`NestedCall`/`NestedToolHost`/记录与用量合并）+ `ToolCallCtx.nested`；`timo-agent/src/run/nested.rs` 复用同一条钩子/审阅/管线（不发总线事件），id `<父>/<n>`、顺序队列、取消、四条记录上限、用量并回父结果；接缝清单 #8 同步。
+- gate：fmt / clippy `-D warnings` / workspace **380 tests**（+10）/ `check-size` OK（target 22.0GiB 软限，阶段收尾统一 `clean-build`）。
+- **变异 11/11 承重**：before/after 钩子、id 前缀、串行锁、用量合并、记录条数与参数字节上限、取消检查、Hidden 目录过滤、审阅传递、错误状态映射；每条都确认是断言失败而非编译错误，改后逐字节还原。
+- 如实登记：本批只做接缝，**没有脚本沙箱**，因此没有真机读数；codemode 工具与脚本面在批 B。
+- 体量：新增 `timo-tools/src/nested.rs` 232 行、`timo-agent/src/run/nested.rs` 278 行；测试拆 `tests/nested.rs`（248）+ `tests/nested_limits.rs`（222）+ `tests/common/mod.rs`（267），无超 500 行文件。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。

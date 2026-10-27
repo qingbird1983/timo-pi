@@ -110,6 +110,8 @@ pub struct ToolCallCtx {
     pub cwd: Arc<std::path::Path>,
     /// 执行前审阅器（None = 自动执行，Phase 1/2 行为）。
     pub review: Option<Arc<dyn crate::review::ToolReview>>,
+    /// 嵌套工具执行宿主（设计 11 §4.1；None = 该次调用不能嵌套别的工具）。
+    pub nested: Option<Arc<dyn crate::nested::NestedToolHost>>,
 }
 
 /// 工具执行 future。
