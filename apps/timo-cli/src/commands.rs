@@ -1,6 +1,6 @@
 //! CLI 输入分发（设计 phase-3.5/02 §6.2）：扩展命令 → 内建 → `/skill:` → 普通提示。
 
-use timo_kernel::Kernel;
+use timo_kernel::{Kernel, WarmingState};
 
 use crate::run_prompt;
 
@@ -99,6 +99,26 @@ pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOu
                             bucket.key, bucket.tokens, bucket.cost
                         );
                     }
+                    match kernel.cache_stats() {
+                        Ok(stats) if stats.miss_count > 0 => {
+                            let mut line = format!(
+                                "  cache: {} misses · {} tok re-billed · ${:.4}",
+                                stats.miss_count, stats.missed_tokens, stats.missed_cost
+                            );
+                            if let Some(idle) = stats.misses.iter().map(|m| m.idle_ms).max()
+                                && idle > 300_000
+                            {
+                                line.push_str(&format!(
+                                    " (last miss after {}m idle; TTL may have expired)",
+                                    idle / 60_000
+                                ));
+                            }
+                            println!("{line}");
+                        }
+                        Ok(_) => {}
+                        Err(error) => eprintln!("[error] cache stats: {error}"),
+                    }
+                    println!("  warming: {}", warming_line(kernel.cache_warming_status()));
                 }
                 None => println!("[session] draft (not saved yet)"),
             }
@@ -153,6 +173,26 @@ fn describe_status(status: timo_kernel::CommandStatus) -> String {
         timo_kernel::CommandStatus::Ready => "ready".into(),
         timo_kernel::CommandStatus::Planned(batch) => format!("planned for {batch}"),
         timo_kernel::CommandStatus::Unsupported => "out of scope for this phase".into(),
+    }
+}
+
+/// 预热状态的一行描述（`/session`）。
+fn warming_line(state: WarmingState) -> String {
+    match state {
+        WarmingState::Inactive { reason } => format!("inactive ({reason})"),
+        WarmingState::Refreshing => "refreshing".into(),
+        WarmingState::Scheduled { next_warm_at_ms } => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
+                .unwrap_or(0);
+            let left = (next_warm_at_ms - now).max(0);
+            if left >= 60_000 {
+                format!("scheduled in {}m", left / 60_000)
+            } else {
+                format!("scheduled in {}s", (left + 999) / 1000)
+            }
+        }
     }
 }
 

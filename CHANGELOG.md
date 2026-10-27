@@ -6,6 +6,18 @@
 
 ---
 
+## [0.1.68] - 2026-10-27
+
+### 实现：缓存统计与预热（Phase 3.5 P1.4）
+
+- 缓存统计：从会话 entry 现算「本应命中却被重新计费」的 token（噪声地板 1024、压缩/预热条目重置基线、模型切换照常计）；`/session` 出现 `cache: N misses · X tok re-billed · $…`，空闲超 5 分钟附 TTL 过期提示。
+- 缓存预热：模型声明 `cache_ttl_seconds` 才启用（Anthropic 目录补 300 秒，OpenAI 兼容不补）；按 TTL 90% 续命、`max_tokens=1` 原样重放、预期节省 ≥ $0.05 才发；thinking 非 Off 不预热（D43）。
+- 模式 `cache_warming: off|streaming|idle`（缺省 streaming）；新 run/换会话取消旧定时器；成功写 `usage(cache_warm)`；`/session` 显示 `warming: scheduled in 4m / inactive (…)`。
+- 真机核对：DeepSeek 会话 `/session` 显示 `warming: inactive`（目录无 TTL），两轮均为缓存命中、没有 miss 行；跨进程读取路径与代价公式由单测与内核集成测试覆盖。
+- 测试新增 12 条（统计 6、预热排定与经济账 2、预热任务 2、目录 TTL 1、内核读取路径 1）；workspace 294 tests；四门禁通过（incremental 4.4GiB 触发清理提醒）。
+
+---
+
 ## [0.1.67] - 2026-10-27
 
 ### 实现：无头打印模式 `-p` / `--mode json`（Phase 3.5 P1.3）

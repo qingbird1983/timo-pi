@@ -15,6 +15,7 @@ D4 的缓存半场：把"本应命中前缀缓存、却被重新计费"的 token
 | D42 | 预热需要模型声明 `cache_ttl_seconds`；没有声明的模型直接停用 | c（目录数据不全） | OpenAI 兼容网关多为自动缓存、无 TTL 可控概念；我们只给 Anthropic 目录补 300 秒。 |
 | D43 | thinking 非 Off 时不做预热 | a（适配器约束） | 我们的 Anthropic 适配器把 `budget_tokens` 夹在 `max_tokens` 内，`max_tokens=1` 的重放会得到非法请求；pi 用 `forceAdaptiveThinking` 判断，我们没有该标志。 |
 | D44 | 预热用量记 `usage(cache_warm)` entry，暂不计入 `/session` 总量 | d（P1 范围） | 与压缩摘要用量同策略；P2 统一计入。 |
+| D50 | 预热任务只在 run 收尾排定；`streaming` 续一次即停，`idle` 在 30 分钟窗内重复 | d（范围收敛） | 循环内部没有"空闲点"回调；pi 在流式/工具执行期间续命，我们退到 run 级挂点。经济账与安全窗仍按 §4.2 执行。 |
 
 统计与预热的**开关**：`cache_warming: "off" | "streaming" | "idle"`，缺省 `"streaming"`（pi 同款）。统计本身无开关，始终可查。
 
@@ -93,9 +94,9 @@ pub struct CacheStats {
   `expected_savings = probability × miss_cost − warm_cost`；`≥ $0.05` 才发。
   价格未知（prompt 或费率为 0）→ 停。
 - 刷新请求：原 `Context` 原样重发，`max_tokens = 1`、`max_retries = 0`、同一取消令牌；忽略流式输出；成功且 `stop_reason ∉ {Error, Aborted}` 时写 `usage` entry：
-  `{"kind": "cache_warm", "provider": "…", "model": "…", "usage": {…}}`。
-- 失效条件：会话切换/新建、模型变化、上下文变化（`generation` 计数器变化）、新模式为 off、截止时间错过 → 取消定时器。
-- 模式 `streaming`：run 结束后立即停（`AgentFinished` 后不再续）；`idle`：run 结束后继续按 30 分钟窗预热。
+  `{"kind": "cache_warm", "provider": "…", "model": "…", "usage": {…}, "timestamp": 1760000000000}`（`timestamp` 供统计算 idle 间隔）。
+- 失效条件：会话切换/新建、模型变化、上下文变化（新 run 开始）、新模式为 off、截止时间错过 → 取消定时器。
+- 模式 `streaming`：run 结束后续一次，成功即停；`idle`：run 结束后继续按 30 分钟窗重复（D50）。
 
 ### 4.3 状态
 
@@ -116,7 +117,7 @@ pub enum WarmingState {
 ## 6. 内核装配
 
 - 预热上下文来源：`RunOutcome` 增加 `last_request: Option<WarmRequest>`（system prompt、messages、tools、thinking、model id）。agent 在发最后一次请求前保存快照；kernel 在 run 结束后交给 `CacheWarmer`。
-- 预热任务与内核同生命周期：`Kernel::drop` 取消；`new_session`/`resume`/模型切换递增 `generation`。
+- 预热任务与内核同生命周期：`Kernel::drop` 取消；`new_session`/`resume`/每次 `run` 开始时取消旧任务（用取消令牌等价实现原计划的 `generation` 计数器）。
 - 预热写 entry 复用 `SessionWriter`（`append_raw(kinds::USAGE, …)`），与消息写入同一把锁。
 
 ## 7. 测试

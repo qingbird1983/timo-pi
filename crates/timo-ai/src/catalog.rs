@@ -90,6 +90,9 @@ pub struct Model {
     /// 额外请求头。
     #[serde(default)]
     pub headers: Vec<(String, String)>,
+    /// 前缀缓存 TTL（秒；None = 未知/不支持预热；phase-3.5/05）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_ttl_seconds: Option<u64>,
     /// openai-completions 行为开关。
     #[serde(default)]
     pub compat: Compat,
@@ -161,6 +164,8 @@ struct ModelEntry {
     context_window: u64,
     #[serde(default = "d_max")]
     max_tokens: u64,
+    #[serde(default)]
+    cache_ttl_seconds: Option<u64>,
 }
 
 fn d_ctx() -> u64 {
@@ -218,6 +223,7 @@ impl Catalog {
                     context_window: e.context_window,
                     max_tokens: e.max_tokens,
                     headers: file.headers.clone(),
+                    cache_ttl_seconds: e.cache_ttl_seconds,
                     compat: Compat::default(),
                 },
             );
@@ -288,4 +294,23 @@ pub fn catalog_load_error(raw: &str) -> Option<Arc<AiError>> {
             detail: e.to_string(),
         })
     })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn anthropic_models_declare_a_cache_ttl() {
+        let catalog = Catalog::builtin();
+        let anthropic = catalog.by_provider("anthropic");
+        assert!(!anthropic.is_empty());
+        for model in anthropic {
+            assert_eq!(model.cache_ttl_seconds, Some(300), "{}", model.id);
+        }
+        for model in catalog.by_provider("openai") {
+            assert_eq!(model.cache_ttl_seconds, None, "{}", model.id);
+        }
+    }
 }

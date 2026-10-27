@@ -57,6 +57,7 @@ pub fn load_catalog(custom: &[CustomProvider]) -> Result<Catalog> {
                 context_window: m.context_window,
                 max_tokens: m.max_tokens,
                 headers: p.headers.clone(),
+                cache_ttl_seconds: m.cache_ttl_seconds,
                 compat: Compat::default(),
             });
         }

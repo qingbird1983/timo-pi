@@ -49,6 +49,19 @@ impl Default for ImageSettings {
     }
 }
 
+/// 缓存预热模式（phase-3.5/05 §2；缺省 `streaming`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CacheWarmingMode {
+    /// 不预热。
+    Off,
+    /// 每次 run 收尾续一次缓存。
+    #[default]
+    Streaming,
+    /// run 收尾后按 30 分钟窗重复续命。
+    Idle,
+}
+
 /// 自动上下文压缩设置（phase-3.5/04；默认值与 pi 一致）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -103,6 +116,8 @@ pub struct Settings {
     pub enable_skill_commands: bool,
     /// 自动上下文压缩。
     pub compaction: CompactionSettings,
+    /// 缓存预热模式。
+    pub cache_warming: CacheWarmingMode,
 }
 
 impl Default for Settings {
@@ -122,6 +137,7 @@ impl Default for Settings {
             skills: Vec::new(),
             enable_skill_commands: true,
             compaction: CompactionSettings::default(),
+            cache_warming: CacheWarmingMode::Streaming,
         }
     }
 }

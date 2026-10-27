@@ -74,6 +74,7 @@ impl Kernel {
     /// # Errors
     /// 会话不存在/损坏 → [`KernelError::Session`]。
     pub async fn resume(&mut self, id: &str) -> Result<()> {
+        self.warmer.cancel("session changed");
         self.ensure_ready().await;
         let path = self
             .find_session_path(id)
@@ -97,6 +98,7 @@ impl Kernel {
     ///
     /// 调用后当前会话 id 与历史都被清空（GUI“新建会话”）。
     pub fn new_session(&mut self) {
+        self.warmer.cancel("session changed");
         self.session = None;
         self.session_id = None;
         self.history = None;

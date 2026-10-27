@@ -72,6 +72,15 @@ pub struct RunChannels<'a> {
     pub follow_up: &'a PendingMessageQueue,
 }
 
+/// 最后一次模型请求的快照（缓存预热重放用；phase-3.5/05 §6）。
+#[derive(Debug, Clone)]
+pub struct WarmRequest {
+    /// 请求模型 id。
+    pub model: String,
+    /// 原样上下文（系统提示、消息、工具、思考档位）。
+    pub context: timo_ai::Context,
+}
+
 /// 一次 run 的产出：本次新增消息与 run 结束时的完整上下文。
 ///
 /// `new_messages` 与 [`crate::AgentHandle::run`] 的返回值一致；`context`
@@ -82,6 +91,8 @@ pub struct RunOutcome {
     pub new_messages: Vec<Message>,
     /// run 结束时的完整上下文（含 run 前的历史）。
     pub context: Vec<Message>,
+    /// 最后一次成功发出的请求快照（无请求时为 None）。
+    pub last_request: Option<WarmRequest>,
 }
 
 /// 运行一轮完整 agent run；返回新增消息与完整上下文。
@@ -117,6 +128,7 @@ pub async fn run_agent_loop(
         system_prompt: Some(system_prompt),
         model: config.model.clone(),
         thinking_level: config.thinking_level,
+        last_request: None,
     };
     for m in prompt {
         ctx.push_message(m).await;
@@ -201,6 +213,7 @@ pub async fn run_agent_loop(
     RunOutcome {
         new_messages,
         context: std::mem::take(&mut ctx.messages),
+        last_request: ctx.last_request.take(),
     }
 }
 
@@ -215,6 +228,8 @@ struct Ctx<'a> {
     system_prompt: Option<String>,
     model: timo_ai::Model,
     thinking_level: timo_config::ThinkingLevel,
+    /// 最近一次请求快照（预热用）。
+    last_request: Option<WarmRequest>,
 }
 
 impl<'a> Ctx<'a> {
@@ -387,6 +402,10 @@ impl<'a> Ctx<'a> {
             provider_hooks: self.config.provider_hooks.clone(),
             ..timo_ai::StreamOptions::default()
         };
+        self.last_request = Some(WarmRequest {
+            model: self.model.id.clone(),
+            context: ctx.clone(),
+        });
         let mut stream = self.config.api.stream(&self.model, &ctx, options).await;
         let mut terminal: Option<AssistantMessage> = None;
         while let Some(ev) = stream.next_event().await {

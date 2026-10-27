@@ -80,6 +80,9 @@ pub struct CustomModel {
     /// 额外请求头。
     #[serde(default)]
     pub headers: Vec<(String, String)>,
+    /// 前缀缓存 TTL（秒；None = 未知/不支持预热）。
+    #[serde(default)]
+    pub cache_ttl_seconds: Option<u64>,
 }
 
 fn default_context_window() -> u64 {
@@ -219,6 +222,10 @@ mod tests {
         assert_eq!(m.max_tokens, 16_384);
         assert!(!m.reasoning);
         assert_eq!(m.input, vec!["text"]);
+        assert_eq!(m.cache_ttl_seconds, None);
+        let m: CustomModel =
+            serde_json::from_str(r#"{"id": "m1", "cache_ttl_seconds": 300}"#).expect("ok");
+        assert_eq!(m.cache_ttl_seconds, Some(300));
     }
 
     #[test]

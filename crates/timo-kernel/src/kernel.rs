@@ -20,11 +20,13 @@ use crate::extensions::{self, ExtensionOptions, ExtensionRuntime};
 use crate::prompt;
 use crate::resolve::{ResolvedModel, load_catalog, resolve_model};
 
+mod cache_api;
 mod compaction_api;
 mod options;
 mod prompt_api;
 mod sessions;
 mod usage_api;
+mod warm_api;
 
 pub use options::KernelOptions;
 
@@ -67,6 +69,8 @@ pub struct Kernel {
     skill_commands_enabled: bool,
     /// 自动压缩设置（settings.compaction）。
     compaction: timo_config::CompactionSettings,
+    /// 缓存预热器（settings.cache_warming）。
+    warmer: crate::warmer::CacheWarmer,
 }
 
 impl Kernel {
@@ -180,6 +184,7 @@ impl Kernel {
             skill_paths,
             skill_commands_enabled,
             compaction: settings.compaction,
+            warmer: crate::warmer::CacheWarmer::new(settings.cache_warming),
         })
     }
 
@@ -211,6 +216,8 @@ impl Kernel {
     /// # Errors
     /// 会话创建失败 / run 前置失败 → [`KernelError`]。
     pub async fn run(&mut self, prompt: &str) -> Result<Vec<timo_ai::Message>> {
+        // 新 run 会改变上下文：旧预热定时器立即作废，收尾时按新上下文重排。
+        self.warmer.cancel("context changed");
         self.ensure_ready().await;
         let prompt = self.expand_input(prompt);
         if self.session.is_none() {
@@ -232,7 +239,11 @@ impl Kernel {
         }
         self.ext_running.store(false, Ordering::SeqCst);
         self.ext_abort.store(false, Ordering::SeqCst);
-        Ok(self.commit_outcome(out?))
+        let mut outcome = out?;
+        if let Some(request) = outcome.last_request.take() {
+            self.arm_warmer(request, &outcome.new_messages);
+        }
+        Ok(self.commit_outcome(outcome))
     }
 
     /// 把一次 run 的完整上下文写回 history，返回本次新增消息。

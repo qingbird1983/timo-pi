@@ -7,6 +7,7 @@
 // 测试代码自由使用 unwrap/expect/panic（standards/04 §2）。
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+mod cache_stats;
 mod commands;
 mod error;
 mod extensions;
@@ -14,7 +15,9 @@ mod kernel;
 mod prompt;
 mod resolve;
 mod usage;
+mod warmer;
 
+pub use cache_stats::{CacheMiss, CacheStats};
 pub use commands::{CommandSource, CommandStatus, SlashCommand};
 
 pub use error::KernelError;
@@ -47,6 +50,7 @@ pub use timo_config::ThinkingLevel;
 pub use timo_session::SessionInfo;
 pub use timo_tools::{ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest};
 pub use usage::{UsageBucket, UsageSummary, UsageTotals};
+pub use warmer::WarmingState;
 
 /// 结果别名：本 crate 一律以 [`KernelError`] 报错。
 pub type Result<T> = std::result::Result<T, KernelError>;
