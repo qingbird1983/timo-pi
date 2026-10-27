@@ -6,6 +6,15 @@
 
 ---
 
+## [0.1.29] - 2026-10-27
+
+### 维护：安装 cargo-sweep 0.8.0，30 天按龄清扫 0 释放
+
+- 运行 `scripts/clean-stale`（`cargo sweep -t 30`）：`target/` 内没有 30 天未用产物，清理 0。
+- 体量仍约 38GiB（字节折算 40.6GB；`debug/incremental` 12.7GB、`debug/deps` 26.3GB），超软上限；按标准 08 不做无 sccache 的全清，待 Phase 3.5 或安装 sccache 后处理。
+
+---
+
 ## [0.1.28] - 2026-10-27
 
 ### 里程碑：Phase 3 完成——桌面壳可用，NSH 插件界面可嵌入（C1~C6 全通过）

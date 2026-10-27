@@ -31,7 +31,7 @@
 
 - NSH 渲染/热更为人工验收；CI 只跑“未签名拒绝”单元测试（设计 03 §8 允许）。
 - 开发签名密钥留在用户数据目录；生产分发密钥策略留 Phase 4 ADR。
-- `target/` 约 38GB；`cargo-sweep` 未安装。
+- `target/` 约 38GiB；`cargo-sweep 0.8.0` 已装，30 天按龄清扫 0 释放（产物均新于 30 天），需 sccache + `cargo clean`。
 - 其余桌面壳遗留见 roadmap phase-3 §6。
 
 ## 下一步
