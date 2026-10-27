@@ -311,6 +311,10 @@ async fn warm_once(input: &ArmInput, token: &CancellationToken) -> Result<Usage,
         .await
         .result()
         .await;
+    if token.is_cancelled() {
+        // 已换会话/开始新 run：这次响应属于旧上下文，不能当新基线落盘。
+        return Err("cancelled".into());
+    }
     if matches!(message.stop_reason, StopReason::Error | StopReason::Aborted) {
         return Err(message
             .error_message

@@ -294,3 +294,70 @@ async fn cancel_stops_the_pending_refresh() {
     );
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// 请求已发出后才完成的假适配器：用于取消竞态。
+struct SlowApi {
+    calls: Arc<AtomicUsize>,
+    gate: Arc<tokio::sync::Notify>,
+}
+
+#[async_trait::async_trait]
+impl ProviderApi for SlowApi {
+    async fn stream(
+        &self,
+        _model: &Model,
+        _context: &Context,
+        _options: StreamOptions,
+    ) -> AssistantMessageStream {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.gate.notified().await;
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut message = AssistantMessage::pending("anthropic-messages", "anthropic", MODEL_ID, 1);
+        message.stop_reason = StopReason::Stop;
+        message.usage.cache_read = 20_000;
+        message.usage.total_tokens = 20_001;
+        tokio::spawn(async move {
+            let _ = tx
+                .send(AssistantStreamEvent::Done {
+                    reason: StopReason::Stop,
+                    message,
+                })
+                .await;
+        });
+        AssistantMessageStream::new(rx)
+    }
+}
+
+#[tokio::test]
+async fn cancelled_in_flight_refresh_writes_no_baseline() {
+    let (path, session) = sink("inflight");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let gate = Arc::new(tokio::sync::Notify::new());
+    let warmer = CacheWarmer::new(CacheWarmingMode::Streaming);
+    arm(
+        &warmer,
+        Arc::new(SlowApi {
+            calls: calls.clone(),
+            gate: Arc::clone(&gate),
+        }),
+        session,
+    );
+    for _ in 0..50 {
+        if calls.load(Ordering::SeqCst) > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    warmer.cancel("new run");
+    gate.notify_waiters();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let entries = timo_session::read_entries(&path).unwrap();
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry.kind != timo_session::kinds::USAGE),
+        "cancelled refresh must not write a baseline"
+    );
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
