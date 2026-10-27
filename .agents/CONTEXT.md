@@ -6,12 +6,13 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P0 完成（ADR-0013）**：D1/D2/D4/D7 验收通过，报告 `docs/design/phase-3.5/report.md`。P1 详设 04~07 已定稿（compaction/缓存/无头/会话存储），P1 实现开工，P2 待定稿。
+- **Phase 3.5 P1 进行中（ADR-0013）**：P0 完成（D1/D2/D4/D7，报告 `docs/design/phase-3.5/report.md`）；P1 详设 04~07 定稿；P1.1 会话分区+导出已提交。下一步 P1.2 compaction（04），随后无头、缓存。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
+- **Phase 3.5 P1.1（会话分区+导出）**：新会话落 `sessions/--<encoded-cwd>--/`，旧平铺只读兼容；resume/delete/list 跨分区；`export_session` 原子导出 leaf 链；CLI `/export` 可用。真机冒烟：分区目录与导出文件逐字核对。
 - **Phase 3.5 P1 详设**：04 compaction（阈值/切点/摘要/entry/投影，D39~D40）、05 缓存统计与预热（D41~D44）、06 无头 `-p`/`--mode json`、07 会话按 cwd 分区与导出（D45~D47）；00 总览补偏离表。
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
 - **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
@@ -21,7 +22,7 @@
 
 ## 下一步（按优先级）
 
-1. Phase 3.5 P1 实现（详设已定稿）：会话分区+导出 → compaction → 无头模式 → 缓存统计 → 预热；每批跑四门禁并单独提交。
+1. Phase 3.5 P1.2 compaction（详设 04）：请求前阈值、user 处切分、摘要 entry 与恢复投影、手动 `/compact`；之后 P1.3 无头、P1.4 缓存统计与预热。每批跑四门禁并单独提交。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. `target/` 当前 15.0GiB（软 15 / 硬 25）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 总数 69 超软限 60，整合评审待办（删除面需所有者确认）。
 
