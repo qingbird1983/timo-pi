@@ -203,12 +203,13 @@ impl Kernel {
         self.registry.declared().into_iter().cloned().collect()
     }
 
-    /// 运行一次 prompt（首轮自动建会话；续轮沿用）。
+    /// 运行一次 prompt（首轮自动建会话；续轮沿用）；`/skill:name` 在这里统一展开。
     ///
     /// # Errors
     /// 会话创建失败 / run 前置失败 → [`KernelError`]。
     pub async fn run(&mut self, prompt: &str) -> Result<Vec<timo_ai::Message>> {
         self.ensure_ready().await;
+        let prompt = self.expand_input(prompt);
         if self.session.is_none() {
             self.open_new_session()?;
         }
@@ -222,9 +223,7 @@ impl Kernel {
                 "agent not assembled".into(),
             )));
         };
-        let out = agent
-            .run_with_context(prompt.to_string(), history, session)
-            .await;
+        let out = agent.run_with_context(prompt, history, session).await;
         if let Some(runtime) = &mut self.ext {
             runtime.absorb_runtime_errors();
         }
