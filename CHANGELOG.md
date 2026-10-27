@@ -6,6 +6,18 @@
 
 ---
 
+## [0.1.61] - 2026-10-27
+
+### 实现：会话按 cwd 分区与导出（Phase 3.5 P1.1）
+
+- 新会话写入 `sessions/--<encoded-cwd>--/`（对齐 pi 编码：去首分隔符，`/`、`\`、`:` → `-`）；旧平铺文件只读兼容。
+- 恢复/删除跨分区查找（旧平铺 → 当前项目 → 其他一级分区）；列表扫描根与一级子目录，同 id 只留最新。
+- 内核新增 `export_session(path?)`：leaf 链原样导出 JSONL，缺省 `<work_dir>/session-YYYYMMDD-HHMMSS.jsonl`，不覆盖、tmp + rename。
+- CLI `/export [path]` 可用；命令面 `export` 从 Planned 改为 Ready。
+- 测试新增 4 条（编码表、分区列表去重、导出链、分区会话恢复与导出）；workspace 267 tests；四门禁通过（target 15.1GiB 触及软限提醒）。
+
+---
+
 ## [0.1.60] - 2026-10-27
 
 ### 设计：Phase 3.5 P1 详设定稿（04~07）

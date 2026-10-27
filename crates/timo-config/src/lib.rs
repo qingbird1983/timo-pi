@@ -23,7 +23,8 @@ pub use models_file::{
     CostRates, CostTier, CustomModel, CustomProvider, load_custom_providers, set_provider_api_key,
 };
 pub use paths::{
-    agent_dir, mcp_path, models_path, project_settings_path, sessions_dir, settings_path,
+    agent_dir, encode_cwd, mcp_path, models_path, project_settings_path, session_dir_for,
+    sessions_dir, settings_path,
 };
 pub use settings::{ImageSettings, RetrySettings, Settings, load_settings, resolve_default_tools};
 pub use thinking::ThinkingLevel;

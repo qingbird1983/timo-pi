@@ -80,9 +80,9 @@ const BUILTIN: [(&str, &str, Option<&str>, CommandStatus); 25] = [
     ),
     (
         "export",
-        "Export the session",
+        "Export the session as JSONL",
         Some("[path]"),
-        CommandStatus::Planned("P1"),
+        CommandStatus::Ready,
     ),
     (
         "model",

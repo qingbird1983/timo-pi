@@ -13,7 +13,7 @@ mod writer;
 
 pub use entry::{ENTRY_VERSION, Entry, SessionHeader, kinds};
 pub use error::SessionError;
-pub use reader::{SessionInfo, list_sessions, project_context, read_entries};
+pub use reader::{SessionInfo, list_sessions, project_context, read_entries, serialize_export};
 pub use writer::{IdGen, SessionWriter};
 
 /// 结果别名：本 crate 一律以 [`SessionError`] 报错。

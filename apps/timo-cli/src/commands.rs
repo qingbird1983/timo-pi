@@ -110,6 +110,14 @@ pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOu
             eprintln!("[reload] context files and skills reloaded");
             CommandOutcome::Handled
         }
+        "export" => {
+            let target = (!rest.is_empty()).then(|| std::path::Path::new(rest));
+            match kernel.export_session(target) {
+                Ok(path) => println!("[export] {}", path.display()),
+                Err(error) => eprintln!("[error] {error}"),
+            }
+            CommandOutcome::Handled
+        }
         "quit" => CommandOutcome::Quit,
         _ => {
             match kernel

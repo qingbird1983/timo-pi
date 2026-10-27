@@ -63,9 +63,47 @@ pub fn project_settings_path(cwd: &Path) -> PathBuf {
     cwd.join(".timo").join("settings.json")
 }
 
+/// 会话目录的项目分区名（phase-3.5/07：`--<encoded-cwd>--`，对齐 pi）。
+///
+/// 去掉开头分隔符，把 `/`、`\`、`:` 换成 `-`。不同 cwd 可能编码相同（与 pi 同限）。
+#[must_use]
+pub fn encode_cwd(cwd: &Path) -> String {
+    let raw = cwd.to_string_lossy();
+    let trimmed = raw.trim_start_matches(['/', '\\']);
+    let encoded: String = trimmed
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    format!("--{encoded}--")
+}
+
+/// 会话文件的项目分区目录：`<sessions_root>/--<encoded-cwd>--`。
+#[must_use]
+pub fn session_dir_for(sessions_root: &Path, cwd: &Path) -> PathBuf {
+    sessions_root.join(encode_cwd(cwd))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_partition_names_encode_the_cwd() {
+        assert_eq!(encode_cwd(Path::new(r"C:\work\demo")), "--C--work-demo--");
+        assert_eq!(encode_cwd(Path::new(r"D:\a\b-c")), "--D--a-b-c--");
+        assert_eq!(encode_cwd(Path::new("/home/me/proj")), "--home-me-proj--");
+        assert_eq!(encode_cwd(Path::new(r"C:\")), "--C----");
+        assert_eq!(
+            session_dir_for(Path::new("root"), Path::new(r"C:\work\demo")),
+            Path::new("root").join("--C--work-demo--")
+        );
+    }
 
     #[test]
     fn project_settings_path_layout() {

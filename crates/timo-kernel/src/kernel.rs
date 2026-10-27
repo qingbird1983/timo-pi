@@ -313,8 +313,9 @@ impl Kernel {
     }
 
     fn open_new_session(&mut self) -> Result<()> {
+        let dir = timo_config::session_dir_for(&self.sessions_dir, &self.work_dir);
         let writer = SessionWriter::create(
-            &self.sessions_dir,
+            &dir,
             &self.work_dir.display().to_string(),
             Some(&format!(
                 "{}/{}",

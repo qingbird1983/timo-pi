@@ -108,24 +108,51 @@ pub struct SessionInfo {
     pub first_message: String,
 }
 
-/// 扫描目录内全部 `*.jsonl`（读首条 header，≤1MB cap），按修改时间倒序。
+/// 扫描会话根目录与一级项目分区内的全部 `*.jsonl`（读首条 header，≤1MB cap），
+/// 按修改时间倒序；同一会话 id 只保留最新的一份（phase-3.5/07）。
 #[must_use]
 pub fn list_sessions(dir: &Path) -> Vec<SessionInfo> {
-    let mut out = vec![];
+    let mut paths = vec![];
     let Ok(rd) = std::fs::read_dir(dir) else {
-        return out;
+        return vec![];
     };
     for item in rd.flatten() {
         let path = item.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
-            continue;
-        }
-        if let Some(info) = scan_session(&path) {
-            out.push(info);
+        if path.is_dir() {
+            if let Ok(inner) = std::fs::read_dir(&path) {
+                for entry in inner.flatten() {
+                    let candidate = entry.path();
+                    if candidate.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                        paths.push(candidate);
+                    }
+                }
+            }
+        } else if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+            paths.push(path);
         }
     }
+    let mut out: Vec<SessionInfo> = paths.iter().filter_map(|p| scan_session(p)).collect();
     out.sort_by_key(|s| std::cmp::Reverse(s.modified_ms));
+    out.dedup_by(|a, b| a.id == b.id);
     out
+}
+
+/// 把 leaf 链（header → 当前叶）序列化为 JSONL；entry 原样输出（phase-3.5/07）。
+///
+/// # Errors
+/// entry 序列化失败 → [`SessionError::CorruptEntry`]。
+pub fn serialize_export(entries: &[Entry]) -> Result<String> {
+    let mut out = String::new();
+    for entry in leaf_chain(entries) {
+        let line = serde_json::to_string(entry).map_err(|reason| SessionError::CorruptEntry {
+            path: PathBuf::from("<export>"),
+            line: 0,
+            reason: format!("serialize: {reason}"),
+        })?;
+        out.push_str(&line);
+        out.push('\n');
+    }
+    Ok(out)
 }
 
 fn scan_session(path: &Path) -> Option<SessionInfo> {
@@ -279,5 +306,63 @@ mod tests {
         assert_eq!(infos[0].cwd, "D:/demo");
         assert_eq!(infos[0].first_message, "first prompt here");
         assert_eq!(infos[0].message_count, 1);
+    }
+
+    #[test]
+    fn list_scans_partitions_and_dedupes() {
+        let (dir, idgen) = setup("list-partition");
+        let partition = dir.join("--D--demo--");
+        let mut w = SessionWriter::create(
+            &partition,
+            "D:/demo",
+            None,
+            Arc::new(FixedClock::new(1)),
+            idgen,
+        )
+        .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("partition prompt", 5)).unwrap(),
+        )
+        .unwrap();
+        let path = w.path().to_path_buf();
+        drop(w);
+        // 同一会话又出现在旧平铺位置：列表只保留一份
+        std::fs::copy(&path, dir.join(path.file_name().unwrap())).unwrap();
+
+        let infos = list_sessions(&dir);
+        assert_eq!(infos.len(), 1);
+        assert!(infos[0].path.starts_with(&partition));
+    }
+
+    #[test]
+    fn export_serializes_the_leaf_chain() {
+        let (dir, idgen) = setup("export");
+        let mut w =
+            SessionWriter::create(&dir, "D:/demo", None, Arc::new(FixedClock::new(7)), idgen)
+                .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("one", 5)).unwrap(),
+        )
+        .unwrap();
+        w.append_raw("custom.demo", serde_json::json!({"x": 1}))
+            .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("two", 6)).unwrap(),
+        )
+        .unwrap();
+        let entries = read_entries(w.path()).unwrap();
+        let body = serialize_export(&entries).unwrap();
+        let lines: Vec<&str> = body.lines().collect();
+        assert_eq!(lines.len(), entries.len());
+        let first: Entry = serde_json::from_str(lines[0]).unwrap();
+        assert_eq!(first.kind, kinds::HEADER);
+        let last: Entry = serde_json::from_str(lines[lines.len() - 1]).unwrap();
+        assert_eq!(
+            Some(last.id.as_str()),
+            entries.last().map(|e| e.id.as_str())
+        );
     }
 }
