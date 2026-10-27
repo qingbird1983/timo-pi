@@ -128,6 +128,7 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
         });
     }
     let base = BasicServices::new(options.work_dir.clone(), Grants::default(), json!({}))
+        .with_agent_dir(options.data_dir.clone())
         .with_abort_flag(Arc::clone(&options.abort))
         .with_running(Arc::clone(&options.running))
         .with_flags(options.flags.clone());
@@ -207,6 +208,7 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
                         },
                         json!({}),
                     )
+                    .with_agent_dir(options.data_dir.clone())
                     .with_ui(options.interactive)
                     .with_abort_flag(Arc::clone(&options.abort))
                     .with_running(Arc::clone(&options.running))

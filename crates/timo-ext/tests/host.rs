@@ -317,6 +317,51 @@ module.exports = function (pi) {
 }
 
 #[test]
+fn agent_dir_reaches_the_extension_through_config() {
+    let source = r#"
+module.exports = function (pi) {
+  pi.registerTool({
+    name: "where",
+    label: "Where",
+    description: "reports the agent dir handed over by the host",
+    parameters: { type: "object" },
+    execute: async () => ({
+      content: [{ type: "text", text: pi.getAgentDir() || "none" }],
+      details: {},
+    }),
+  });
+};
+"#;
+    let blank = Fixture::new("where", source);
+    let missing = blank
+        .host
+        .call_tool("plugin_where_where", json!({}))
+        .unwrap()
+        .content[0]["text"]
+        .clone();
+    assert_eq!(missing, "none", "未设 agentDir 时不得凭空给路径");
+
+    let dir = tempfile::tempdir().unwrap();
+    let services: Arc<dyn HostServices> = Arc::new(
+        BasicServices::new(dir.path(), Grants::default(), json!({}))
+            .with_agent_dir(dir.path().join("agents-root")),
+    );
+    let fixture = Fixture::with_services("where", source, services, Duration::from_secs(30));
+    let text = fixture
+        .host
+        .call_tool("plugin_where_where", json!({}))
+        .unwrap()
+        .content[0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        text.ends_with("agents-root"),
+        "agentDir must reach JS: {text}"
+    );
+}
+
+#[test]
 fn diagnostics_from_shim_are_collected() {
     let source = r#"
 module.exports = function (pi) {

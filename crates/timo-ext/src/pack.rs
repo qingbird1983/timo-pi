@@ -13,7 +13,7 @@ use rolldown::{
 use crate::Result;
 use crate::diag::ErrorCode;
 use crate::error::ExtError;
-use crate::manifest::{Capabilities, MANIFEST_SCHEMA, Manifest, compute_source_hash};
+use crate::manifest::{Capabilities, FsCapability, MANIFEST_SCHEMA, Manifest, compute_source_hash};
 
 /// 打包产物上限（设计 02 §2）。
 pub const MAX_BUNDLE_BYTES: usize = 5 * 1024 * 1024;
@@ -243,9 +243,22 @@ fn scan_forbidden(code: &str) -> Result<()> {
     Ok(())
 }
 
+/// 装机期的能力**建议**（advisory，不作数）：源码里出现 `pi.exec`/`pi.readFile` 等
+/// 调用才提议，用户 `timo ext trust` 才真正授权（设计 02 §5、03 §1）。
 fn propose_capabilities(code: &str) -> Capabilities {
+    let reads_files = code.contains("pi.readFile") || code.contains("pi.listDir");
     Capabilities {
         exec: code.contains("pi.exec"),
+        fs: FsCapability {
+            // 代理定义可能在数据目录，相对 cwd 表达不了，只能建议整树读。
+            // 真正的护栏在 `fs_scope`：`.git`/`.ssh`/`.env*`/密钥文件一律 E404。
+            read: if reads_files {
+                vec!["**".to_string()]
+            } else {
+                vec![]
+            },
+            ..FsCapability::default()
+        },
         ..Capabilities::default()
     }
 }
@@ -284,6 +297,10 @@ mod tests {
             propose_capabilities("await pi.exec('git', ['status']); fetch('https://x');");
         assert!(proposed.exec);
         assert!(proposed.net.domains.is_empty());
+        assert!(proposed.fs.read.is_empty(), "没读文件就不该建议 fs.read");
+        let reader = propose_capabilities("const t = await pi.readFile(p); pi.listDir(d);");
+        assert_eq!(reader.fs.read, vec!["**".to_string()]);
+        assert!(!reader.exec, "只读文件不该建议 exec");
         assert!(!propose_capabilities("const x = 1;").exec);
     }
 

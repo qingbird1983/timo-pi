@@ -6,12 +6,13 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；D6（subagent）详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md) 定稿，实现四批中 ①②③ 已落，④（扩展本体 + 真机验收）待开工；P2 待定稿。
+- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；**D6（subagent）四批全部落地并真机验收**（详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md)，夹具 `examples/`）；P2 待定稿。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
+- **D6 批④（subagent 扩展 + 真机验收）**：`examples/extensions/subagent/source/index.ts`（single / parallel≤8 / chain `{previous}`，24 KB 截断，聚合 usage）+ `examples/agents/scout.md`、`reviewer.md`（frontmatter 两种 tools 写法各用一次）+ `examples/README.md`（安装与授权提醒）。真机 DeepSeek 三模式各跑一轮：`/session` 的 `Tools/summaries tokens=6926 $0.0007` 与工具结果 usage 逐字对上——**批③ 登记的适配器缺口已用跨进程读数补证**；7 个会话文件 = 7 次主会话（9 次子进程一个没落）；失败即停与超时 kill 各有读数（`Get-Process timo` 为 0）。**真机纠了两处口径**：① 子进程命令把 `-p` 当开关（我们的 `-p` 取值）→ 子进程只打用法错误；② `--tools` 只做减法 → scout 的 `grep/find` 拿不到，按 pi 正向 enable 语义改成"列出的即最终允许集合"（`apply_allowlist`）。同时把 `pi.exec` 并进 `execParallel` 同一条执行路径（原 `Command::output()` 不认超时也 kill 不掉）、装机探测建议 `fs.read`、`--model` 支持裸 id（目录唯一才可用，歧义列候选）。偏离新增 D57（bin/timeout 走 `--ext-flag`，沙箱无 `process.env`）、D58（`pi.getAgentDir()`，沙箱无 `os.homedir`）。
 - **D6 批③（工具用量回报）**：`ToolOutput.usage: Option<Usage>` → `ToolResultMessage.usage`（`run/tools.rs`）→ `Tools/summaries` 桶（`usage.rs` 聚合既有，未改语义）；ext 侧 `ToolCallResult.usage` 原样过 JSON 边界（shim 不裁字段），内建与 MCP 保持 `None`。两条新测试（消息 + 事件双通路 / 缺省不得造），变异验证 agent 层转发承重。**实测缺口已登记**：`extensions/events.rs` 的 `usage: result.usage` 移除后 timo-kernel+timo-ext 全绿（模块私有、无单工具执行 API ⇒ 无测试入口），必须由批④ 子代理真机 `/session` 的 Tools 读数补证，否则不算完成。
 - **D6 批②（内核/CLI 三参数）**：`KernelOptions` 加 `no_session`/`tool_allowlist`/`append_system_prompt`，CLI 对应 `--no-session`、`--tools a,b,*`、`--append-system-prompt <text|@path>`（可重复；`@path` 读不到 → 退出码 2；`--tools` 全空 → 退出码 2；与 `resume` 互斥）。会话闸门收成 `Kernel::ensure_session()` 一处（run 与 `start_session` 共用，不留平行分支）；工具过滤在 MCP + 扩展注册完之后统一 `registry.hide_unlisted()`，未命中项进 `resource_warnings`（新 `WarningKind::UnknownTool`）。**修掉一个真缺口**：无头 `-p` 路径原先不打印资源告警，`unknown tool` 在子代理场景静默——现 `print::run` 收尾统一出口（含失败早退路径）。真机 DeepSeek：首行 `session_id:null` 且会话目录零文件、`--tools read` 下模型答 `NO_TOOL`、追加暗号被答对；三条闸门逐个变异验红。体量闸拦下 519/601 行两文件，按既有惯例拆出 `kernel/ext_api.rs`、`printer.rs`、`sessions_cmd.rs`（未加豁免）。
 - **D6 批①（宿主文件读取 + 并发执行）**：`pi.readFile`/`pi.listDir` 落地 `fs.read` 强制点——保护路径先拒（`.git`/`.ssh`/`.env`/密钥文件 `E404`）、无授权 `E401`、范围外 `E403`、超 1 MiB 标 `[truncated]`；`pi.execParallel` ≤8 任务 / 4 并发、结果按提交序返回、超时或取消 kill 子进程。踩坑与修法：kill 外壳后孙进程仍握着输出管道，`JoinHandle::join()` 白等 30 秒——改有界收尾（`mpsc` + `recv_timeout` 0.8 秒）并 reap 直接子进程，超时用例 29.4s → 1.8s。新增 9 个测试（fs_scope 5 + permissions 3 + host 1）。
@@ -24,11 +25,11 @@
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
 - **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
 - **验收中修复**：桌面把 `/skill:` 原文发给模型 → 展开收进 `Kernel::run`（`85527d4`）。
-- **门禁**：fmt / clippy / workspace tests（315）/ check-size 全绿；`target/` 超软限（incremental 5.6GiB / deps 17.3GiB），阶段收尾跑 `scripts/clean-build`。
+- **门禁**：fmt / clippy / workspace tests（321）/ check-size 全绿；`target/` **24.4GiB 逼近 25GiB 硬限**（incremental 5.8GiB），下一轮动代码前必须先跑 `scripts/clean-build`。
 
 ## 下一步（按优先级）
 
-1. D6 批④（详设 08 §5/§6）：`examples/extensions/subagent`（index.ts + manifest，代理定义发现走 `pi.readFile`/`pi.listDir`，single/parallel/chain + JSONL 聚合）、示例代理 `scout`/`reviewer`、真机 DeepSeek 验收（含中止 kill 子进程用例）；验收读数必须覆盖主会话 `/session` 的 `Tools` 桶，用来补证批③ 留下的适配器缺口。跑四门禁并单独提交；之后 P2 详设 → 实现 → `clean-build` + tag。
+1. **先跑 `scripts/clean-build`**（target 24.4GiB，硬限 25GiB），再开 P2 四题详设：prompt 模板（含 D56 workflow 预设）、provider composer、codemode、信任门控。定稿 → 实现 → 阶段收尾（`report.md` 补全 + `clean-build` + tag `phase-3.5.end`，tag 只在所有者要求时打）。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. `target/` 当前 23.2GiB（软 15 / 硬 25，incremental 5.2GiB）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 实测 77 篇，整合评审待办（删除面需所有者确认）。
 4. **审查收债**（前置：Phase 3.5 收口）：按 [docs/roadmap/audit-debt.md](../docs/roadmap/audit-debt.md) 清偿 2026-10-27 三路审查发现——**A1 会话半行拼接缺陷最先**（[P-012](pitfalls/P-012-session-half-line-append.md)，唯一会丢数据），B1 桌面壳穿透门面次之，其余排序见台账 §4。架构文档的文档侧偏差已于本轮回填。

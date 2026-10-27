@@ -55,6 +55,50 @@ async fn unknown_model_spec_errors() {
 }
 
 #[tokio::test]
+async fn a_bare_model_id_resolves_when_unique() {
+    let data = temp_dir("bareid");
+    let kernel = Kernel::new(KernelOptions {
+        data_dir: Some(data),
+        work_dir: Some(temp_dir("bareid-work")),
+        model_override: Some(("".into(), "claude-sonnet-4-5".into())),
+        api_key: Some("test-key".into()),
+        ..Default::default()
+    })
+    .await
+    .expect("bare id must resolve on its own");
+    assert_eq!(kernel.model_label(), "anthropic/claude-sonnet-4-5");
+}
+
+#[tokio::test]
+async fn an_ambiguous_bare_model_id_lists_candidates() {
+    let data = temp_dir("duel");
+    let model = r#"{"id":"dual","context_window":1000,"max_tokens":100,"input":["text"],"cost":{"input":1,"output":1,"cache_read":0,"cache_write":0}}"#;
+    std::fs::write(
+        data.join("models.json"),
+        format!(
+            r#"{{"providers":{{"acme":{{"base_url":"https://a.example/v1","api":"openai-completions","api_key":"x","models":[{model}]}},"other":{{"base_url":"https://b.example/v1","api":"openai-completions","api_key":"x","models":[{model}]}}}}}}"#
+        ),
+    )
+    .unwrap();
+    let result = Kernel::new(KernelOptions {
+        data_dir: Some(data),
+        work_dir: Some(temp_dir("duel-work")),
+        model_override: Some(("".into(), "dual".into())),
+        api_key: Some("k".into()),
+        ..Default::default()
+    })
+    .await;
+    let Err(err) = result else {
+        panic!("an ambiguous bare id must fail");
+    };
+    let text = err.to_string();
+    assert!(
+        text.contains("ambiguous") && text.contains("acme/dual") && text.contains("other/dual"),
+        "{text}"
+    );
+}
+
+#[tokio::test]
 async fn no_credential_errors_cleanly() {
     let data = temp_dir("nocred");
     let err = Kernel::new(KernelOptions {

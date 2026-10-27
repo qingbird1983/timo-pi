@@ -245,6 +245,15 @@ impl Catalog {
             .collect()
     }
 
+    /// 按裸模型 id 跨供应商查找（`--model <id>` 不给 provider 时用；设计 08 §5）。
+    /// 命中多个即歧义，调用方决定报错并列出候选。
+    #[must_use]
+    pub fn by_id(&self, id: &str) -> Vec<&Model> {
+        let mut hits: Vec<&Model> = self.models.values().filter(|m| m.id == id).collect();
+        hits.sort_by(|a, b| a.provider.cmp(&b.provider));
+        hits
+    }
+
     /// 插入或覆盖一个模型（供自定义供应商接入）。
     pub fn upsert(&mut self, model: Model) {
         self.models

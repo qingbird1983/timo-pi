@@ -300,7 +300,7 @@ impl Kernel {
         let stray = self
             .tool_allowlist
             .clone()
-            .map(|allowlist| self.registry.hide_unlisted(&allowlist))
+            .map(|allowlist| self.registry.apply_allowlist(&allowlist))
             .unwrap_or_default();
         if self.agent.is_none() {
             let (hooks, provider_hooks) =

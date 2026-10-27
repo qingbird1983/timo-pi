@@ -2,6 +2,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use serde_json::json;
 use timo_ext::{
     BasicServices, Capabilities, ErrorCode, FsCapability, GrantState, Grants, HostServices,
@@ -327,6 +330,21 @@ fn exec_parallel_keeps_order_and_limits() {
     assert!(err.starts_with("E401"), "{err}");
 }
 
+/// 一条会挂 30 秒的命令（超时/中止验收共用，避免两处各写一份平台分支）。
+fn slow_command() -> (String, Vec<String>) {
+    if cfg!(windows) {
+        (
+            "cmd".to_string(),
+            vec!["/C".to_string(), "ping -n 30 127.0.0.1 > nul".to_string()],
+        )
+    } else {
+        (
+            "sh".to_string(),
+            vec!["-c".to_string(), "sleep 30".to_string()],
+        )
+    }
+}
+
 #[test]
 fn exec_parallel_timeout_kills_the_child() {
     let dir = tempfile::tempdir().unwrap();
@@ -339,13 +357,10 @@ fn exec_parallel_timeout_kills_the_child() {
         },
         serde_json::Value::Null,
     );
+    let (command, args) = slow_command();
     let slow = timo_ext::ExecRequest {
-        command: if cfg!(windows) { "cmd" } else { "sh" }.to_string(),
-        args: if cfg!(windows) {
-            vec!["/C".to_string(), "ping -n 30 127.0.0.1 > nul".to_string()]
-        } else {
-            vec!["-c".to_string(), "sleep 30".to_string()]
-        },
+        command,
+        args,
         timeout_ms: Some(200),
     };
     let started = std::time::Instant::now();
@@ -357,4 +372,55 @@ fn exec_parallel_timeout_kills_the_child() {
         "timeout must bound the wait: {:?}",
         started.elapsed()
     );
+}
+
+#[test]
+fn exec_honours_timeout_ms_and_kills_the_child() {
+    let dir = tempfile::tempdir().unwrap();
+    let services = BasicServices::new(
+        dir.path(),
+        Grants {
+            exec: true,
+            ..Default::default()
+        },
+        serde_json::Value::Null,
+    );
+    let (command, args) = slow_command();
+    let started = std::time::Instant::now();
+    let out = services
+        .exec(&command, &args, &serde_json::json!({ "timeoutMs": 200 }))
+        .expect("granted exec");
+    assert_eq!(out.code, -1, "{out:?}");
+    assert!(out.stderr.contains("timeout"), "{out:?}");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "pi.exec must not block on a hung child: {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
+fn a_raised_abort_flag_cancels_pi_exec() {
+    let dir = tempfile::tempdir().unwrap();
+    let abort = Arc::new(AtomicBool::new(false));
+    let services = BasicServices::new(
+        dir.path(),
+        Grants {
+            exec: true,
+            ..Default::default()
+        },
+        serde_json::Value::Null,
+    )
+    .with_abort_flag(Arc::clone(&abort));
+    let (command, args) = slow_command();
+    let handle =
+        std::thread::spawn(move || services.exec(&command, &args, &serde_json::Value::Null));
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    abort.store(true, Ordering::SeqCst);
+    let out = handle
+        .join()
+        .expect("exec thread returns")
+        .expect("granted exec");
+    assert_eq!(out.code, -1, "{out:?}");
+    assert!(out.stderr.contains("cancelled by host"), "{out:?}");
 }

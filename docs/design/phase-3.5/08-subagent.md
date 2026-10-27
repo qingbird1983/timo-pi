@@ -37,6 +37,8 @@
 | D54 | parallel 由宿主 `execParallel` 实现（≤4 并发），JS 侧不引入并发事件循环 | a（QuickJS 单线程） | 语义与 pi 一致：一次提交、按序回填结果 |
 | D55 | 子代理用量计入主会话 `Tools/summaries` 桶（`ToolResultMessage.usage`） | b（pi 只在 TUI 展示） | 用量设计（phase-3.5/03）本就为嵌套调用预留合并入口 |
 | D56 | workflow 预设（`/implement` 等 prompt templates）不在本批 | d（排期） | 随 P2 prompt-templates 落；本批只做工具与代理定义 |
+| D57 | 子进程可执行文件与超时经 `--ext-flag bin=` / `--ext-flag timeout=` 传入，不读 `TIMO_BIN` 环境变量 | a（QuickJS 沙箱没有 `process.env`） | 蓝本用 env 传二进制路径；我们只有宿主 flag 通道，缺省按 PATH 找 `timo`、超时 600 秒 |
+| D58 | 宿主新增 `pi.getAgentDir()`（config 带 `agentDir`）给扩展定位用户级 `agents/` | a（沙箱没有 `os.homedir`/`CONFIG_DIR_NAME`） | 蓝本从 pi 宿主导入 `getAgentDir()`；我们把同一个值经 `HostServices::config()` 交给 JS，缺省空串 |
 
 ## 4. 接口契约
 
@@ -61,7 +63,8 @@ await pi.listDir(path)   // → [{ name, isDir }]，不递归，不排除隐藏�
 ```
 
 - `--no-session`：不建会话文件，`session_id` 为 None；JSON 首行 `"session_id": null`，其余事件不变；与 `/export`、`resume` 互斥（同时给出 → 用法错误 2）。
-- `--tools`：列出的名字保持原 exposure，未列出的置 `Exposure::Hidden`（注册表不变，只是不声明给模型）。未知名 → stderr 逐条 `[warn] unknown tool \`x\``，不影响其余；`--tools ""` → 用法错误 2。
+- `--tools`：列出的名字就是**最终允许集合**——命中即声明给模型（原本被 `default_tools` 置 Hidden 的也恢复为可声明，对齐 pi 的正向 enable 语义），未命中的置 `Exposure::Hidden`；注册表不变，只改声明面。未知名 → stderr 逐条 `[warn] unknown tool \`x\``，不影响其余；`--tools ""` → 用法错误 2。
+  - 真机依据（批④）：示例 `scout.md` 声明 `tools: read, grep, find, ls`，早期"只做减法"的实现里 grep/find 仍是 Hidden，子代理回答"没有 grep/find 工具可用"并拒绝取证——只减不增的口径与蓝本不符，故按 enable 语义修正。
 - `--append-system-prompt`：文本作为最后的附加节接在系统提示尾部（与 `APPEND_SYSTEM.md` 同一节实现）；`@path` 读不到 → stderr 报错退出 2；空文本 → 忽略并警告。
 - 资源告警在无头路径也必须出口（`-p`/`--mode json` 收尾打印，失败提前返回同样打印）：父代理只能看到子进程的 stderr，静默等于把缺陷藏起来。
 
@@ -86,9 +89,11 @@ await pi.execParallel([{ command, args, timeoutMs }, ...])
 
 - **注册工具** `subagent`（`label: "Subagent"`），参数：
   `{ agent?: string, task?: string, tasks?: [{agent, task}], chain?: [{agent, task}] }`。
-- **发现**：`<dataDir>/agents/*.md` 先、`<cwd>/.timo/agents/*.md` 后；同名后者覆盖前者。frontmatter 取 `name`/`description`/`tools`（逗号串或数组）/`model`；正文 = 系统提示；缺 `name` 用文件名。坏文件跳过并 `pi.ui.notify` 一次。
-- **模型解析**：`provider/id` 直接用；裸 `id` 仅当目录内唯一才可用，歧义则该次调用失败并列出候选。
-- **调用**：`pi.exec(bin, ["--mode","json","-p","--no-session","--thinking",<档位>, ...(tools?["--tools",tools.join(",")]:[]), ...(model?["--provider",p,"--model",id]:[]), "--append-system-prompt", text, `Task: ${task}`])`；`bin` 取 env `TIMO_BIN`，缺省 `timo`。
+- **发现**：`<dataDir>/agents/*.md` 先、`<cwd>/.timo/agents/*.md` 后；同名后者覆盖前者。`dataDir` 经宿主 `pi.getAgentDir()` 取得（D58，缺省空串则跳过用户级）。frontmatter 取 `name`/`description`/`tools`（逗号串或数组）/`model`；正文 = 系统提示；缺 `name` 用文件名。坏文件跳过并 `ctx.ui.notify` 一次（我们没给扩展 `pi.ui`）。
+- **模型解析**：`provider/id` 拆成 `--provider` + `--model`；裸 `id` 只给 `--model`，唯一性与歧义判定收在内核一处（歧义时子进程非 0 退出并在 stderr 列出候选，扩展原样转述）——扩展自己不再数一遍候选，避免两处口径。
+- **调用**：`pi.exec(bin, ["--mode","json","--no-session","--thinking",<档位>, ...(tools?["--tools",tools.join(",")]:[]), ...(model?(hasSlash?["--provider",p,"--model",id]:["--model",id]):[]), "--append-system-prompt", text, "-p", `Task: ${task}`], { timeoutMs })`。
+  - `-p` 在我们的 CLI 里是**取值**参数（可重复），任务文本必须紧跟它，不能像蓝本那样放末尾位置——批④ 真机踩过：拼错的子进程只打出用法错误，主会话拿到 `0 turn(s), 0 tokens`。
+  - `bin` 取 `--ext-flag bin=`（D57），缺省按 PATH 找 `timo`；单次超时取 `--ext-flag timeout=`，缺省 600000ms。
 - **解析**：逐行 JSON。`type=="message" && message.role=="assistant"` → `turns+=1`、累加 usage、记 `contextTokens`；`type=="tool_execution_end"` → 记一步过程；`type=="agent_end"` → 取最后一条 assistant 文本为 output；`code!=0` → 失败并附 stderr 尾部 4 KB。
 - **返回**：`content` = 文本摘要（代理名、turns、答案，超 24 KB 截断）；`details` = 结构化结果（agent/source/model/exitCode/usage/steps，留给 GUI）；`usage` = 聚合值（§4.3）。
 - **模式**：single 直接跑；parallel 用 `execParallel`（每个任务一条子进程命令）；chain 顺序跑并替换 `{previous}`，首个失败即停。
@@ -103,6 +108,7 @@ await pi.execParallel([{ command, args, timeoutMs }, ...])
    - 断言：子进程独立会话（临时目录里不产生子会话文件）、工具面受 `--tools` 约束、返回文本含答案、`/session` totals 比调用前增加了子代理 token；
    - chain 模式跑 `scout → reviewer`，确认 `{previous}` 替换与失败即停。
 4. 取消：主会话 abort 后子进程消失（`tasklist`/`pgrep` 读数为 0），工具结果报 aborted 而非挂住。
+   - 实测形态（批④）：无头进程在管道里收不到 Ctrl+C，`taskkill` 走的是 TerminateProcess 不是 abort 路径，所以这一项用**同一套 kill 代码**的超时通道验：`--ext-flag timeout=1500` 让 scout 子进程超时 → 工具结果 `FAILED exit -1: timeout`，跑完 `Get-Process timo` 读数为 0（无孤儿）。abort 通道另有进程内单测 `a_raised_abort_flag_cancels_pi_exec`（置位后 kill 并报 `cancelled by host`）。桌面/交互 Ctrl+C 的真机触发留 Phase 4 与 `Ctrl+C 130` 一起补。
 
 ## 7. 体量
 

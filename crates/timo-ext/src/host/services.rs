@@ -114,6 +114,7 @@ fn join_pipe(receiver: Option<std::sync::mpsc::Receiver<String>>) -> String {
 /// CLI/测试用的基础服务实现。
 pub struct BasicServices {
     cwd: PathBuf,
+    agent_dir: PathBuf,
     has_ui: bool,
     grants: Grants,
     settings: JsonValue,
@@ -130,6 +131,7 @@ impl BasicServices {
     pub fn new(cwd: impl Into<PathBuf>, grants: Grants, settings: JsonValue) -> Self {
         Self {
             cwd: cwd.into(),
+            agent_dir: PathBuf::new(),
             has_ui: false,
             grants,
             settings,
@@ -139,6 +141,13 @@ impl BasicServices {
             running: Arc::new(AtomicBool::new(false)),
             flags: std::collections::BTreeMap::new(),
         }
+    }
+
+    /// 内核数据目录（扩展用它找用户级 `agents/`；设计 08 §5）。
+    #[must_use]
+    pub fn with_agent_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.agent_dir = dir.into();
+        self
     }
 
     /// 开启 TTY 对话框（stdin 行交互）。
@@ -188,21 +197,19 @@ impl HostServices for BasicServices {
         &self,
         command: &str,
         args: &[String],
-        _options: &JsonValue,
+        options: &JsonValue,
     ) -> std::result::Result<ExecOutput, String> {
         if !self.grants.exec {
             return Err("E401 exec capability is not granted".to_string());
         }
-        let output = std::process::Command::new(command)
-            .args(args)
-            .current_dir(&self.cwd)
-            .output()
-            .map_err(|error| format!("cannot run `{command}`: {error}"))?;
-        Ok(ExecOutput {
-            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-            code: output.status.code().unwrap_or(-1),
-        })
+        // 与 execParallel 同一条执行路径：`Command::output()` 既不认超时，
+        // 取消时也 kill 不掉子进程（设计 08 §6.4 的中止验收过不去）。
+        let request = ExecRequest {
+            command: command.to_string(),
+            args: args.to_vec(),
+            timeout_ms: options.get("timeoutMs").and_then(JsonValue::as_u64),
+        };
+        Ok(run_one(&self.cwd, &request, &self.aborted))
     }
 
     fn read_file(&self, path: &str) -> std::result::Result<String, String> {
@@ -397,6 +404,7 @@ impl HostServices for BasicServices {
         json!({
             "hasUI": self.has_ui,
             "cwd": self.cwd.display().to_string(),
+            "agentDir": self.agent_dir.display().to_string(),
             "model": self.model,
             "thinkingLevel": self.thinking,
             "systemPrompt": "",

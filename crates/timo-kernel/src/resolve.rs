@@ -76,12 +76,29 @@ pub async fn resolve_model(
     explicit_key: Option<&str>,
     custom: &[CustomProvider],
 ) -> Result<ResolvedModel> {
-    // 1. 显式指定
+    // 1. 显式指定（provider 为空 = 裸 id：目录内唯一才可用，设计 08 §5）
     if let Some((provider, id)) = override_spec {
-        let model = catalog
-            .get(provider, id)
-            .ok_or_else(|| KernelError::ModelNotFound(format!("{provider}/{id}")))?
-            .clone();
+        let model = if provider.is_empty() {
+            match catalog.by_id(id).as_slice() {
+                [] => return Err(KernelError::ModelNotFound(id.clone())),
+                [only] => (*only).clone(),
+                many => {
+                    let candidates: Vec<String> = many
+                        .iter()
+                        .map(|m| format!("{}/{}", m.provider, m.id))
+                        .collect();
+                    return Err(KernelError::ModelNotFound(format!(
+                        "`{id}` is ambiguous, use one of: {}",
+                        candidates.join(", ")
+                    )));
+                }
+            }
+        } else {
+            catalog
+                .get(provider, id)
+                .ok_or_else(|| KernelError::ModelNotFound(format!("{provider}/{id}")))?
+                .clone()
+        };
         return Ok(finish(catalog, model, settings, explicit_key, custom));
     }
     // 2. settings 默认（凭证可用才采纳）

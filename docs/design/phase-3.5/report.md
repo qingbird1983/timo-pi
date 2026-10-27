@@ -78,6 +78,16 @@
 - 变异验证：把 `usage: output.usage` 换成 `None` → agent 那条测试转红（还原后 sha 一致）。
 - **实测覆盖缺口（不谎报）**：把内核适配器 `crates/timo-kernel/src/extensions/events.rs` 的 `usage: result.usage` 换成 `None` 后，`timo-kernel` + `timo-ext` 全部测试仍绿——该环没有公开测试入口（`mod extensions` 私有、内核无单工具执行 API）。批④ 子代理真机验收要用 `/session` 的 `Tools` 桶读数把它端到端补上，否则不许算完成。
 
+### D6 批④ 真机读数（DeepSeek，临时数据目录，7 次主会话 / 9 次子进程）
+
+- 装机链路真跑通：`ext add` 用 rolldown 把 TS 打成 `bundle.cjs` → `ext trust subagent` 授权 → 主会话模型调用 `plugin_subagent_subagent`。装机建议能力读数：`{"exec":true,"fs":{"read":["**"]}}`（`pi.readFile`/`pi.listDir` 现在会被探测到，此前只探 `pi.exec`）。
+- **补上批③ 登记的适配器缺口**：主会话文件里 `tool_result`（`plugin_subagent_subagent`）带 `usage={input:4499,output:379,cache_read:2048,total_tokens:6926,cost.total:0.00073598}`，`/session` 打出 `Tools/summaries tokens=6926 $0.0007`、总计 `input=5274`——两个读数逐字对上，内核适配器那一行确认在生产里承重。
+- single / parallel / chain 三模式真机各跑一轮：parallel 两条任务按提交序回填（宿主 `execParallel`）；chain 第二步 reviewer 原样征引第一步输出（`{previous}` 替换有实证）；失败即停用 `model: nosuchprovider/nosuchmodel` 验出——第一步 `FAILED exit 1: [error] model not found`，第二步未执行。
+- `--no-session` 在子代理链路上的跨进程读数：sessions 目录恰好 7 个文件（= 7 次主会话），子进程跑了 9 次一个没落。
+- **真机纠了两处偏差**（都已先改文档再改码）：① 子进程参数把 `-p` 当布尔开关用，实际我们的 `-p` 取值，子进程只打出用法错误、主会话拿到 `0 turn(s) 0 tokens`；② `--tools` 早期实现只做减法，示例 scout 声明的 `grep/find` 拿不到，子代理回答"没有 grep/find 工具可用"——按 pi 的正向 enable 语义改为"列出的即最终允许集合"（复跑后 scout 的 steps 真出现 `grep → find`）。
+- 顺带把 `pi.exec` 与 `pi.execParallel` 合并到同一条执行路径：原先单条 exec 用 `Command::output()`，既不认 `timeoutMs` 也 kill 不掉，取消/超时验收过不去。
+- 未做（如实）：交互 Ctrl+C 触发的真机 abort（无头管道收不到信号）——用超时通道与进程内 abort 单测等价覆盖，读数见设计 08 §6.4。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。

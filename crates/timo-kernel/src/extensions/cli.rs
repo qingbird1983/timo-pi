@@ -89,14 +89,19 @@ pub async fn install_extension(data_dir: &Path, source: &Path) -> crate::Result<
         }
     };
     let mut manifest = out.manifest;
-    if out.proposed.exec || !out.proposed.net.domains.is_empty() {
+    if out.proposed.exec || !out.proposed.net.domains.is_empty() || !out.proposed.fs.read.is_empty()
+    {
         manifest.capabilities.exec |= out.proposed.exec;
         for domain in out.proposed.net.domains {
             if !manifest.capabilities.net.domains.contains(&domain) {
                 manifest.capabilities.net.domains.push(domain);
             }
         }
-        manifest.capabilities.fs = manifest.capabilities.fs.clone();
+        for scope in out.proposed.fs.read {
+            if !manifest.capabilities.fs.read.contains(&scope) {
+                manifest.capabilities.fs.read.push(scope);
+            }
+        }
         manifest
             .validate(&root.join("manifest.json"))
             .map_err(|error| crate::KernelError::Extension(error.to_string()))?;

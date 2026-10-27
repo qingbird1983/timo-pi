@@ -10,7 +10,7 @@ pub struct KernelOptions {
     pub data_dir: Option<PathBuf>,
     /// 工作目录（工具与项目设置解析基底）。
     pub work_dir: Option<PathBuf>,
-    /// 模型覆盖（`--provider P --model M`）。
+    /// 模型覆盖（`--provider P --model M`）；provider 为空串 = 裸 `--model id`，按目录唯一性解析。
     pub model_override: Option<(String, String)>,
     /// 思考档位覆盖（CLI > 设置）。
     pub thinking: Option<timo_config::ThinkingLevel>,
@@ -30,7 +30,8 @@ pub struct KernelOptions {
     pub ext_flags: Vec<(String, String)>,
     /// 不落会话文件（`--no-session`；子代理用，设计 08 §4.2）。
     pub no_session: bool,
-    /// 工具允许列表（`--tools a,b,*`）：`None` = 按设置与默认激活集；列出的保持原 exposure，其余置 Hidden。
+    /// 工具允许列表（`--tools a,b,*`）：`None` = 按设置与默认激活集；列出的即最终允许集合
+    /// （被默认集关掉的也恢复声明），未列出的置 Hidden。
     pub tool_allowlist: Option<Vec<String>>,
     /// 追加到系统提示尾部的文本（`--append-system-prompt`，可重复；设计 08 D52 走命令行文本）。
     pub append_system_prompt: Vec<String>,

@@ -65,17 +65,20 @@ impl ToolRegistry {
         self.tools.values().collect()
     }
 
-    /// 按 `--tools` 允许列表收敛声明面（设计 08 §4.2）：命中的保持原 exposure，
-    /// 未命中的置 [`Exposure::Hidden`]；注册表本身不变，只是不再声明给模型。
+    /// 按 `--tools` 允许列表收敛声明面（设计 08 §4.2）：列出的就是**最终允许集合**，
+    /// 命中即对模型声明（原本 Hidden/Deferred 的恢复为 [`Exposure::Direct`]），
+    /// 未命中的置 [`Exposure::Hidden`]；注册表本身不变，只改声明面。
     ///
     /// 返回一个工具都没命中的列表项，由调用方逐条告警。
-    pub fn hide_unlisted(&mut self, allowlist: &[String]) -> Vec<String> {
+    pub fn apply_allowlist(&mut self, allowlist: &[String]) -> Vec<String> {
         let mut unmatched = allowlist.to_vec();
         for def in self.tools.values_mut() {
             let before = unmatched.len();
             unmatched.retain(|pattern| !pattern_matches(pattern, &def.name));
             if unmatched.len() == before {
                 def.exposure = Exposure::Hidden;
+            } else if !def.declared_to_model() {
+                def.exposure = Exposure::Direct;
             }
         }
         unmatched
@@ -133,18 +136,23 @@ mod tests {
     }
 
     #[test]
-    fn hide_unlisted_keeps_matches_and_reports_strays() {
+    fn allowlist_enables_listed_tools_and_hides_the_rest() {
         let mut reg = ToolRegistry::new();
-        for name in ["read", "grep", "mcp__radius__search", "mcp__other__run"] {
+        for name in ["read", "mcp__radius__search", "mcp__other__run"] {
             reg.register(dummy(name));
         }
-        let stray = reg.hide_unlisted(&["read".into(), "mcp__radius__*".into()]);
+        // grep 模拟"注册但被 default_tools 关掉"：列出来就必须恢复声明
+        let mut off = dummy("grep");
+        off.exposure = Exposure::Hidden;
+        reg.register(off);
+
+        let stray = reg.apply_allowlist(&["read".into(), "grep".into(), "mcp__radius__*".into()]);
         let declared: Vec<String> = reg.declared().iter().map(|d| d.name.clone()).collect();
-        assert_eq!(declared, ["mcp__radius__search", "read"]);
+        assert_eq!(declared, ["grep", "mcp__radius__search", "read"]);
         assert_eq!(reg.all().len(), 4, "注册表不变，只改声明面");
         assert!(stray.is_empty(), "每个列表项都命中过就不该报未知");
         assert_eq!(
-            reg.hide_unlisted(&["nope".into()]),
+            reg.apply_allowlist(&["nope".into()]),
             ["nope".to_string()],
             "一个都没命中的列表项要报回去"
         );

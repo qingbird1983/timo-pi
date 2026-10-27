@@ -71,7 +71,7 @@ pub(crate) struct Common {
     /// Do not persist a session for this run (ephemeral; subagents).
     #[arg(long = "no-session")]
     no_session: bool,
-    /// Comma-separated allowlist of tool names or `*` patterns to declare to the model.
+    /// Comma-separated allowlist of tool names or `*` patterns to enable for this run.
     #[arg(long = "tools", value_name = "TOOLS", value_delimiter = ',')]
     tools: Vec<String>,
     /// Append text, or the contents of `@path`, to the system prompt (repeatable).
@@ -282,7 +282,9 @@ pub(crate) fn build_options(
     let model_override = match (&common.provider, &common.model) {
         (None, None) => None,
         (Some(p), Some(m)) => Some((p.clone(), m.clone())),
-        _ => return Err("--provider and --model must be supplied together".into()),
+        // 只给 --model：provider 留空，由内核按目录唯一性解析（设计 08 §5）。
+        (None, Some(m)) => Some((String::new(), m.clone())),
+        (Some(_), None) => return Err("--provider needs --model as well".into()),
     };
     let thinking = match &common.thinking {
         None => None,
@@ -428,6 +430,23 @@ mod tests {
         assert!(
             error.starts_with("--append-system-prompt cannot read `missing-rule.md`:"),
             "{error}"
+        );
+    }
+
+    #[test]
+    fn a_bare_model_flag_leaves_the_provider_empty() {
+        let options = build_options(&common(&["--model", "deepseek-chat"]), None)
+            .expect("bare --model is legal");
+        assert_eq!(
+            options
+                .model_override
+                .as_ref()
+                .map(|(p, m)| (p.as_str(), m.as_str())),
+            Some(("", "deepseek-chat"))
+        );
+        assert_eq!(
+            usage_error(&common(&["--provider", "deepseek"])),
+            "--provider needs --model as well"
         );
     }
 }

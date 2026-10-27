@@ -288,6 +288,7 @@ globalThis.__timo_make_api = function (config) {
       native.action("setActiveTools", JSON.stringify(names || []));
     },
     getSettings: () => __timo_parse(native.action("getSettings", "{}"), {}),
+    getAgentDir: () => String(config.agentDir || ""),
     getCommands: () => __timo_parse(native.action("getCommands", "{}"), []),
     setModel: async (model) => __timo_parse(native.action("setModel", JSON.stringify(model)), false),
     getThinkingLevel: () => __timo_parse(native.action("getThinkingLevel", "{}"), "off"),

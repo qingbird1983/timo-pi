@@ -118,7 +118,7 @@ async fn no_session_writes_nothing_to_disk() {
 }
 
 #[tokio::test]
-async fn tool_allowlist_hides_the_rest_and_warns_on_strays() {
+async fn tool_allowlist_enables_listed_tools_and_warns_on_strays() {
     let data = std::env::temp_dir().join(format!("timo-kernel-tools-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     let work = data.join("work");
@@ -128,7 +128,7 @@ async fn tool_allowlist_hides_the_rest_and_warns_on_strays() {
         work_dir: Some(work),
         model_override: Some(("anthropic".into(), "claude-sonnet-4-5".into())),
         api_key: Some("test-key".into()),
-        tool_allowlist: Some(vec!["read".into(), "nope".into()]),
+        tool_allowlist: Some(vec!["read".into(), "grep".into(), "nope".into()]),
         ..Default::default()
     })
     .await
@@ -140,7 +140,11 @@ async fn tool_allowlist_hides_the_rest_and_warns_on_strays() {
         .iter()
         .map(|t| t.name.clone())
         .collect();
-    assert_eq!(names, ["read"], "只声明允许列表里的工具");
+    assert_eq!(
+        names,
+        ["grep", "read"],
+        "列出的都要声明（grep 被默认激活集关掉了也要恢复），未列出的不声明"
+    );
     let stray = kernel
         .resource_warnings()
         .iter()
