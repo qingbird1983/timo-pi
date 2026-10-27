@@ -85,6 +85,7 @@
 | D46 | 旧平铺会话不迁移 | b（只增不改） | 读取兼容，新写入进分区（07） |
 | D47 | 导出保留原始 entry 与 parent_id | a（自有会话格式） | 线性链原样输出（07） |
 | D48 | 压缩 entry 用 `keep_recent_messages` 计数而非 `first_kept_entry_id` | b（线性链实现更简） | 免去"消息 → entry id"映射；投影时在链上倒数 N 条（04） |
+| D49 | 无头模式先调 `Kernel::start_session()` 预建会话 | b（缺口补齐） | 会话头必须在首行而 run 内部才建会话；预建后 run 复用，仅此一处新增内核入口（06 §8） |
 
 ## 7. 接缝核对（architecture/03）
 

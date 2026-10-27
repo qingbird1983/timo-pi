@@ -6,12 +6,13 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P1 进行中（ADR-0013）**：P0 完成（D1/D2/D4/D7，报告 `docs/design/phase-3.5/report.md`）；P1 详设 04~07 定稿；P1.1 会话分区+导出、P1.2 compaction 已提交。下一步 P1.3 无头（06），随后 P1.4 缓存统计与预热（05）。
+- **Phase 3.5 P1 进行中（ADR-0013）**：P0 完成（D1/D2/D4/D7，报告 `docs/design/phase-3.5/report.md`）；P1 详设 04~07 定稿；P1.1 会话分区+导出、P1.2 compaction、P1.3 无头模式已提交。下一步 P1.4 缓存统计与预热（05），随后阶段收尾（D3/D5/D6 验收）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
+- **Phase 3.5 P1.3（无头模式）**：`timo -p "<任务>"`（可重复、同会话）与 `--mode json`；text 只出终答，JSONL 首行会话头、首/末事件 `agent_start`/`agent_end`、`message_update` 不带 partial；退出码 0/1/2、Ctrl+C 130。内核只补 `Kernel::start_session()`（D49）。真机：json 模式走完 `bash` 工具调用得到 `TIMO_JSON_SMOKE`，两条 `-p` 保住暗号。
 - **Phase 3.5 P1.2（compaction）**：每轮请求前按「窗口 − reserve」自动压缩；切点只落 user 消息；`session.compaction` entry 只增不删，恢复投影为「摘要 + 保留尾部 + 之后消息」；手动 `/compact [补充要求]` 输出前后 token 与保留条数。真机手动压缩 `1836 → 279`，重启后仍答出「青柚」；修掉 `tokens_after` 沿用压缩前 usage 的读数错误；`/session` 改为按会话文件全部 message entry 累计，压缩后历史用量不再缩水。
 - **Phase 3.5 P1.1（会话分区+导出）**：新会话落 `sessions/--<encoded-cwd>--/`，旧平铺只读兼容；resume/delete/list 跨分区；`export_session` 原子导出 leaf 链；CLI `/export` 可用。真机冒烟：分区目录与导出文件逐字核对。
 - **Phase 3.5 P1 详设**：04 compaction（阈值/切点/摘要/entry/投影，D39~D40）、05 缓存统计与预热（D41~D44）、06 无头 `-p`/`--mode json`、07 会话按 cwd 分区与导出（D45~D47）；00 总览补偏离表。
@@ -23,9 +24,9 @@
 
 ## 下一步（按优先级）
 
-1. Phase 3.5 P1.3 无头模式（详设 06）：`-p` 可重复 + `--mode text|json`，JSONL 首尾事件与退出码 0/1/2、Ctrl+C=130；之后 P1.4 缓存统计与预热（05）。每批跑四门禁并单独提交。
+1. Phase 3.5 P1.4 缓存统计与预热（详设 05）：miss 统计与噪声地板、压缩/预热重置基线、TTL 90% 调度与 $0.05 经济阈值、`usage(cache_warm)` entry；之后阶段收尾（D3/D5/D6 验收 + P1 报告）。每批跑四门禁并单独提交。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
-3. `target/` 当前 18.4GiB（软 15 / 硬 25）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 总数 69 超软限 60，整合评审待办（删除面需所有者确认）。
+3. `target/` 当前 18.6GiB（软 15 / 硬 25）；后续每阶段收尾跑 `scripts/clean-build`。sccache 到位后再收紧硬限。docs 总数 69 超软限 60，整合评审待办（删除面需所有者确认）。
 
 > 施工顺序唯一来源：当前阶段设计文档；设计错误先改文档再写码。
 
@@ -33,7 +34,7 @@
 
 - NSH 渲染/热更仍为人工验收（设计 03 §8 允许），CI 只跑“未签名拒绝”。
 - 生产签名密钥分发策略未定，留 Phase 4 ADR。
-- `target/` 当前 18.4GiB（软 15 / 硬 25），阶段收尾再清；无 sccache，未做全清；分类读数与清扫统一用 `scripts/target-size` / `clean-build`。
+- `target/` 当前 18.6GiB（软 15 / 硬 25），阶段收尾再清；无 sccache，未做全清；分类读数与清扫统一用 `scripts/target-size` / `clean-build`。
 - 桌面壳遗留：模型热切换、设置·扩展页、会话搜索、超大 diff 外部编辑器、trace 全文入口、审阅开关不重放（roadmap phase-3 §6）。
 
 ## 关键提醒

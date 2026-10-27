@@ -6,10 +6,12 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 
 mod commands;
 mod ext_cmd;
+mod json_mode;
+mod print;
 use commands::{CommandOutcome, WARNED, handle_command, print_resource_warnings};
 use timo_kernel::{
     AssistantStreamEvent, Content, Kernel, KernelEvent, KernelOptions, Message, ThinkingLevel,
@@ -20,7 +22,10 @@ use timo_kernel::{
 #[command(name = "timo", about = "Timo-pi non-interactive smoke CLI", version)]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
+    /// Headless print mode (`-p`); ignored when a subcommand is used.
+    #[command(flatten)]
+    print: print::PrintArgs,
 }
 
 #[derive(Subcommand)]
@@ -36,7 +41,7 @@ enum Command {
 }
 
 #[derive(Args)]
-struct Common {
+pub(crate) struct Common {
     /// Provider id (must be paired with --model).
     #[arg(long)]
     provider: Option<String>,
@@ -97,11 +102,24 @@ struct SessionsArgs {
 
 #[tokio::main]
 async fn main() {
-    let code = match Cli::parse().command {
-        Command::Run(args) => run_command(args).await,
-        Command::Resume(args) => resume_command(args).await,
-        Command::Sessions(args) => sessions_command(args),
-        Command::Ext(args) => ext_cmd::run(args).await,
+    let cli = Cli::parse();
+    let code = match cli.command {
+        Some(_) if !cli.print.prompts.is_empty() => {
+            eprintln!("[error] -p/--print cannot be combined with a subcommand");
+            2
+        }
+        Some(command) => match command {
+            Command::Run(args) => run_command(args).await,
+            Command::Resume(args) => resume_command(args).await,
+            Command::Sessions(args) => sessions_command(args),
+            Command::Ext(args) => ext_cmd::run(args).await,
+        },
+        None if cli.print.prompts.is_empty() => {
+            eprintln!("[error] nothing to run: supply -p <prompt> or a subcommand\n");
+            eprint!("{}", Cli::command().render_help());
+            2
+        }
+        None => print::run(cli.print).await,
     };
     std::process::exit(code);
 }
@@ -282,7 +300,10 @@ pub(crate) async fn run_prompt(kernel: &mut Kernel, prompt: &str) -> i32 {
     code
 }
 
-fn build_options(common: &Common, max_turns: Option<usize>) -> Result<KernelOptions, String> {
+pub(crate) fn build_options(
+    common: &Common,
+    max_turns: Option<usize>,
+) -> Result<KernelOptions, String> {
     let model_override = match (&common.provider, &common.model) {
         (None, None) => None,
         (Some(p), Some(m)) => Some((p.clone(), m.clone())),

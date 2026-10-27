@@ -107,9 +107,11 @@ timo -p "<prompt>" [--mode text|json] [--cwd DIR] [--provider P --model M]
 
 ## 8. 实现落点
 
-- `apps/timo-cli/src/main.rs`：`Cli` 增加 `-p/--print`（Vec）与 `--mode`；`main` 在 `print` 非空时走 `run_print`；`run_print` 复用 `Kernel::run` 与现有事件订阅。
-- 新增 `apps/timo-cli/src/json_mode.rs`：`JsonWriter`（逐事件映射 + 逐行 flush）与 `session_header`。text 模式只取 `AgentFinished.messages` 最后一条 assistant 的 text。
-- 内核不新增接口；只依赖 `KernelEvent` 与 `Compacted`（04）。
+- `apps/timo-cli/src/main.rs`：`Cli` 的子命令改为可选，并扁平化 `PrintArgs`；`main` 在 `-p` 非空时走 `print::run`，两者同时出现按用法错误处理。
+- `apps/timo-cli/src/print.rs`：`PrintArgs`/`PrintMode`/`run`/`prompt_once`（复用 `Kernel::run` 与事件订阅；Ctrl+C 两段语义与 text/json 退出码）。
+- `apps/timo-cli/src/json_mode.rs`：`JsonWriter`（逐事件映射 + 逐行 flush）、`session_header`、终答提取。
+- 内核只补一个会话创建入口 `Kernel::start_session()`：会话头要求首行带 session id，而 `Kernel::run` 内部才建会话；预建后 run 直接复用（D49）。
+- CLI 新增 `serde_json` 依赖边（workspace 已有，无新外部 crate）。
 
 ## 9. 测试
 

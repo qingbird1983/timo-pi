@@ -342,6 +342,17 @@ impl Kernel {
         self.session_id.as_deref()
     }
 
+    /// 立即创建并落盘新会话（首次 [`Kernel::run`] 原本也会建；无头模式需要先拿 id 输出会话头）。
+    ///
+    /// # Errors
+    /// 会话文件创建失败 → [`KernelError::Session`]。
+    pub fn start_session(&mut self) -> Result<()> {
+        if self.session.is_none() {
+            self.open_new_session()?;
+        }
+        Ok(())
+    }
+
     /// 中止当前 run。
     pub fn abort(&self) {
         self.ext_abort.store(true, Ordering::SeqCst);

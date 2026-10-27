@@ -6,6 +6,19 @@
 
 ---
 
+## [0.1.67] - 2026-10-27
+
+### 实现：无头打印模式 `-p` / `--mode json`（Phase 3.5 P1.3）
+
+- `timo -p "<任务>"`（可重复，同一会话顺序执行）：stdout 只出最终回答，`[tool]`、流式增量与 `[usage]` 不再混入；错误与资源告警走 stderr。
+- `timo --mode json -p ...`：stdout 为 JSONL——首行 `session_header`（会话 id、cwd、模型），首事件 `agent_start`、末事件 `agent_end`；真机 50 行逐行可解析，`message_update` 不含 partial，工具块开头补 `id`/`tool_name`。
+- 退出码：成功 0；输出截断、错误、取消 1；用法错误（`-p` 配子命令、无参数）2；第一次 Ctrl+C 中止并最多等 5 秒，第二次立即 130。
+- 内核只补 `Kernel::start_session()` 预建会话（会话头要首行带 id，D49）；`serde_json` 为 workspace 既有依赖，无新外部 crate。
+- 真机 DeepSeek 验收：text 只回「青柚」；json 模式工具调用 `bash` 读取 README 得到 `TIMO_JSON_SMOKE`；两条 `-p` 同会话保住暗号。
+- 测试新增 6 条（JSON 映射 5 条 + 退出码 1 条）；workspace 282 tests。
+
+---
+
 ## [0.1.64] - 2026-10-27
 
 ### 实现：上下文压缩 compaction（Phase 3.5 P1.2）
