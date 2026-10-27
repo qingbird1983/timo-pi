@@ -84,9 +84,9 @@ async fn run(
         {
             body = replaced;
         }
-        let mut headers = vec![("authorization".to_string(), format!("Bearer {api_key}"))];
-        headers.extend(model.headers.iter().cloned());
-        headers.extend(options.headers.iter().cloned());
+        let headers = base_headers(&model.compat, &api_key);
+        let headers = crate::hooks::merge_headers(headers, &model.headers);
+        let mut headers = crate::hooks::merge_headers(headers, &options.headers);
         if let Some(hooks) = &options.provider_hooks
             && let Some(patch) = hooks.before_headers(headers.clone()).await
         {
@@ -194,4 +194,35 @@ async fn run(
 fn finalize(mut m: AssistantMessage, started: Instant) -> AssistantMessage {
     m.duration_ms = Some(started.elapsed().as_millis() as u64);
     m
+}
+
+/// 协议自带头；`compat.send_auth_header = false` 时不发认证头（设计 10 §4.1）。
+fn base_headers(compat: &crate::Compat, api_key: &str) -> Vec<(String, String)> {
+    if compat.send_auth_header {
+        vec![("authorization".to_string(), format!("Bearer {api_key}"))]
+    } else {
+        Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_header_can_be_switched_off() {
+        let on = base_headers(&crate::Compat::default(), "k");
+        assert_eq!(
+            on,
+            vec![("authorization".to_string(), "Bearer k".to_string())]
+        );
+        let off = base_headers(
+            &crate::Compat {
+                send_auth_header: false,
+                ..crate::Compat::default()
+            },
+            "k",
+        );
+        assert!(off.is_empty(), "{off:?}");
+    }
 }

@@ -44,6 +44,19 @@ pub fn apply_header_patch(
     headers
 }
 
+/// 叠加一层请求头：同名（大小写不敏感）由 `over` 覆盖，其余保持原顺序（设计 10 §4.1）。
+#[must_use]
+pub fn merge_headers(
+    mut base: Vec<(String, String)>,
+    over: &[(String, String)],
+) -> Vec<(String, String)> {
+    for (name, value) in over {
+        base.retain(|(existing, _)| !existing.eq_ignore_ascii_case(name));
+        base.push((name.clone(), value.clone()));
+    }
+    base
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
@@ -68,5 +81,27 @@ mod tests {
                 ("c".to_string(), "3".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn merge_headers_overrides_case_insensitively_and_keeps_order() {
+        let base = vec![
+            ("A".to_string(), "1".to_string()),
+            ("b".to_string(), "2".to_string()),
+        ];
+        let over = vec![
+            ("a".to_string(), "9".to_string()),
+            ("c".to_string(), "3".to_string()),
+        ];
+        assert_eq!(
+            merge_headers(base, &over),
+            vec![
+                ("b".to_string(), "2".to_string()),
+                ("a".to_string(), "9".to_string()),
+                ("c".to_string(), "3".to_string()),
+            ]
+        );
+        let only = vec![("x".to_string(), "1".to_string())];
+        assert_eq!(merge_headers(only.clone(), &[]), only);
     }
 }

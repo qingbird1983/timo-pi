@@ -52,6 +52,11 @@ pub struct Compat {
     pub supports_usage_in_streaming: bool,
     /// 是否校验 finish_reason 必达。
     pub supports_finish_reason: bool,
+    /// 是否发送协议自带的认证头（`authorization` / `x-api-key`）。
+    ///
+    /// 有些网关要求完全自定义的鉴权头，此时置 `false` 并用 `headers` 自己带；
+    /// 缺省 `true` 保持 Phase 1 以来的行为（设计 10 §4.1）。
+    pub send_auth_header: bool,
 }
 
 impl Default for Compat {
@@ -60,6 +65,7 @@ impl Default for Compat {
             max_tokens_field: false,
             supports_usage_in_streaming: true,
             supports_finish_reason: true,
+            send_auth_header: true,
         }
     }
 }

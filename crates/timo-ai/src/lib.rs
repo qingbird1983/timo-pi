@@ -22,7 +22,7 @@ pub use api::{ByteStream, ProviderApi, SseRequest, SseTransport, api_for, api_wi
 pub use auth::{AuthMethod, AuthResolver};
 pub use catalog::{ApiKind, Catalog, Compat, Model, RateCard, calculate_cost};
 pub use errors::AiError;
-pub use hooks::{ProviderHooks, apply_header_patch};
+pub use hooks::{ProviderHooks, apply_header_patch, merge_headers};
 pub use stream::{AssistantMessageStream, AssistantStreamEvent, StreamOptions};
 pub use types::{
     AssistantMessage, Content, Context, Cost, Message, StopReason, SystemMessage, Tool,

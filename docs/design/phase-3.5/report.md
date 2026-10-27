@@ -103,6 +103,13 @@
 - **真机抓到一个真实缺口并修掉（G8）**：`fs.read` 的 `**` 按 cwd 解析，而用户级 `<data_dir>/agents` 几乎总在 cwd 之外 ⇒ 首次真机 `E403 … outside the declared fs.read scopes`，subagent 一个代理都发现不了。装机时补 `<data_dir>/**` 绝对作用域（`timo_ext::dir_scope`，与 `key()` 同一套归一化，`is_protected` 仍先拦 `.git/.ssh/.env`）。修复后同一场景通过——没有它，D56 的 workflow 预设在真实目录布局下不可用。
 - **如实登记两处噪音/未做**：① 扩展诊断表里每次都会留一行 `E303 cannot access …/.timo/agents`（扩展对"项目级 agents 目录不存在"的探测，功能无影响，与已登记的 stderr 噪音同类）；② REPL 在跑过一次 prompt 之前不打印资源告警（`WARNED` 首次打印的既有行为），所以坏模板的 warning 要等首轮对话才可见；③ 扩展自带资源目录（`resources_discover`）按 §7 留本题第二批；④ 桌面命令面板暂不列模板（D63）。
 
+### P2 第二题·批 A 读数：provider 配置面（2026-10-27）
+
+- **落地**：`models.json` 新增 `auth_header`（供应商级，不写 = 照旧发认证头）、模型级 `headers`、模型级 `compat`（`max_tokens_field` / `supports_usage_in_streaming` / `supports_finish_reason`，未写的项沿用默认）。头合并统一到一个 `merge_headers`（同名大小写不敏感、后者覆盖），顺带修掉"供应商级与模型级同名头会被发两遍"的旧行为。设计见 [10](10-provider-composer.md) §4.1。
+- gate：fmt / clippy `-D warnings` / workspace **344 tests**（+5）/ `check-size` OK。变异 5/5 全红（模型级头不参与合并、`auth_header` 缺省翻成不发、未声明 compat 项翻成 false、同名头只追加不覆盖、openai 认证头开关反转），每条都确认 `Compiling` 行。
+- **一处无测试入口，实测证明**：把 openai adapter 里 `let headers = base_headers(...)` 换成空表，`timo-ai` 38 条测试仍全绿——`base_headers` 函数本身有单测，**调用点没有**。真机回归覆盖：带供应商级 + 模型级同名自定义头、`compat.max_tokens_field=true`、`auth_header` 缺省，DeepSeek 正常回答（RC=0）。`auth_header=false` 的"不发认证头"只有单测（无自建网关可抓请求），如实登记。
+- **未做**：`oauth` / `refreshModels` / `thinkingLevelMap` / `samplingParams`（D68，另一条能力线）；虚拟模型（B1~B3）。
+
 ## 本轮发现并修复的问题
 
 - **桌面的 `/skill:` 曾是字面量**：CLI 在分发层展开，桌面把输入框原文直接交给内核，技能不会触发。已把展开收进 `Kernel::run`（commit `85527d4`），CLI 与桌面共用一条路径；CLI 仍保留"未知技能命令"的报错。

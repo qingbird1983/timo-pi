@@ -90,12 +90,9 @@ async fn run(
             body = replaced;
         }
         let url = AnthropicApi::endpoint(model, options);
-        let mut headers = vec![
-            ("x-api-key".to_string(), api_key),
-            ("anthropic-version".to_string(), "2023-06-01".to_string()),
-        ];
-        headers.extend(model.headers.iter().cloned());
-        headers.extend(options.headers.iter().cloned());
+        let headers = base_headers(&model.compat, &api_key);
+        let headers = crate::hooks::merge_headers(headers, &model.headers);
+        let mut headers = crate::hooks::merge_headers(headers, &options.headers);
         if let Some(hooks) = &options.provider_hooks
             && let Some(patch) = hooks.before_headers(headers.clone()).await
         {
@@ -203,6 +200,15 @@ fn finalize(mut m: AssistantMessage, started: Instant) -> AssistantMessage {
     m
 }
 
+/// 协议自带头；`compat.send_auth_header = false` 时只留版本头（设计 10 §4.1）。
+fn base_headers(compat: &crate::Compat, api_key: &str) -> Vec<(String, String)> {
+    let mut headers = vec![("anthropic-version".to_string(), "2023-06-01".to_string())];
+    if compat.send_auth_header {
+        headers.insert(0, ("x-api-key".to_string(), api_key.to_string()));
+    }
+    headers
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -230,5 +236,21 @@ mod tests {
             "context_window": 200000, "max_tokens": 64000
         }))
         .expect("model")
+    }
+
+    #[test]
+    fn auth_header_can_be_switched_off_but_version_stays() {
+        let on = base_headers(&crate::Compat::default(), "k");
+        assert_eq!(on[0], ("x-api-key".to_string(), "k".to_string()));
+        assert!(on.iter().any(|(name, _)| name == "anthropic-version"));
+        let off = base_headers(
+            &crate::Compat {
+                send_auth_header: false,
+                ..crate::Compat::default()
+            },
+            "k",
+        );
+        assert!(!off.iter().any(|(name, _)| name == "x-api-key"), "{off:?}");
+        assert!(off.iter().any(|(name, _)| name == "anthropic-version"));
     }
 }

@@ -22,6 +22,7 @@ pub struct ResolvedModel {
 /// models.json 非法 → [`KernelError::Config`]；api 协议名未知 → 同上。
 pub fn load_catalog(custom: &[CustomProvider]) -> Result<Catalog> {
     let mut catalog = Catalog::builtin();
+    let default_compat = Compat::default();
     for p in custom {
         let api = match p.api.as_deref().map(ApiKind::parse) {
             Some(None) => {
@@ -56,9 +57,25 @@ pub fn load_catalog(custom: &[CustomProvider]) -> Result<Catalog> {
                 },
                 context_window: m.context_window,
                 max_tokens: m.max_tokens,
-                headers: p.headers.clone(),
+                // 供应商级在前、模型级覆盖同名（设计 10 §4.1）。
+                headers: timo_ai::merge_headers(p.headers.clone(), &m.headers),
                 cache_ttl_seconds: m.cache_ttl_seconds,
-                compat: Compat::default(),
+                // 未声明的兼容项沿用默认（Phase 1 行为不变）。
+                compat: Compat {
+                    max_tokens_field: m
+                        .compat
+                        .max_tokens_field
+                        .unwrap_or(default_compat.max_tokens_field),
+                    supports_usage_in_streaming: m
+                        .compat
+                        .supports_usage_in_streaming
+                        .unwrap_or(default_compat.supports_usage_in_streaming),
+                    supports_finish_reason: m
+                        .compat
+                        .supports_finish_reason
+                        .unwrap_or(default_compat.supports_finish_reason),
+                    send_auth_header: p.auth_header.unwrap_or(default_compat.send_auth_header),
+                },
             });
         }
     }
@@ -183,4 +200,67 @@ fn build_auth(
         provider_ref,
         env_names,
     })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn custom(json: serde_json::Value) -> timo_config::CustomProvider {
+        serde_json::from_value(json).expect("provider fixture")
+    }
+
+    #[test]
+    fn model_headers_override_provider_headers_and_compat_is_applied() {
+        let catalog = load_catalog(&[custom(serde_json::json!({
+            "name": "gw",
+            "base_url": "https://gw.example/v1",
+            "api": "openai-completions",
+            "auth_header": false,
+            "headers": [["x-org", "acme"], ["x-shared", "provider"]],
+            "models": [{
+                "id": "m1",
+                "headers": [["x-shared", "model"]],
+                "compat": { "max_tokens_field": true, "supports_usage_in_streaming": false }
+            }]
+        }))])
+        .expect("catalog");
+
+        let model = catalog.get("gw", "m1").expect("model");
+        assert_eq!(
+            model.headers,
+            vec![
+                ("x-org".to_string(), "acme".to_string()),
+                ("x-shared".to_string(), "model".to_string()),
+            ]
+        );
+        assert!(model.compat.max_tokens_field);
+        assert!(!model.compat.supports_usage_in_streaming);
+        assert!(model.compat.supports_finish_reason, "未声明的项沿用默认");
+        assert!(!model.compat.send_auth_header);
+    }
+
+    #[test]
+    fn undeclared_switches_keep_phase_one_defaults() {
+        let catalog = load_catalog(&[custom(serde_json::json!({
+            "name": "plain",
+            "models": [{ "id": "m" }]
+        }))])
+        .expect("catalog");
+
+        let model = catalog.get("plain", "m").expect("model");
+        assert!(model.headers.is_empty(), "{:?}", model.headers);
+        let defaults = Compat::default();
+        assert_eq!(model.compat.max_tokens_field, defaults.max_tokens_field);
+        assert_eq!(
+            model.compat.supports_usage_in_streaming,
+            defaults.supports_usage_in_streaming
+        );
+        assert_eq!(
+            model.compat.supports_finish_reason,
+            defaults.supports_finish_reason
+        );
+        assert!(model.compat.send_auth_header, "缺省必须仍然发认证头");
+    }
 }

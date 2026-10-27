@@ -83,6 +83,23 @@ pub struct CustomModel {
     /// 前缀缓存 TTL（秒；None = 未知/不支持预热）。
     #[serde(default)]
     pub cache_ttl_seconds: Option<u64>,
+    /// 兼容性开关（未写的项沿用默认，设计 10 §4.1）。
+    #[serde(default)]
+    pub compat: ModelCompatConfig,
+}
+
+/// models.json 里的模型级兼容性开关；缺省项由内核用 `timo_ai::Compat::default()` 补齐。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ModelCompatConfig {
+    /// 用 `max_tokens` 而非 `max_completion_tokens`。
+    #[serde(default)]
+    pub max_tokens_field: Option<bool>,
+    /// 流式响应携带 usage。
+    #[serde(default)]
+    pub supports_usage_in_streaming: Option<bool>,
+    /// 校验 finish_reason 必达。
+    #[serde(default)]
+    pub supports_finish_reason: Option<bool>,
 }
 
 fn default_context_window() -> u64 {
@@ -115,6 +132,9 @@ pub struct CustomProvider {
     /// 额外请求头。
     #[serde(default)]
     pub headers: Vec<(String, String)>,
+    /// 是否发送协议自带认证头；`None` = 发送（沿用 Phase 1 行为，设计 10 §4.1）。
+    #[serde(default)]
+    pub auth_header: Option<bool>,
     /// 模型清单。
     #[serde(default)]
     pub models: Vec<CustomModel>,
