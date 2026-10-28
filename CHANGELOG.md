@@ -13,6 +13,7 @@
 - 产品定位不是 VS Code 式工作区模型：启动即无条件加载项目资源，不再弹出"是否信任此文件夹"。决策见 ADR-0015。
 - 撤回范围：内核 `trust` 模块与决策链、CLI `--approve`/`--no-approve` 与 `/trust`、扩展 `project_trust` 事件与 `ctx.isProjectTrusted()` 真值（恢复恒 `true`）、子代理透传、桌面信任弹框与 `trust.json`。
 - 文档：删除详设 `phase-3.5/12-project-trust.md` 与 D80~D87；00-overview、02-skills、report、roadmap 同步；新增 ADR-0015。
+- 顺带修复 codemode 超时/取消在慢 runner 上的两处竞态（CI 偶发红）：安装期命中 deadline 时按中断原因重述，主循环主动中断时不被脚本收尾错误覆盖；本机同组用例重复 20 次全绿。
 
 ---
 

@@ -259,7 +259,13 @@ pub(super) async fn execute(
         // 兜底：中断处理器失效时线程可能停不下来，调用本身仍须有界返回
         // （线程在后台自生自灭；正常路径在毫秒级结束）。
         None => match tokio::time::timeout(THREAD_STOP_GRACE, &mut done).await {
-            Ok(result) => result,
+            Ok(Ok(mut run)) => {
+                // 主循环已因父取消/deadline 主动收尾：脚本线程随后报的
+                // "cancelled" 等错误只是收尾噪声，最终原因按中断类型重述。
+                run.error = Some(interrupt_reason(&ctx.cancel, deadline, source.timeout_ms));
+                Ok(run)
+            }
+            Ok(Err(error)) => Err(error),
             Err(_) => Ok(ScriptRun {
                 items: Vec::new(),
                 console: Vec::new(),
@@ -277,4 +283,22 @@ pub(super) async fn execute(
         started,
         source.max_output_tokens,
     ))
+}
+
+/// 主循环主动中断后的最终原因（父取消优先于 deadline）。
+fn interrupt_reason(
+    cancel: &CancellationToken,
+    deadline: Option<Instant>,
+    timeout_ms: Option<u64>,
+) -> String {
+    if cancel.is_cancelled() {
+        return "Script aborted: execution aborted".to_string();
+    }
+    match deadline {
+        Some(_) => format!(
+            "Script timed out: execution timed out after {} ms",
+            timeout_ms.unwrap_or(0)
+        ),
+        None => "Script sandbox stopped".to_string(),
+    }
 }

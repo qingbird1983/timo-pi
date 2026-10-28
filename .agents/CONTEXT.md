@@ -12,7 +12,7 @@
 
 ## 上一轮完成了什么
 
-- **P2 第四题·项目信任门控整体撤回（2026-10-28）**：按所有者决定，产品不做 VS Code 式工作区信任。删除内核 `trust` 模块与决策链、CLI `/trust` 与 `--approve/--no-approve`、扩展 `project_trust` 事件与 `ctx.isProjectTrusted()` 真值（恢复恒 `true`）、子代理透传、桌面五项弹框与 `trust.json`；项目设置/MCP/扩展/技能/模板/SYSTEM/APPEND 恢复无条件加载，启动不再询问。删除详设 12、D80~D87、P-014，新增 [ADR-0015](../docs/adr/ADR-0015-no-project-trust.md)，00-overview/02-skills/report/roadmap/CHANGELOG 同步。gate：四连全绿；纯删除批不做变异。
+- **P2 第四题·项目信任门控整体撤回（2026-10-28）**：按所有者决定，产品不做 VS Code 式工作区信任。删除内核 `trust` 模块与决策链、CLI `/trust` 与 `--approve/--no-approve`、扩展 `project_trust` 事件与 `ctx.isProjectTrusted()` 真值（恢复恒 `true`）、子代理透传、桌面五项弹框与 `trust.json`；项目设置/MCP/扩展/技能/模板/SYSTEM/APPEND 恢复无条件加载，启动不再询问。删除详设 12、D80~D87、P-014，新增 [ADR-0015](../docs/adr/ADR-0015-no-project-trust.md)，00-overview/02-skills/report/roadmap/CHANGELOG 同步。gate：四连全绿；纯删除批不做变异。顺带修复 codemode 超时/取消在慢 runner 上的两处竞态（CI 偶发红），本机重复 20 次全绿。
 - **P2 第三题·批 C（进度呈现与真机验收）**：CLI `run`/交互路径把 `ToolCallUpdate` 文本块逐行缩进打印，桌面按行累积进 trace（上限 400 字符）；`-p` text 模式仍只出终答（既有语义）。DeepSeek 真机三场景：并行 `Promise.all`（墙钟 1.0s、时间戳差 1~2ms、4 行嵌套进度）、失败脚本（`before` 保留、`codemode failed`、exit 0）、`timeout_ms:1000` + `sleep 30`（1171ms 取消、无残留进程）。真机修 G9 Windows `bash` 命中 WSL / G10 `Promise.all` 续体未排空误报 / G11 超时直接 abort 留下孤儿；shell 探测改为 PATH 绝对路径 + `uname -s`，结束时子令牌取消 + 2 秒排空。gate **413 tests**（+7）；累计 **26/26 变异全红**（本批 7 条：进度行、桌面累积、WSL 跳过、原生 bash、settle 续体、子调用清理、OOM 提示），逐条确认编译通过、断言失败、逐字节还原。
 - **P2 第三题·批 B（codemode 沙箱与工具面）**：`timo-kernel/src/codemode/{mod,tool,describe,format,sandbox}.rs` + `shim.js`。`codemode` 是内核内置工具（`ModelOnly`、默认关；占位注册先于 `--tools` allowlist、最终按注册表重建；`+codemode`/`--tools` 激活）。脚本全局 `tools/text/console/return/exit/ALL_TOOLS/describeTool`；选项行 `max_output_tokens`/`timeout_ms`；输出多文本编号、console 块、超预算头尾截断 + 临时文件；`Deferred` 进 `ALL_TOOLS` 但不占描述预算；描述按 3000 token 预算轮转。资源：进程级 worker 2/等待 60 秒、256 MiB 内存、16 MiB/10 万次输出；每脚本一条 `std::thread`（不用 `spawn_blocking`），完成经 oneshot 交回，中断后 5 秒兜底。gate **406 tests**（+26）；**19 条变异全红**（逐条确认编译通过、断言失败、逐字节还原）。真机与 CLI/桌面进度留批 C。
 - **P2 第三题·批 A（嵌套工具接缝）**：`timo_tools::nested` 定义 `CallableTool`/`NestedCall`/`NestedToolHost`/记录与用量合并，`ToolCallCtx.nested` 交给工具一个执行宿主；`timo-agent/src/run/nested.rs` 复用同一条钩子/审阅/管线（不发总线事件），id `<父>/<n>`、串行队列、父取消传递、四条记录上限（256 条 / 8 KiB / 32 KiB / 500 字符）、用量并回父结果。`run_one` 抽出 `prepare_call`/`apply_after` 两处共用，既有语义不变。gate **380 tests**（+10）；**11 条变异全红**（逐条确认断言失败、改后逐字节还原）；测试按规范拆 `nested.rs` / `nested_limits.rs` + `common/mod.rs`，无超 500 行文件。本批无脚本沙箱，故无真机读数。
@@ -35,7 +35,7 @@
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
 - **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
 - **验收中修复**：桌面把 `/skill:` 原文发给模型 → 展开收进 `Kernel::run`（`85527d4`）。
-- **门禁**：fmt / clippy `-D warnings` / workspace tests（**413**）/ check-size 全绿（target 24.0GiB：incremental 4.5 / deps 18.1，软限内、incremental 触 WARN，阶段收尾跑 `clean-build`）。累计变异 **26/26 全红**（P2 第三题；信任批的 22 条随功能撤回，移除批为纯删除、不做变异）。
+- **门禁**：fmt / clippy `-D warnings` / workspace tests（**413**）/ check-size 全绿（target 24.3GiB：incremental 4.6 / deps 18.4，软限内、incremental 触 WARN，阶段收尾跑 `clean-build`）。累计变异 **26/26 全红**（P2 第三题；信任批的 22 条随功能撤回，移除批为纯删除、不做变异）。
 
 ## 下一步（按优先级）
 
