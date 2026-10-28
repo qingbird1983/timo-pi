@@ -1,8 +1,8 @@
 # 审查收债：代码—文档一致性与复杂度清偿
 
-- 状态：待启动（前置：Phase 3.5 收口）
+- 状态：已完成（2026-10-28；A/B/C/D 全部清零，workspace 419 tests 全绿）
 - 日期：2026-10-27（同日两轮：三路一致性审查 + 全仓复杂度审计）
-- 关联：architecture/01~05、architecture/03-critical-seams；standards/03/04/07/08；`.agents/handoff/H-010-audit-debt.md`；`.agents/pitfalls/P-012-session-half-line-append.md`
+- 关联：architecture/01~05、architecture/03-critical-seams；standards/03/04/07/08；`.agents/handoff/H-010-audit-debt.md`（启动）、`H-012-audit-debt.md`（完成）；`.agents/pitfalls/P-012-session-half-line-append.md`、`P-016-hook-error-isolation-changes-dispatch-result.md`
 
 ## 1. 背景
 
@@ -97,6 +97,7 @@
 - A/B/D 组全部清零；`cargo test --workspace` 全绿；新增测试至少覆盖 A1。
 - D 组清零判据：删除后无新增 `#[allow(dead_code)]` 豁免；`scripts/check-size` 通过；被删除的公共 API 在 docs 中的引用已先行改掉（先文档后代码）。
 - C 组全部回填；`docs/README.md` 清单状态同步。
+- **完成记录（2026-10-28）**：fmt / clippy `-D warnings` / workspace **419 tests** / check-size 全绿；新增测试覆盖 A1、B4（MCP/扩展/内核三层取消）、B5（跨扩展错误隔离）；`clean-build` 后 `target/` 14.0GiB（incremental 1.1 / deps 11.7）。
 - 《阶段进度报告》按 standards/03 附录模板填写，含接缝核对与体量核对（体量核对里记 D 组净减行数）。
 
 ## 6. 风险

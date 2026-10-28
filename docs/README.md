@@ -84,7 +84,7 @@ docs/
 | design/phase-3.5/report.md | 定稿（Phase 3.5 完成，tag `phase-3.5.end`） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板/provider/codemode 实现，含真机读数、体量核对与阶段收尾 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
-| roadmap/audit-debt.md | 待启动（Phase 3.5 收口后） | 审查收债：代码—文档一致性与复杂度清偿台账（A 数据缺陷 1 项 + B 代码缺口 9 项 + C 文档滞后 2 项 + D 复杂度清理 9 项） |
+| roadmap/audit-debt.md | 定稿（2026-10-28 已完成） | 审查收债：代码—文档一致性与复杂度清偿台账（A 1 项 + B 9 项 + C 10 项 + D 9 项；全部清零，419 tests 全绿） |
 | roadmap/phase-0 ~ phase-4 | phase-3.5 完成（tag `phase-3.5.end`）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
 | standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agents/代码/依赖的预算与清理机制） |
