@@ -1,7 +1,9 @@
 //! 插件页面：左栏两个入口、已安装管理与市场（设计 01 §5、08 §3）。
 
+mod install_wizard;
 mod installed;
 mod market;
+pub(crate) mod nsh;
 
 use gpui_kit::component::{
     ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt as _, h_flex, v_flex,
@@ -40,10 +42,7 @@ impl DesktopApp {
         self.palette_open = false;
         self.plugins_error = None;
         self.market_error = None;
-        #[cfg(feature = "nsh-poc")]
-        {
-            self.nsh_page = false;
-        }
+        self.nsh_page = false;
         let _ = self.commands.send(BridgeCommand::ListPlugins);
         if view == PluginsView::Market {
             let _ = self.commands.send(BridgeCommand::LoadMarket);

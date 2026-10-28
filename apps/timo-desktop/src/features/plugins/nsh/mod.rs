@@ -3,9 +3,10 @@
 //! 只有这个模块 `use nsh_platform_gpui`；对外只暴露普通 Rust 数据与错误文本。
 //! 默认构建不编译：整个模块由 `nsh-poc` feature 门控。
 
+pub(crate) mod install;
 mod page;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -93,7 +94,7 @@ impl NshPreview {
     pub(crate) fn new(dark: bool) -> Self {
         let root = poc_dir().unwrap_or_else(|| PathBuf::from("nsh-poc"));
         let mut status = None;
-        let trust = match open_trust(&root.join("trust")) {
+        let trust = match open_trust(&[root.join("trust")]) {
             Ok(trust) => trust,
             Err(error) => {
                 status = Some((false, error));
@@ -274,7 +275,7 @@ impl NshPreview {
         self.stop();
         let dir = self.root.join("trust");
         let _ = std::fs::remove_file(dir.join("nsh-trust.json"));
-        match open_trust(&dir) {
+        match open_trust(&[dir]) {
             Ok(trust) => {
                 self.trust = trust;
                 self.set_status(true, t!("nsh.trust_reset").to_string());
@@ -352,35 +353,39 @@ pub(crate) fn poc_dir() -> Option<PathBuf> {
     timo_kernel::data_dir().ok().map(|dir| dir.join("nsh-poc"))
 }
 
-fn open_trust(dir: &Path) -> Result<TrustStore, String> {
-    std::fs::create_dir_all(dir).map_err(|error| {
+/// 打开信任库并把各目录里的 `*.pub` 注册为根（第一个目录是持久化的信任目录）。
+///
+/// 一个根都没有就返回「无信任根」；额外的目录不存在时静默跳过，
+/// 这样调试构建可以同时喂进开发根（设计 02 §5）。
+pub(crate) fn open_trust(dirs: &[PathBuf]) -> Result<TrustStore, String> {
+    let Some(first) = dirs.first() else {
+        return Err(t!("nsh.no_root").to_string());
+    };
+    std::fs::create_dir_all(first).map_err(|error| {
         t!(
             "nsh.dir_failed",
-            path = dir.display().to_string(),
+            path = first.display().to_string(),
             error = error
         )
         .to_string()
     })?;
-    let mut trust =
-        TrustStore::open(dir).map_err(|error| t!("nsh.trust_failed", error = error).to_string())?;
-    let entries = std::fs::read_dir(dir).map_err(|error| {
-        t!(
-            "nsh.dir_failed",
-            path = dir.display().to_string(),
-            error = error
-        )
-        .to_string()
-    })?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("pub") {
+    let mut trust = TrustStore::open(first)
+        .map_err(|error| t!("nsh.trust_failed", error = error).to_string())?;
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
             continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("pub") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path)
+                .map_err(|error| t!("nsh.root_read_failed", error = error).to_string())?;
+            let key = PublicKey::from_base64(text.trim())
+                .map_err(|error| t!("nsh.root_invalid", error = error).to_string())?;
+            trust.add_root(key);
         }
-        let text = std::fs::read_to_string(&path)
-            .map_err(|error| t!("nsh.root_read_failed", error = error).to_string())?;
-        let key = PublicKey::from_base64(text.trim())
-            .map_err(|error| t!("nsh.root_invalid", error = error).to_string())?;
-        trust.add_root(key);
     }
     if trust.roots().is_empty() {
         return Err(t!("nsh.no_root").to_string());

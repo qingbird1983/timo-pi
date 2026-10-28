@@ -139,7 +139,6 @@ palette:
   choose_model: 选择模型…
 
 nsh:
-  entry: 插件预览（实验）
   title: 插件预览（NSH PoC）
   back: 返回对话
   empty: 尚未加载签名包
@@ -180,7 +179,20 @@ plugins:
   discover_tab: 发现
   refresh: 刷新
   add: 添加插件
-  add_cli: 当前版本用 `timo ext add <file>` 安装 A 轨扩展；文件选择器与 B 轨安装向导在 P1 接入。
+  add_cli: A 轨扩展仍用 `timo ext add <file>` 安装；B 轨「添加插件」走签名包目录。
+  preview: 开发预览
+  pick_dir: 选择已解包的插件目录
+  wizard_title: 确认安装
+  wizard_identity: "%{name} %{version}（build %{build}）· sha256 %{sha}…"
+  wizard_hint: 签名校验已通过；选择运行挡位，挡位不能高于清单申请档位。
+  wizard_dir: "来源目录：%{path}"
+  install_as: 按%{tier}挡位安装
+  tier_locked: 清单只申请到%{tier}挡位
+  cancel: 取消
+  installed: "已安装：%{id}"
+  no_manifest: 目录里没有可读取的 schema 2 清单（manifest.json）
+  no_bundle: "清单指向的签名包不存在：%{file}"
+  verify_failed: "签名校验失败：%{error}"
   close: 返回
   group_builtin: 内置插件配置
   group_experimental: 实验性插件

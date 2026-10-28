@@ -28,11 +28,16 @@ impl DesktopApp {
             Button::new("plugins-add")
                 .primary()
                 .small()
+                .icon(IconName::Plus)
                 .label(t!("plugins.add").to_string())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.notice = Some(t!("plugins.add_cli").to_string());
-                    cx.notify();
-                }))
+                .on_click(cx.listener(|this, _, _, cx| this.pick_plugin_dir(cx)))
+                .into_any_element(),
+            Button::new("plugins-preview")
+                .ghost()
+                .small()
+                .icon(IconName::Eye)
+                .label(t!("plugins.preview").to_string())
+                .on_click(cx.listener(|this, _, window, cx| this.open_nsh_page(window, cx)))
                 .into_any_element(),
             Button::new("plugins-close")
                 .ghost()
@@ -49,6 +54,9 @@ impl DesktopApp {
             cx,
         )];
         body.push(self.installed_tabs(cx));
+        if self.pending_install.is_some() {
+            body.push(self.install_wizard(cx));
+        }
         if let Some(error) = &self.plugins_error {
             body.push(banner(error.clone(), cx));
         }

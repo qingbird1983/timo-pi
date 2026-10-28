@@ -1,13 +1,13 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**Phase 4 P0**——schema 2 清单、统一插件清单、市场索引与桌面两页落地，门禁四连全绿）。
+- 更新：2026-10-28（会话主题：**Phase 4 P1**——B 轨签名包从「内核账本」到「桌面真机安装」打通，NSH 退出 feature 门控）。
 
 ## 当前阶段与状态
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - **Phase 3.5 ✅**（tag `phase-3.5.end`，2026-10-28）：报告 `docs/design/phase-3.5/report.md`。
 - **审查收债 ✅**（2026-10-28）：A1 数据缺陷、B1~B9 代码缺口、C1~C10 文档回填、D1~D9 复杂度清理全部完成；台账 `docs/roadmap/audit-debt.md`。
-- 下一关：**Phase 4（GUI 插件系统）**——设计 00~08 定稿；**P0 已完成**（schema 2 清单、统一插件清单、市场索引/缓存/状态、桌面两页）；**P1-a 已完成**（`plugins::nsh` B 轨安装账本 + 两层撤销 + 暂存清扫）。P1 已拆四批（00 §4）：a 内核账本 ✅ → b 桌面验签与安装接线（`nsh-poc` 并入插件页）→ c slot/宿主 API v1/看门狗 → d slot 容器渲染与诊断。
+- 下一关：**Phase 4（GUI 插件系统）**——设计 00~08 定稿；**P0 已完成**（schema 2 清单、统一插件清单、市场索引/缓存/状态、桌面两页）；**P1-a 已完成**（`plugins::nsh` 安装账本 + 两层撤销 + 暂存清扫）；**P1-b 已完成**（NSH 常驻、隔离层搬家、真签名包安装链路 + 挡位确认卡）。P1 剩余：c slot 运行时/宿主 API v1/看门狗 → d slot 容器渲染与诊断（00 §4）。
 - 三个设计默认值：市场索引地址默认留空（首次配置，不伪造官方地址）；评论只外链；实验性组 v1 为空（只登记真实功能）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；桌面壳已知限制见 `docs/roadmap/phase-3-desktop-shell.md` §6。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
@@ -21,11 +21,12 @@
 - **Phase 4 设计已定稿**：统一管理器、manifest/签名包、slot/动作、宿主 API v1、运行时隔离、devkit、自证插件、插件市场；市场卡片为**错落式瀑布流**（08 §3.1，按可用宽度 3/2/1、最多三列）。
 - **P0 已实现**：`timo-ext` schema 2 清单（E720/E721/E722 校验顺序）；`timo-kernel::plugins` 统一清单（A 轨 discover 优先 + B 轨扫描）、启停/收紧挡位/撤销/卸载、A 轨按挡位裁剪授权；`timo-kernel::plugins::market` 静态索引解析（E750~E755）、ETag 缓存/离线回退、收藏/屏蔽/已安装记录、索引 URL 存 `settings.json`；桌面左栏"已安装/插件市场"两入口与两页。
 - **P0 收口**：三处超 500 行文件拆分（`plugins/{model,list}.rs`、`bridge_{events,plugins}.rs`、`market_card.rs`），纯搬迁；CHANGELOG 0.1.110。
+- **P1-b 落地**：`nsh-poc` feature 退场（所有者拍板），NSH 是桌面常驻依赖；`features/nsh_poc/` → `features/plugins/nsh/`，实验预览页变成「已安装」页头的**开发预览**；「添加插件」= 原生目录选择 → `verify_package` → `PackageReceipt` → 内核 `install_bundle`，高于清单申请档位的挡位按钮直接禁用。开发根公钥由 `scripts/build-nsh-poc` 放进 `<数据目录>/plugins/dev/root.pub`（仅调试构建采信）。
 - **市场形态与分发边界**见 [ADR-0016](../docs/adr/ADR-0016-plugin-marketplace.md)：静态索引只提供元数据，安装仍以签名包为准；屏蔽 ≠ 卸载。
 
 ## 下一步（按优先级）
 
-1. **Phase 4 P1-b**：桌面 NSH 隔离层改造——`verify_package` → `PackageReceipt` → `plugins::nsh::install_bundle` → 健康检查 → `accept_package`/回退；安装向导与文件选择器接线；`nsh-poc` 实验页并入正式插件页后删除。**注意：`install_bundle` 目前只有内核测试在用，桌面尚未接线**（P1-b 的第一件事）。
+1. **Phase 4 P1-c**：slot 运行时与宿主 API v1——`HostChannel`、查询/动作白名单（E740/E741/E742）、按插件隔离的 `storage.json`（E744）、`__ping/__pong` 看门狗、主题 token 消毒（E743）；实例装进 `AppView` 后走「首帧 + 1s 无错 → `accept_package`」的健康门（设计 05 §2~§4）。市场卡片的「安装」按钮接这条链路（当前仍禁用并提示 P1）。
 2. **桌面壳视觉精修**（所有者定调：P0 只要入口与按钮位置正确，配色/间距后期统一精修）：research/07 → 设计稿 → 批次实现。
 3. **推送与远端核验**：本地 P0 提交尚未 push，推送后必须核远端 CI 为绿。
 4. docs 实测篇数与整合评审待办（删除面需所有者确认）。
@@ -52,15 +53,15 @@
 - **钩子失败不再整体报错**：`dispatch_all` 记录诊断后继续；只有 payload 编码失败才返回 Err。
 - **密钥只写钥匙串**：`models.json` 只存引用；不打印、不入库；临时测试密钥文件用完即删。
 - **版本只认 registry 源码签名**；0.8.1/0.1.12 下 NSH 报 E0716，锁 0.8.0 家族 + 0.1.10；升级前重跑编译探针。
-- **NSH 只在 `nsh-poc` feature**：默认构建与 `cargo test --workspace` 不依赖 NSH。
+- **NSH 是桌面常驻依赖**（P1-b 起，`nsh-poc` feature 已删）：`cargo test --workspace` 会编 NSH/QuickJS/zstd，CI 需要 C 工具链；NSH 类型只允许出现在 `apps/timo-desktop/src/features/plugins/nsh/`。
 - **NSH 信任流程**：先 `verify_package`、健康后再 `accept_package`；不要用 `load_package`。
 - **两种信任别混**：扩展能力授权与 NSH 包信任互相独立；产品不做 VS Code 式项目/工作区信任（ADR-0015）。
 - **B 轨验签在桌面、落盘在内核**：内核不链接 NSH，只吃 `PackageReceipt`（设计 02 §4 落地分工）；「撤销授权」是用户意图，清单保持**已禁用 + E711 诊断**，不要标成 `Error`（标错会把 P0 那条 revoke 测试打红）。
 - **覆盖层快捷键**：Sheet/Dialog 的焦点陷阱会让 App 根级 action 失效（P-009）。
 - **UI 测试禁用 `use gpui_kit::*`**（P-007）；子模块普通 `#[test]` 不要被 glob 带进 `test` 宏（P-010）。
 - **真机冒烟配置**：临时目录放 `desktop.json` + `models.json`（顶层 `{"providers": {...}}`，`base_url` 下划线命名），`api_key` 用 `$DEEPSEEK_API_KEY`，启动时 `TIMO_AGENT_DIR` 指过去；不写个人路径入库。
-- **门禁四连**：fmt / clippy / `CARGO_INCREMENTAL=0 cargo test --workspace` / `check-size`；NSH 改动另跑 `--features nsh-poc`；全量测试慢，用 `CARGO_BUILD_JOBS=1`。
-- **门禁**：workspace **462 tests** 全绿（P0 的 453 + P1-a 安装账本 9）；P1-a 九条承重判定逐条变异验证（改坏必红、还原必绿，sha256 复核）；桌面 `--features nsh-poc` 在 P0 收口时 27 全绿（P1-a 未动桌面）；`target/` 17.4GiB（incremental 2.1 / deps 13.9，P1 中途不硬清，阶段收尾再 `clean-build`）。
+- **门禁四连**：fmt / clippy / `cargo test --workspace` / `check-size`；全量测试慢，用 `CARGO_BUILD_JOBS=1`；NSH 已常驻，不再单独跑 feature 门控。
+- **门禁**：workspace **465 tests** 全绿（P1-a 安装账本 9 + P1-b 真包链路 3：合法签名包装成已安装插件、篡改包被拒不落盘、未签名字节被拒现已随默认构建跑）；P1-a 九条承重判定逐条变异验证（改坏必红、还原必绿，sha256 复核）。真包测试要先 `cargo install nsh-cli@0.3.0` + `scripts/build-nsh-poc`，缺包时打印 skip 后跳过。
 - **构建缓存按容量治理**：`target/` 15GiB 软 / 25GiB 硬；incremental >4GiB 先删；阶段收尾跑 `scripts/clean-build`；无 sccache 不全清。
 - **写中文文件后扫隐形字符**：`grep -nP '[\x{3040}-\x{30ff}\x{200b}-\x{200f}\x{feff}]'`。
 - **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对。

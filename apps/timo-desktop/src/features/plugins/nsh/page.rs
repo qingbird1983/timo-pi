@@ -1,9 +1,7 @@
 //! 插件预览页的界面与动作（表盘与按钮；渲染细节见 `mod.rs`）。
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::{
-    ActiveTheme as _, IconName, Sizable as _, StyledExt as _, h_flex, v_flex,
-};
+use gpui_kit::component::{ActiveTheme as _, Sizable as _, StyledExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, IntoElement as _, ParentElement as _, Styled as _, Window, div,
@@ -13,22 +11,6 @@ use super::{HEALTH_DELAY, NshPreview, NshSource, short_sha};
 use crate::app::DesktopApp;
 
 impl DesktopApp {
-    /// 侧栏入口（仅 `nsh-poc` feature 编译）。
-    pub(crate) fn nsh_entry(&self, cx: &mut Context<Self>) -> AnyElement {
-        v_flex()
-            .px_2()
-            .pb_3()
-            .child(
-                Button::new("nsh-poc-open")
-                    .ghost()
-                    .small()
-                    .icon(IconName::Bot)
-                    .label(t!("nsh.entry").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| this.open_nsh_page(window, cx))),
-            )
-            .into_any_element()
-    }
-
     /// 预览页是否占用中央区域（Esc 关闭用）。
     pub(crate) fn nsh_page_open(&self) -> bool {
         self.nsh_page
@@ -47,7 +29,7 @@ impl DesktopApp {
         }
     }
 
-    /// 打开 NSH 预览页（仅 `nsh-poc` feature）。
+    /// 打开 NSH 预览页（从插件页的「开发预览」进入）。
     pub(crate) fn open_nsh_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.nsh_page = true;
         self.settings_open = false;

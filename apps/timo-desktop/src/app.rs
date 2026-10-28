@@ -83,10 +83,10 @@ pub struct DesktopApp {
     pub(crate) market_sort: MarketSort,
     pub(crate) market_search_input: Entity<InputState>,
     pub(crate) market_url_input: Entity<InputState>,
-    #[cfg(feature = "nsh-poc")]
+    /// 本地安装向导的待确认候选（验签通过后才有值）。
+    pub(crate) pending_install: Option<crate::features::plugins::nsh::install::InstallCandidate>,
     pub(crate) nsh_page: bool,
-    #[cfg(feature = "nsh-poc")]
-    pub(crate) nsh_preview: Option<crate::features::nsh_poc::NshPreview>,
+    pub(crate) nsh_preview: Option<crate::features::plugins::nsh::NshPreview>,
     _subscriptions: Vec<Subscription>,
     _events: Task<()>,
 }
@@ -267,9 +267,8 @@ impl DesktopApp {
             market_sort: MarketSort::Recommended,
             market_search_input,
             market_url_input,
-            #[cfg(feature = "nsh-poc")]
+            pending_install: None,
             nsh_page: false,
-            #[cfg(feature = "nsh-poc")]
             nsh_preview: None,
             _subscriptions: subscriptions,
             _events: task,
@@ -357,7 +356,7 @@ impl DesktopApp {
         )
     }
 
-    /// 中央区域（设置页或对话）；预览页由 `nsh-poc` feature 的包装接入。
+    /// 中央区域（设置页、插件页或对话）；插件页内含 NSH 预览区。
     pub(crate) fn main_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         if self.settings_open {
             self.settings_page(cx)
@@ -375,15 +374,6 @@ impl DesktopApp {
                 .into_any_element()
         }
     }
-
-    /// 默认构建没有预览页（供 Esc 关闭分支共用）。
-    #[cfg(not(feature = "nsh-poc"))]
-    pub(crate) fn nsh_page_open(&self) -> bool {
-        false
-    }
-
-    #[cfg(not(feature = "nsh-poc"))]
-    pub(crate) fn close_nsh_page(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for DesktopApp {
@@ -400,16 +390,7 @@ impl Render for DesktopApp {
                 this.open_next_review(window, cx);
             });
         }
-        let center = {
-            #[cfg(feature = "nsh-poc")]
-            {
-                self.center_panel(window, cx)
-            }
-            #[cfg(not(feature = "nsh-poc"))]
-            {
-                self.main_panel(window, cx)
-            }
-        };
+        let center = self.center_panel(window, cx);
         let palette = self.command_palette(cx);
         v_flex()
             .relative()

@@ -10441,6 +10441,7 @@ dependencies = [
  "serde",
  "serde_json",
  "similar",
+ "tempfile",
  "timo-kernel",
  "tokio",
 ]

@@ -9,11 +9,6 @@ description = "Timo desktop shell (Phase 3)"
 name = "timo-desktop"
 path = "src/main.rs"
 
-[features]
-default = []
-# NSH 只在这个 feature 下编译；默认构建不引入 NSH（设计 03 §2）。
-nsh-poc = ["dep:nsh-platform-gpui"]
-
 [dependencies]
 timo-kernel = { workspace = true }
 tokio = { workspace = true }
@@ -27,12 +22,14 @@ gpui-kit = { version = "=0.8.0", features = ["gpui-fast"] }
 gpui-fast = "=0.1.10"
 gpui-fast-platform = "=0.1.10"
 rust-i18n = "=4.2.4"
+# B 轨是产品面（设计 00 K9）：NSH 不再是 feature 门控的实验依赖。
 nsh-platform-gpui = { version = "=0.3.0", default-features = false, features = [
     "js",
-], optional = true }
+] }
 
 [dev-dependencies]
 gpui-kit = { version = "=0.8.0", features = ["gpui-fast", "test-support"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

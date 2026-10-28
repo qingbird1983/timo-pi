@@ -134,6 +134,7 @@ fn market_and_installed_entries_render_their_actions(cx: &mut TestAppContext) {
         window.render_frame(cx);
         assert!(window.find("plugins-refresh").visible());
         assert!(window.find("plugins-add").visible());
+        assert!(window.find("plugins-preview").visible());
         assert!(window.find("plugin-detail-session-search").visible());
         assert!(window.find("plugin-toggle-session-search").visible());
 

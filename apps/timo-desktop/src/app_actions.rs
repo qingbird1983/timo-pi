@@ -124,10 +124,7 @@ impl DesktopApp {
         self.chat.update(cx, |chat, _| chat.reset());
         self.sync_scroller(cx);
         self.plugins_view = None;
-        #[cfg(feature = "nsh-poc")]
-        {
-            self.nsh_page = false;
-        }
+        self.nsh_page = false;
     }
 
     pub(crate) fn open_session(&mut self, id: String, cx: &mut Context<Self>) {
@@ -136,10 +133,7 @@ impl DesktopApp {
             return;
         }
         self.plugins_view = None;
-        #[cfg(feature = "nsh-poc")]
-        {
-            self.nsh_page = false;
-        }
+        self.nsh_page = false;
         let _ = self.commands.send(BridgeCommand::OpenSession(id));
     }
 

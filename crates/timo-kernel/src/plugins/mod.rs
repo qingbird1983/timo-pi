@@ -26,7 +26,7 @@ pub use model::{
 };
 pub use state::{PLUGINS_SCHEMA, PluginStateEntry, PluginsState, state_path};
 pub use tier::{effective_capabilities, infer_tier};
-pub use timo_ext::{PermissionTier, PluginKind};
+pub use timo_ext::{GuiManifest, PermissionTier, PluginKind};
 
 /// 启用/禁用插件（保留文件与授权）。
 ///

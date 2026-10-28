@@ -90,8 +90,6 @@ impl DesktopApp {
                         rows
                     }),
             );
-        #[cfg(feature = "nsh-poc")]
-        let sidebar = sidebar.child(self.nsh_entry(cx));
         sidebar.id("sidebar").test_support()
     }
 

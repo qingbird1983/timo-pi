@@ -26,6 +26,7 @@
 | gpui-fast / gpui-fast-platform | 0.1.10（版本钉） | — | NSH 0.3 声明 `^0.1.9`；锁 0.1.10，Cargo 解析器选择 gpui-kit 0.8.0 家族 |
 
 - 桌面壳的 `nsh-poc` feature 才引入 NSH；默认构建不编译 NSH。
+  > **勘误（Phase 4 P1-b，2026-10-28）**：B 轨安装是产品面，`nsh-poc` feature 已退场，NSH 成为桌面壳的常驻依赖；隔离层从 `features/nsh_poc/` 迁到 `features/plugins/nsh/`（设计 00 §3）。本文件其余内容仍是有效约束。
 - 版本升级独立成提交，并按 standards/08 §5 窗口化。
 - **编译探针已通过（2026-10-26）**：`gpui-kit 0.8.0` 家族 + `gpui-fast 0.1.10` + `nsh-platform-gpui 0.3.0` 的 `cargo check` 成功，临时 crate 同时实例化 `AppView::new` 与 `Button`。
 - 失败路径：gpui-kit 0.8.1 / gpui-fast 0.1.12 下，NSH 0.2.0 与 0.3.0 都在 `chrome.rs` 报 E0716（`KeyBinding::new` 要求 `'static`）；0.1.10 的签名接受 `&str`，因此锁 0.1.10。

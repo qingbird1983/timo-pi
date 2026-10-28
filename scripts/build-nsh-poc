@@ -36,6 +36,9 @@ if [ ! -f "$KEYS/release.cert.json" ]; then
     --out "$KEYS/release.cert.json"
 fi
 cp "$KEYS/root.pub" "$TRUST/root.pub"
+# B 轨正式安装面只信数据目录下的插件信任根；这是开发密钥，放 dev 根（调试构建才生效，设计 02 §5）。
+mkdir -p "$DATA/timo-pi/plugins/dev"
+cp "$KEYS/root.pub" "$DATA/timo-pi/plugins/dev/root.pub"
 
 rm -rf "$WORK/v1" "$WORK/v2" "$WORK/crash"
 mkdir -p "$WORK/v1" "$WORK/v2" "$WORK/crash"

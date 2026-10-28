@@ -29,7 +29,7 @@ Phase 4 同时管理两类插件，并提供**两个左栏入口**：插件市�
 | `timo-kernel/src/plugins/nsh.rs` | NSH 包安装账本：回执校验、落盘与回滚、撤销与暂存清扫（**只有普通 Rust 类型，不链接 NSH**） | P1 | 02/05 |
 | `apps/timo-desktop/src/features/plugins/` | 已安装页、安装向导、授权面板、诊断面板 | P0/P1 | 01 |
 | `apps/timo-desktop/src/features/market/` | 市场发现页、分类/搜索、收藏/屏蔽、卡片安装 | P0 | 08 |
-| `apps/timo-desktop/src/features/nsh_poc/` | 并入正式插件页；`nsh-poc` feature 退场 | P1 | 05 |
+| `apps/timo-desktop/src/features/plugins/nsh/` | 唯一的 NSH 隔离层（原 `features/nsh_poc/`）：验签 → 回执 → 内核落盘；实验页并入插件页「开发预览」，`nsh-poc` feature 已退场 | P1 | 05 |
 | `crates/timo-devkit/`（新 bin crate） | `new` / `check` / `pack` / `verify` / `keygen` | P2 | 06 |
 | `examples/plugins/session-search/` | 自证插件（TSX） | P2 | 07 |
 | `docs/design/phase-4/` | 本目录 | — | — |

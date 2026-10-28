@@ -139,7 +139,6 @@ palette:
   choose_model: Choose a model…
 
 nsh:
-  entry: Plugin preview (experimental)
   title: Plugin preview (NSH PoC)
   back: Back to chat
   empty: No signed package loaded yet
@@ -180,7 +179,20 @@ plugins:
   discover_tab: Discover
   refresh: Refresh
   add: Add plugin
-  add_cli: This build installs A-track extensions with `timo ext add <file>`; the file picker and B-track wizard arrive in P1.
+  add_cli: A-track extensions still install with `timo ext add <file>`; Add Plugin uses a signed B-track bundle.
+  preview: Dev preview
+  pick_dir: Pick an unpacked plugin directory
+  wizard_title: Confirm install
+  wizard_identity: "%{name} %{version} (build %{build}) - sha256 %{sha}..."
+  wizard_hint: Signature verified; pick a permission tier, which cannot exceed the declared one.
+  wizard_dir: "Source directory: %{path}"
+  install_as: Install with the %{tier} tier
+  tier_locked: The manifest only asks for the %{tier} tier
+  cancel: Cancel
+  installed: "Installed: %{id}"
+  no_manifest: No readable schema-2 manifest.json in that directory
+  no_bundle: "The signed package named by the manifest is missing: %{file}"
+  verify_failed: "Signature check failed: %{error}"
   close: Back
   group_builtin: Built-in configuration
   group_experimental: Experimental

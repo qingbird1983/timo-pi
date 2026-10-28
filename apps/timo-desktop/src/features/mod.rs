@@ -3,8 +3,6 @@
 pub(crate) mod chat;
 mod chat_rows;
 mod chat_view;
-#[cfg(feature = "nsh-poc")]
-pub(crate) mod nsh_poc;
 pub(crate) mod palette;
 pub(crate) mod plugins;
 pub(crate) mod review;

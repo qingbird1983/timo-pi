@@ -50,10 +50,7 @@ impl DesktopApp {
         self.palette_open = !self.palette_open;
         if self.palette_open {
             self.settings_open = false;
-            #[cfg(feature = "nsh-poc")]
-            {
-                self.nsh_page = false;
-            }
+            self.nsh_page = false;
             self.palette.update(cx, |state, cx| {
                 state.set_query("", window, cx);
                 state.focus(window, cx);

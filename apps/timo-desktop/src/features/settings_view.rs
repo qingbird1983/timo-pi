@@ -54,10 +54,7 @@ impl DesktopApp {
         self.palette_open = false;
         self.provider_error = None;
         self.provider_feedback = None;
-        #[cfg(feature = "nsh-poc")]
-        {
-            self.nsh_page = false;
-        }
+        self.nsh_page = false;
         let _ = self.commands.send(BridgeCommand::ListProviders);
         cx.notify();
     }
