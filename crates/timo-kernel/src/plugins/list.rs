@@ -28,8 +28,9 @@ pub fn list_plugins(data_dir: &Path, work_dir: &Path) -> Vec<PluginEntry> {
         include_project_pi: true,
     });
     for found in outcome.extensions {
+        let revoked = state.is_revoked(&found.id);
         let state = state.get(&found.id);
-        let enabled = state.is_none_or(|entry| entry.enabled);
+        let enabled = !revoked && state.is_none_or(|entry| entry.enabled);
         let manifest = found.manifest;
         let declared = declared_from_a(manifest.as_ref());
         let inferred = state
@@ -41,6 +42,12 @@ pub fn list_plugins(data_dir: &Path, work_dir: &Path) -> Vec<PluginEntry> {
             diagnostics.push(PluginDiagnostic {
                 code: "E205".into(),
                 message: "manifest.json is missing; the extension will not load".into(),
+            });
+        }
+        if revoked {
+            diagnostics.push(PluginDiagnostic {
+                code: "E711".into(),
+                message: "the plugin is revoked and cannot be enabled".into(),
             });
         }
         seen.insert(found.id.clone());
@@ -71,15 +78,25 @@ pub fn list_plugins(data_dir: &Path, work_dir: &Path) -> Vec<PluginEntry> {
         if seen.contains(&id) {
             continue;
         }
+        let revoked = state.is_revoked(&id);
         let state = state.get(&id);
-        let enabled = state.is_none_or(|entry| entry.enabled);
+        let enabled = !revoked && state.is_none_or(|entry| entry.enabled);
         match manifest {
             Ok(manifest) => {
                 let mut diagnostics = vec![];
+                let mut broken = false;
                 if !manifest.bundle_path(&root).is_file() {
+                    broken = true;
                     diagnostics.push(PluginDiagnostic {
                         code: "E713".into(),
                         message: format!("package `{}` is missing", manifest.bundle),
+                    });
+                }
+                if revoked {
+                    // 撤销 = 拒载但记为「已禁用 + E711」，不当成装载故障（设计 02 §6）。
+                    diagnostics.push(PluginDiagnostic {
+                        code: "E711".into(),
+                        message: "the plugin is revoked and cannot be enabled".into(),
                     });
                 }
                 let declared_tier = manifest.tier;
@@ -95,14 +112,12 @@ pub fn list_plugins(data_dir: &Path, work_dir: &Path) -> Vec<PluginEntry> {
                     enabled,
                     tier,
                     declared: declared_from_b(&manifest),
-                    state: if diagnostics.is_empty() {
-                        if enabled {
-                            PluginState::Enabled
-                        } else {
-                            PluginState::Disabled
-                        }
-                    } else {
+                    state: if broken {
                         PluginState::Error
+                    } else if enabled {
+                        PluginState::Enabled
+                    } else {
+                        PluginState::Disabled
                     },
                     source: PluginSource::LocalFile,
                     source_hash: manifest.source_hash.clone(),

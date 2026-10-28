@@ -1,7 +1,8 @@
-//! 统一插件清单与生命周期（设计 01；P0 覆盖 A 轨安装与两轨清单）。
+//! 统一插件清单与生命周期（设计 01/02）。
 //!
-//! A 轨运行期仍由 `extensions` 模块装载，本模块只提供清单、状态、挡位与
-//! 启停/卸载入口；B 轨签名包安装与运行在 P1 接入。
+//! A 轨运行期仍由 `extensions` 模块装载，本模块提供清单、状态、挡位与
+//! 启停/卸载入口；B 轨签名包由桌面隔离层验签后交 [`nsh::install_bundle`]
+//! 落盘，运行期 `AppView` 留在桌面。
 
 mod list;
 mod model;
@@ -9,11 +10,12 @@ mod state;
 mod tier;
 
 pub mod market;
+pub mod nsh;
 
 use std::path::Path;
 
 use timo_config::Clock;
-use timo_ext::{Manifest, PermissionStore, is_valid_id};
+use timo_ext::{PermissionStore, is_valid_id};
 
 use crate::extensions::{install_extension, remove_extension};
 
@@ -29,11 +31,17 @@ pub use timo_ext::{PermissionTier, PluginKind};
 /// 启用/禁用插件（保留文件与授权）。
 ///
 /// # Errors
-/// 插件不存在或状态写入失败 → [`PluginError`]。
+/// 插件不存在或状态写入失败 → [`PluginError`]；已撤销的插件不能启用 → E711。
 pub fn set_enabled(data_dir: &Path, id: &str, enabled: bool) -> Result<(), PluginError> {
     ensure_valid_id(id)?;
     let entry = find(data_dir, id)?;
     let mut state = PluginsState::load(data_dir);
+    if enabled && state.is_revoked(id) {
+        return Err(PluginError::new(
+            "E711",
+            format!("plugin `{id}` is revoked; reinstall it to enable"),
+        ));
+    }
     let mut next = state.get(id).cloned().unwrap_or_default();
     next.enabled = enabled;
     if next.tier.is_none() {
@@ -82,6 +90,7 @@ pub fn revoke_plugin(data_dir: &Path, _work_dir: &Path, id: &str) -> Result<(), 
     let mut next = state.get(id).cloned().unwrap_or_default();
     next.enabled = false;
     state.put(id, next);
+    state.set_revoked(id, true);
     state.save(data_dir)
 }
 
@@ -130,7 +139,8 @@ pub async fn install_plugin(
     if source.extension().is_some_and(|ext| ext == "nshpkg") {
         return Err(PluginError::new(
             "E710",
-            "B-track packages arrive with the NSH runtime (P1)",
+            "B-track packages must be verified by the desktop NSH layer, then installed \
+             through plugins::nsh::install_bundle",
         ));
     }
     let id = source
@@ -149,7 +159,13 @@ pub async fn install_plugin(
             format!("requested tier {tier} exceeds declared capabilities ({declared})"),
         ));
     }
-    write_grant(data_dir, &manifest, tier)?;
+    write_grant(
+        data_dir,
+        &id,
+        &manifest.source_hash,
+        &manifest.capabilities,
+        tier,
+    )?;
     let mut state = PluginsState::load(data_dir);
     state.put(
         &id,
@@ -189,16 +205,18 @@ fn find(data_dir: &Path, id: &str) -> Result<PluginEntry, PluginError> {
 
 fn write_grant(
     data_dir: &Path,
-    manifest: &Manifest,
+    id: &str,
+    source_hash: &str,
+    capabilities: &timo_ext::Capabilities,
     tier: PermissionTier,
 ) -> Result<(), PluginError> {
-    let effective = effective_capabilities(tier, &manifest.capabilities);
+    let effective = effective_capabilities(tier, capabilities);
     let path = data_dir.join("permissions.json");
     let mut store = PermissionStore::load(&path).unwrap_or_default();
     store.grants.insert(
-        manifest.id.clone(),
+        id.to_string(),
         timo_ext::Grant {
-            source_hash: manifest.source_hash.clone(),
+            source_hash: source_hash.to_string(),
             exec: effective.exec,
             net: effective.net.domains,
             fs: effective.fs,

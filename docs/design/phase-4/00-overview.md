@@ -26,7 +26,7 @@ Phase 4 同时管理两类插件，并提供**两个左栏入口**：插件市�
 | `timo-kernel/src/plugins/` | 统一插件清单、安装/卸载/启停、挡位映射与撤销 | P0 | 01 |
 | `timo-kernel/src/plugins/market.rs` | 市场索引拉取、缓存、分类过滤、收藏/屏蔽 | P0 | 08 |
 | `timo-ext`（manifest 扩展） | A 轨 manifest 兼容；B 轨字段（kind/ui/tier/api/slots） | P0 | 02 |
-| `timo-kernel/src/plugins/nsh.rs` | NSH 包索引、签名校验、健康检查、热更交换 | P1 | 02/05 |
+| `timo-kernel/src/plugins/nsh.rs` | NSH 包安装账本：回执校验、落盘与回滚、撤销与暂存清扫（**只有普通 Rust 类型，不链接 NSH**） | P1 | 02/05 |
 | `apps/timo-desktop/src/features/plugins/` | 已安装页、安装向导、授权面板、诊断面板 | P0/P1 | 01 |
 | `apps/timo-desktop/src/features/market/` | 市场发现页、分类/搜索、收藏/屏蔽、卡片安装 | P0 | 08 |
 | `apps/timo-desktop/src/features/nsh_poc/` | 并入正式插件页；`nsh-poc` feature 退场 | P1 | 05 |
@@ -37,11 +37,13 @@ Phase 4 同时管理两类插件，并提供**两个左栏入口**：插件市�
 ## 4. 批次与提交序列
 
 1. **已完成**：00 总览 + 08 市场 + 原型；所有者 2026-10-28 批准，设计整体定稿。
-2. P0 详设 01（管理器）+ 02（manifest/包）+ 08（市场）：统一清单、安装/卸载/启停、权限挡位映射、索引与缓存。
-3. P1 详设 03（slot/动作）+ 05（运行时隔离）：B 轨运行、健康检查、崩溃/死循环处理。
-4. P1 详设 04（宿主 API v1）：`timo.*` 命名空间、只读查询、动作与工具代理、版本契约。
-5. P2 详设 06（devkit）+ 07（自证插件）：签名打包、会话搜索面板。
-6. 验收 D1~D6 → `report.md` → 看板/CHANGELOG → tag `phase-4.end`。
+2. **P0 已完成**：详设 01（管理器）+ 02（manifest）+ 08（市场）——schema 2 清单、统一清单与生命周期、索引与缓存、桌面两页。
+3. **P1-a**：`plugins::nsh` 安装账本（回执驱动的落盘/更新/回滚 + 两层撤销 + 暂存清扫），纯内核不碰 NSH。
+4. **P1-b**：桌面 NSH 隔离层改造：`verify_package` → 回执 → `install_bundle` → 健康检查 → `accept_package`/回退；`nsh-poc` 实验页并入正式插件页（K9）。
+5. **P1-c**：详设 03（slot）+ 04（宿主 API v1）+ 05（运行时隔离）：`HostChannel`、查询/动作白名单、存储、看门狗、主题消毒。
+6. **P1-d**：slot 容器渲染与诊断面（侧栏 panel、工具卡、会话条目附加区）。
+7. P2 详设 06（devkit）+ 07（自证插件）：签名打包、会话搜索面板。
+8. 验收 D1~D6 → `report.md` → 看板/CHANGELOG → tag `phase-4.end`。
 
 > 每批门禁四连不变（fmt / clippy / workspace tests / check-size）；UI 批次另附真机截图与逐态核对。
 >

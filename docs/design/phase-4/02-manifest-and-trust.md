@@ -84,6 +84,7 @@ bytes
 ```
 
 - 用 `verify_package` 不用 `load_package`：失败时磁盘上不产生信任记录。
+- **落地分工（P1-a 补记，不改上述顺序）**：`verify_package` 及其签名/证书/撤销/降级判定只在桌面 NSH 隔离层执行（内核不链接 NSH，设计 00 §6）；隔离层把结论打包成一个普通 Rust 结构 `PackageReceipt { app_id, version, build, sha256 }` 交给 `timo-kernel::plugins::nsh::install_bundle`，由内核完成清单比对、挡位上限、staging→rename 落盘、`Grant` 与 `plugins.json` 写入。内核侧还会独立复核一次包字节 sha256（与回执不符即 E711），不信任调用方给的哈希。
 - `assets_root = <data_dir>/plugins/assets`；资源路径由 NSH 校验（无 `..`）。
 - 同 id 已存在时进入更新：要求 `build` 递增（NSH 语义）且 `version` 不降低；否则 E712。
 - 失败回滚：删除 staging、撤销本次 Grant、保留旧目录与旧 View。
@@ -94,6 +95,7 @@ bytes
 - 开发信任根：`<data_dir>/plugins/dev/`，仅在 `debug` 构建或显式 `--dev-plugins` 时启用；界面标注「开发签名」。
 - 发布密钥分发策略另立 ADR（阶段文档 §4 遗留）；本设计只定义信任根的存放与读取。
 - 撤销两层：NSH 撤销列表（包级）+ timo `plugins.json.revoked`（安装级）；任一命中即拒载并记 E711。
+- **安装级撤销的读写点（P1-a 补记）**：写入只有一处——`revoke_plugin`（撤销授权）把 id 记入 `revoked` 并同时禁用；读取有两处——`install_bundle` 重装与 `set_enabled(true)` 启用都拒绝命中者（E711），`list_plugins` 给出 E711 诊断并保持「已禁用」徽标（撤销是**用户意图**，不是装载故障，所以不标 `Error`）；`uninstall_plugin` 删除条目（对齐 §6「删 state/revoked 条目」）。包级撤销仍由 NSH 信任库判定，内核不重复实现。
 - 私钥不进入仓库与日志；devkit 输出只打印公钥指纹。
 
 ## 6. 热更、回退与卸载

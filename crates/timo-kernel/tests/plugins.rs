@@ -140,8 +140,14 @@ fn revoke_removes_grant_and_disables() {
     revoke_plugin(dir.path(), dir.path(), "demo").unwrap();
     let entries = list_plugins(dir.path(), dir.path());
     assert_eq!(entries[0].state, PluginState::Disabled);
+    assert_eq!(
+        entries[0].diagnostics[0].code, "E711",
+        "撤销要在清单里给出拒载原因"
+    );
     let store = timo_kernel::PermissionStore::load(&dir.path().join("permissions.json")).unwrap();
     assert!(!store.grants.contains_key("demo"));
+    let error = set_enabled(dir.path(), "demo", true).unwrap_err();
+    assert_eq!(error.code(), "E711");
 }
 
 #[test]

@@ -55,6 +55,9 @@ pub struct PluginsState {
     /// 按 id 索引的状态。
     #[serde(default)]
     pub plugins: BTreeMap<String, PluginStateEntry>,
+    /// 安装级撤销名单（设计 02 §5；命中即拒载并记 E711）。
+    #[serde(default)]
+    pub revoked: Vec<String>,
 }
 
 impl Default for PluginsState {
@@ -62,6 +65,7 @@ impl Default for PluginsState {
         Self {
             schema: PLUGINS_SCHEMA,
             plugins: BTreeMap::new(),
+            revoked: Vec::new(),
         }
     }
 }
@@ -122,6 +126,23 @@ impl PluginsState {
     /// 删除状态。
     pub fn remove(&mut self, id: &str) {
         self.plugins.remove(id);
+        self.revoked.retain(|item| item != id);
+    }
+
+    /// 是否被安装级撤销。
+    #[must_use]
+    pub fn is_revoked(&self, id: &str) -> bool {
+        self.revoked.iter().any(|item| item == id)
+    }
+
+    /// 写入/清除安装级撤销标记（设计 02 §5）。
+    pub fn set_revoked(&mut self, id: &str, revoked: bool) {
+        self.schema = PLUGINS_SCHEMA;
+        self.revoked.retain(|item| item != id);
+        if revoked {
+            self.revoked.push(id.to_string());
+            self.revoked.sort();
+        }
     }
 }
 
