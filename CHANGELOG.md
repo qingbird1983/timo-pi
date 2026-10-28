@@ -6,6 +6,16 @@
 
 ---
 
+## [0.1.110] - 2026-10-28
+
+### P0 收口：三处超体量文件拆分，门禁四连全绿
+
+- 按标准 08 拆分 P0 期间超过 500 行的三个文件：内核 `plugins/mod.rs` 拆出 `model.rs`（数据结构/错误）与 `list.rs`（清单扫描），桌面 `bridge.rs` 拆出 `bridge_events.rs`（事件与快照）与 `bridge_plugins.rs`（插件/市场命令处理），市场页拆出 `market_card.rs`（单卡渲染与列高估算）。**纯搬迁，公开行为与测试断言一字未改**。
+- 门禁读数：fmt 干净；clippy workspace `-D warnings` 通过；`cargo test --workspace` **453 通过 / 0 失败**；`scripts/check-size` OK（文件行数全绿，仅 `target/` 22.7GiB 容量告警）；桌面 `--features nsh-poc` clippy/test 通过。
+- 遗留（P1）：B 轨签名包安装、slot 运行时、宿主 API v1、健康检查；市场安装按钮按设计保持禁用并带"P1"提示。
+
+---
+
 ## [0.1.109] - 2026-10-28
 
 ### Backlog 补注：插件语言两轨均为 JS/TS，AI 自写无编译环节
