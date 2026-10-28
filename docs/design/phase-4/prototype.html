@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phase 4 · 插件管理器原型（粗粒度）</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --sidebar: #f4f4f5;
+    --line: #e4e4e7;
+    --text: #18181b;
+    --muted: #71717a;
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --radius: 10px;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #ececee; color: var(--text); font-size: 14px; }
+  .window {
+    width: 1280px; height: 800px; margin: 24px auto; background: var(--bg);
+    border: 1px solid #d4d4d8; border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column; box-shadow: 0 18px 50px rgba(0,0,0,.12);
+  }
+  .titlebar {
+    height: 38px; display: flex; align-items: center; gap: 10px;
+    padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+    color: var(--muted); font-size: 12px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #d4d4d8; }
+  .app { flex: 1; display: flex; min-height: 0; }
+  .sidebar {
+    width: 248px; flex-shrink: 0; background: var(--sidebar);
+    border-right: 1px solid var(--line); display: flex; flex-direction: column;
+  }
+  .side-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 8px; }
+  .side-title { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .icon-btn {
+    width: 26px; height: 26px; border: 1px solid var(--line); background: var(--panel);
+    border-radius: 7px; color: var(--muted); cursor: pointer;
+  }
+  .sessions { flex: 1; padding: 4px 8px; overflow: hidden; }
+  .session {
+    padding: 8px 10px; border-radius: 8px; color: var(--muted);
+    display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px;
+  }
+  .session b { color: var(--text); font-weight: 500; font-size: 13px; }
+  .session span { font-size: 11px; }
+  .session.active { background: var(--panel); border: 1px solid var(--line); }
+  .side-foot { border-top: 1px solid var(--line); padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
+    color: var(--muted); border: 0; background: transparent; font: inherit; cursor: pointer; text-align: left;
+  }
+  .nav-item.active { background: var(--panel); color: var(--text); border: 1px solid var(--line); font-weight: 600; }
+  .nav-item svg { width: 16px; height: 16px; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .page-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px 12px;
+  }
+  .page-head h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  .head-actions { display: flex; gap: 8px; }
+  .search {
+    height: 32px; width: 220px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); padding: 0 10px; color: var(--muted); font-size: 13px;
+  }
+  .btn {
+    height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tabs { display: flex; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+  .tab { padding: 8px 0; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+  .content { flex: 1; min-height: 0; display: flex; }
+  .list { flex: 1; padding: 12px 16px 16px 24px; overflow: hidden; }
+  .row {
+    display: grid; grid-template-columns: 36px 1fr 76px 90px 64px 44px;
+    align-items: center; gap: 12px; padding: 11px 12px; border-radius: 9px;
+    border: 1px solid transparent; margin-bottom: 4px;
+  }
+  .row.selected { background: var(--panel); border-color: var(--line); }
+  .glyph {
+    width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center;
+    background: #f4f4f5; color: #52525b; font-size: 13px; font-weight: 700;
+  }
+  .row.selected .glyph { background: var(--accent-soft); color: var(--accent); }
+  .name { font-size: 13px; font-weight: 600; }
+  .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px;
+    border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); background: var(--panel);
+  }
+  .badge.b { border-color: #bfdbfe; color: #1d4ed8; background: #eff6ff; }
+  .badge.read { border-color: #bbf7d0; color: #15803d; background: #f0fdf4; }
+  .badge.write { border-color: #fde68a; color: #a16207; background: #fefce8; }
+  .badge.trust { border-color: #fecaca; color: #b91c1c; background: #fef2f2; }
+  .switch {
+    width: 34px; height: 20px; border-radius: 999px; background: var(--accent); position: relative;
+  }
+  .switch::after {
+    content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; top: 2px; right: 2px;
+  }
+  .switch.off { background: #d4d4d8; }
+  .switch.off::after { right: auto; left: 2px; }
+  .health { font-size: 11px; color: var(--ok); }
+  .health.warn { color: var(--warn); }
+  .detail {
+    width: 380px; flex-shrink: 0; border-left: 1px solid var(--line);
+    background: var(--panel); padding: 18px 20px; overflow: hidden;
+  }
+  .detail h2 { margin: 0; font-size: 16px; }
+  .detail .meta { color: var(--muted); font-size: 12px; margin: 4px 0 14px; }
+  .card { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; margin-bottom: 12px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .card-title { font-size: 12px; font-weight: 600; }
+  .kv { display: grid; grid-template-columns: 92px 1fr; gap: 5px 8px; font-size: 12px; color: var(--muted); }
+  .kv b { color: var(--text); font-weight: 500; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+  .foot-actions { display: flex; gap: 8px; margin-top: 6px; }
+  .foot-actions .btn { flex: 1; }
+  .diag-ok { color: var(--ok); font-size: 12px; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(24,24,27,.35); display: none;
+    align-items: center; justify-content: center; z-index: 20;
+  }
+  .overlay.open { display: flex; }
+  .dialog {
+    width: 560px; background: var(--panel); border-radius: 14px; border: 1px solid var(--line);
+    box-shadow: 0 24px 60px rgba(0,0,0,.22); padding: 20px;
+  }
+  .dialog h3 { margin: 0 0 4px; font-size: 16px; }
+  .dialog .hint { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .steps { display: flex; gap: 8px; margin-bottom: 14px; }
+  .step { flex: 1; height: 4px; border-radius: 4px; background: #e4e4e7; }
+  .step.done { background: var(--accent); }
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .tier { border: 1px solid var(--line); border-radius: 9px; padding: 10px; cursor: pointer; }
+  .tier.active { border-color: var(--accent); background: var(--accent-soft); }
+  .tier b { display: block; font-size: 13px; margin-bottom: 3px; }
+  .tier span { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .declared { border: 1px solid var(--line); border-radius: 9px; padding: 10px; font-size: 12px; color: var(--muted); }
+  .declared div + div { margin-top: 4px; }
+  .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .demo-bar {
+    display: flex; justify-content: center; gap: 8px; padding: 10px; font-size: 12px; color: var(--muted);
+  }
+  .demo-bar button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span style="margin-left:8px">Timo · 插件</span>
+  </div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="side-head">
+        <span class="side-title">会话</span>
+        <button class="icon-btn">+</button>
+      </div>
+      <div class="sessions">
+        <div class="session active"><b>Phase 4 插件设计</b><span>刚刚 · 桌面壳</span></div>
+        <div class="session"><b>审查收债</b><span>今天 · 内核</span></div>
+        <div class="session"><b>报告结构梳理</b><span>昨天 · 文档</span></div>
+      </div>
+      <div class="side-foot">
+        <button class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 20a2 2 0 1 1-4 0v-1H4a1 1 0 0 1-1-1v-3h1a2 2 0 1 0 0-4H3V8a1 1 0 0 1 1-1h3V6a2 2 0 1 1 4 0v1h3a1 1 0 0 1 1 1v3h1a2 2 0 1 1 0 4h-1v3a1 1 0 0 1-1 1h-4z"/></svg>
+          插件
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          设置
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="page-head">
+        <h1>插件</h1>
+        <div class="head-actions">
+          <input class="search" placeholder="搜索插件名称或 id">
+          <button class="btn primary" onclick="openInstall()">安装插件</button>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab active">全部 · 12</div>
+        <div class="tab">A 轨兼容 · 8</div>
+        <div class="tab">B 轨界面 · 4</div>
+        <div class="tab">有诊断 · 3</div>
+      </div>
+      <div class="content">
+        <section class="list">
+          <div class="row selected">
+            <div class="glyph">搜</div>
+            <div><div class="name">会话搜索</div><div class="sub">session-search · 1.0.0</div></div>
+            <span class="badge b">B 轨</span>
+            <span class="badge read">只读</span>
+            <span class="health">正常</span>
+            <div class="switch"></div>
+          </div>
+          <div class="row">
+            <div class="glyph">子</div>
+            <div><div class="name">子代理</div><div class="sub">subagent · 0.3.1</div></div>
+            <span class="badge">A 轨</span>
+            <span class="badge trust">执行</span>
+            <span class="health">正常</span>
+            <div class="switch"></div>
+          </div>
+          <div class="row">
+            <div class="glyph">主</div>
+            <div><div class="name">主题：暖灰</div><div class="sub">theme-warm · 0.2.0</div></div>
+            <span class="badge b">B 轨</span>
+            <span class="badge read">只读</span>
+            <span class="health">正常</span>
+            <div class="switch"></div>
+          </div>
+          <div class="row">
+            <div class="glyph">L</div>
+            <div><div class="name">Lint 助手</div><div class="sub">lint-helper · 0.1.4</div></div>
+            <span class="badge">A 轨</span>
+            <span class="badge write">读写</span>
+            <span class="health warn">2 条诊断</span>
+            <div class="switch off"></div>
+          </div>
+          <div class="row">
+            <div class="glyph">卡</div>
+            <div><div class="name">工具卡片：终端</div><div class="sub">terminal-card · 0.1.0</div></div>
+            <span class="badge b">B 轨</span>
+            <span class="badge read">只读</span>
+            <span class="health">正常</span>
+            <div class="switch"></div>
+          </div>
+        </section>
+
+        <aside class="detail">
+          <h2>会话搜索</h2>
+          <div class="meta">B 轨界面插件 · v1.0.0 · 来自本地文件 · 已启用</div>
+
+          <div class="card">
+            <div class="card-head"><span class="card-title">权限挡位</span><span class="badge read">只读</span></div>
+            <div class="kv">
+              <span>读取会话</span><b>允许（只读快照）</b>
+              <span>文件</span><b>未授予</b>
+              <span>网络</span><b>未授予</b>
+              <span>执行命令</span><b>未授予</b>
+            </div>
+            <div class="foot-actions"><button class="btn">调整挡位</button><button class="btn">撤销授权</button></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="card-title">界面槽位</span><span class="badge b">panel</span></div>
+            <div class="kv">
+              <span>位置</span><b>侧栏面板</b>
+              <span>入口标题</span><b>会话搜索</b>
+              <span>API 版本</span><b class="mono">v1</b>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="card-title">诊断</span><span class="diag-ok">无错误</span></div>
+            <div class="kv">
+              <span>最近记录</span><b>今天 16:42 安装完成</b>
+              <span>来源哈希</span><b class="mono">sha256:9f2c…a41d</b>
+            </div>
+          </div>
+
+          <div class="foot-actions">
+            <button class="btn">检查更新</button>
+            <button class="btn">卸载</button>
+            <button class="btn">打开目录</button>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="overlay" id="install">
+  <div class="dialog">
+    <h3>安装插件</h3>
+    <div class="hint">选择本地插件包，校验签名后选择权限挡位。A 轨扩展与 B 轨界面插件使用同一个安装入口。</div>
+    <div class="steps"><div class="step done"></div><div class="step done"></div><div class="step"></div></div>
+    <div class="declared" style="margin-bottom:12px">
+      <div><b style="color:var(--text)">包信息</b>　session-search-1.0.0.nshpkg</div>
+      <div>id：session-search　类型：B 轨界面插件　API：v1</div>
+      <div>签名：timo-preview-2026（已验证）</div>
+    </div>
+    <div class="tiers">
+      <div class="tier active"><b>只读</b><span>展示与只读查询，无文件写、无网络、无命令</span></div>
+      <div class="tier"><b>读写</b><span>在授权作用域内读写文件，仍无网络与命令</span></div>
+      <div class="tier"><b>执行</b><span>可执行命令与访问白名单域名，经宿主代理</span></div>
+    </div>
+    <div class="declared">
+      <div><b style="color:var(--text)">声明能力</b>（插件申请，不得超过所选挡位）</div>
+      <div>读取会话列表与搜索 · 渲染 panel 槽位 · 发送通知</div>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" onclick="closeInstall()">取消</button>
+      <button class="btn primary" onclick="closeInstall()">安装并启用</button>
+    </div>
+  </div>
+</div>
+
+<div class="demo-bar">
+  <span>原型演示：</span>
+  <button onclick="openInstall()">查看安装流程</button>
+  <button onclick="closeInstall()">关闭弹层</button>
+</div>
+<script>
+  function openInstall() { document.getElementById('install').classList.add('open'); }
+  function closeInstall() { document.getElementById('install').classList.remove('open'); }
+  if (location.hash === '#install') openInstall();
+</script>
+</body>
+</html>

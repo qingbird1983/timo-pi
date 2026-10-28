@@ -7,7 +7,7 @@
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - **Phase 3.5 ✅**（tag `phase-3.5.end`，2026-10-28）：报告 `docs/design/phase-3.5/report.md`。
 - **审查收债 ✅**（2026-10-28）：A1 数据缺陷、B1~B9 代码缺口、C1~C10 文档回填、D1~D9 复杂度清理全部完成；台账 `docs/roadmap/audit-debt.md`。
-- 下一关：**Phase 4（GUI 插件系统）**，按 `docs/roadmap/phase-4-gui-plugins.md` 先定稿设计再写码；桌面视觉精修在 3.5 与 4 均收口后启动。
+- 下一关：**Phase 4（GUI 插件系统）设计进行中**（2026-10-28：00 总览 + 插件管理器原型为草稿，待评审）；`docs/roadmap/phase-4-gui-plugins.md` 要求设计定稿后才写码。
 - 看板：`docs/roadmap/00-roadmap.md` §1；桌面壳已知限制见 `docs/roadmap/phase-3-desktop-shell.md` §6。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
@@ -20,7 +20,7 @@
 
 ## 下一步（按优先级）
 
-1. **Phase 4（GUI 插件系统）**：先读/定稿 `docs/roadmap/phase-4-gui-plugins.md` 与 B 轨设计，再启动实现。
+1. **Phase 4 设计评审**：先让所有者看 `docs/design/phase-4/00-overview.md` 与 `prototype.html`（两轨统一入口、权限挡位、安装流程），确认后写 01~07 详设并定稿。
 2. **桌面壳视觉精修**（3.5 与 4 均收口后）：research/07 → 设计稿 → 批次实现。
 3. **推送与远端核验**：本地收债提交尚未 push（远端停在 `8bd0a18` / tag `phase-3.5.end`），推送后必须核远端 CI 为绿。
 4. docs 实测篇数与整合评审待办（删除面需所有者确认）。

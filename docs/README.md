@@ -82,6 +82,8 @@ docs/
 | design/phase-3.5/10-provider-composer.md | 定稿 | P2 第二题：请求头/认证头/兼容性配置面，虚拟模型的目录/路由/状态三步 |
 | design/phase-3.5/11-codemode.md | 定稿 | P2 第三题：脚本沙箱、嵌套工具调用接缝、输出截断与资源限制（D72~D79） |
 | design/phase-3.5/report.md | 定稿（Phase 3.5 完成，tag `phase-3.5.end`） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板/provider/codemode 实现，含真机读数、体量核对与阶段收尾 |
+| design/phase-4/00-overview.md | 草稿（待评审） | Phase 4 总览：两轨统一插件管理器、权限挡位、模块布局与批次 |
+| design/phase-4/prototype.html | 草稿（方向稿） | 插件管理器粗粒度原型：列表、详情、安装向导与挡位选择 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/audit-debt.md | 定稿（2026-10-28 已完成） | 审查收债：代码—文档一致性与复杂度清偿台账（A 1 项 + B 9 项 + C 10 项 + D 9 项；全部清零，419 tests 全绿） |
