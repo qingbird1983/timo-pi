@@ -1,6 +1,6 @@
 //! 会话写入器（设计 04 §4~5：append-only + 每行 flush）。
 
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -125,6 +125,7 @@ impl SessionWriter {
             });
         }
         let leaf = entries.last().map(|e| e.id.clone());
+        repair_tail(path)?;
         let file = std::fs::OpenOptions::new()
             .append(true)
             .open(path)
@@ -201,6 +202,49 @@ impl SessionWriter {
     }
 }
 
+/// 续写前修整末尾：非法半行截断到最后一个换行；合法但缺换行的末行补 `\n`。
+///
+/// 只对"没有以换行结尾"的文件动手；已有完整换行结尾的文件原样保留。
+fn repair_tail(path: &Path) -> Result<()> {
+    let raw = std::fs::read(path).map_err(|source| SessionError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if raw.is_empty() || raw.last() == Some(&b'\n') {
+        return Ok(());
+    }
+    let start = raw
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    let complete = serde_json::from_slice::<Entry>(&raw[start..]).is_ok();
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .map_err(|source| SessionError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if complete {
+        file.seek(SeekFrom::End(0))
+            .map_err(|source| SessionError::Io {
+                path: path.to_path_buf(),
+                source,
+            })?;
+        file.write_all(b"\n").map_err(|source| SessionError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    } else {
+        file.set_len(start as u64)
+            .map_err(|source| SessionError::Io {
+                path: path.to_path_buf(),
+                source,
+            })?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,5 +296,66 @@ mod tests {
         let w2 =
             SessionWriter::open(&d.join(format!("{sid}.jsonl")), clock, idgen).expect("reopen");
         assert_eq!(w2.leaf_id(), Some(last.as_str()));
+    }
+
+    #[test]
+    fn reopen_truncates_a_partial_tail_before_appending() {
+        let d = dir("partial-tail");
+        let clock = Arc::new(FixedClock::new(1));
+        let idgen = Arc::new(IdGen::new());
+        let mut w = SessionWriter::create(&d, "D:/demo", None, clock.clone(), idgen.clone())
+            .expect("create");
+        w.append_raw(kinds::MESSAGE, serde_json::json!({"n": 1}))
+            .expect("a1");
+        let path = w.path().to_path_buf();
+        drop(w);
+
+        let mut raw = std::fs::read_to_string(&path).expect("read");
+        raw.push_str(
+            r#"{"v":1,"id":"ZZ","ts":"t","parent_id":null,"type":"message","payload":{"n""#,
+        );
+        std::fs::write(&path, raw).expect("write");
+
+        let mut reopened = SessionWriter::open(&path, clock, idgen).expect("reopen");
+        let appended = reopened
+            .append_raw(kinds::MESSAGE, serde_json::json!({"n": 2}))
+            .expect("append after repair");
+        drop(reopened);
+
+        let entries = crate::reader::read_entries(&path).expect("all entries readable");
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries.last().expect("last").id, appended);
+        let text = std::fs::read_to_string(&path).expect("read repaired");
+        assert!(text.ends_with('\n'));
+        assert_eq!(text.lines().count(), 3);
+    }
+
+    #[test]
+    fn reopen_separates_a_complete_tail_without_newline() {
+        let d = dir("complete-tail");
+        let clock = Arc::new(FixedClock::new(1));
+        let idgen = Arc::new(IdGen::new());
+        let mut w = SessionWriter::create(&d, "D:/demo", None, clock.clone(), idgen.clone())
+            .expect("create");
+        w.append_raw(kinds::MESSAGE, serde_json::json!({"n": 1}))
+            .expect("a1");
+        let path = w.path().to_path_buf();
+        drop(w);
+
+        let raw = std::fs::read_to_string(&path).expect("read");
+        let body = raw
+            .strip_suffix('\n')
+            .expect("writer always ends with newline");
+        std::fs::write(&path, body).expect("drop the final newline");
+
+        let mut reopened = SessionWriter::open(&path, clock, idgen).expect("reopen");
+        let appended = reopened
+            .append_raw(kinds::MESSAGE, serde_json::json!({"n": 2}))
+            .expect("append");
+        drop(reopened);
+
+        let entries = crate::reader::read_entries(&path).expect("all entries readable");
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries.last().expect("last").id, appended);
     }
 }

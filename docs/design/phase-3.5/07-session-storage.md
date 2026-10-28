@@ -44,6 +44,7 @@ sessions/--<encoded-cwd>--/<session-id>.jsonl
 ## 4. 写入、查找与列表
 
 - `SessionWriter::create(dir, …)`：调用方传入的 `dir` 现在是分区目录（内核计算）。目录不存在则创建（沿用现有行为）。
+- `SessionWriter::open`：续写前修整末尾——末行不是合法 JSON 则截断到最后一个换行；末行合法但缺 `\n` 则补一个换行，保证新 entry 不会拼到旧行上。
 - 查找（`resume` / `delete` / 导出当前会话）：
   1. `sessions/<id>.jsonl`（旧平铺）；
   2. `sessions/<encoded-cwd>/<id>.jsonl`（当前项目）；

@@ -32,7 +32,7 @@
 
 | # | 问题 | 证据 | 验收标准 |
 |---|---|---|---|
-| A1 | `SessionWriter::open` 以追加模式续写，不清除文件末尾残留半行。崩溃留下的半行会被新 entry 拼成「带换行的非法中间行」，此后 `read_entries` 恒报 `CorruptEntry`，该会话永久不可读 | `crates/timo-session/src/writer.rs:115-134`；读取端容忍见 `reader.rs:32-39` | 打开续写前截断末尾非完整行；新增测试：写半行 → open → 追加 → 全量可读 |
+| A1 ✅ | `SessionWriter::open` 以追加模式续写，不清除文件末尾残留半行。崩溃留下的半行会被新 entry 拼成「带换行的非法中间行」，此后 `read_entries` 恒报 `CorruptEntry`，该会话永久不可读 | `crates/timo-session/src/writer.rs:115-134`；读取端容忍见 `reader.rs:32-39` | 打开续写前截断末尾非完整行；新增测试：写半行 → open → 追加 → 全量可读（2026-10-28 已修） |
 
 ### B 组 —— 代码缺口
 
