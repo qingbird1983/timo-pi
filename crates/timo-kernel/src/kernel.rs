@@ -245,12 +245,6 @@ impl Kernel {
         self.mcp.state(server).await
     }
 
-    /// 已启用的 MCP server 名单（纯配置，不建连）。
-    #[must_use]
-    pub fn mcp_servers(&self) -> Vec<String> {
-        self.mcp.enabled_servers()
-    }
-
     /// 对模型声明的工具清单快照（首次调用触发 MCP 连接与枚举）。
     pub async fn tools(&mut self) -> Vec<ToolDefinition> {
         self.ensure_ready().await;
@@ -391,12 +385,6 @@ impl Kernel {
     #[must_use]
     pub fn thinking_label(&self) -> &'static str {
         self.resolved.thinking.as_str()
-    }
-
-    /// 重试设置（诊断）。
-    #[must_use]
-    pub fn retry_settings(&self) -> &timo_config::RetrySettings {
-        &self.retry
     }
 }
 

@@ -181,7 +181,7 @@ async fn abort_flag_retires_dispatch() {
 fn host_errors(hooks: &ExtHooks) -> Vec<ErrorCode> {
     hooks
         .host()
-        .diagnostics()
+        .diagnostics_for("bridge")
         .into_iter()
         .map(|entry| entry.code)
         .collect()

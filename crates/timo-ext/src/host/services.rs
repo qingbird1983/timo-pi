@@ -159,13 +159,6 @@ impl BasicServices {
         self
     }
 
-    /// 设置当前模型快照。
-    #[must_use]
-    pub fn with_model(mut self, model: JsonValue) -> Self {
-        self.model = model;
-        self
-    }
-
     /// 目录快照（`ctx.modelRegistry`；设计 10 §4.2）。
     #[must_use]
     pub fn with_models(mut self, models: Vec<JsonValue>) -> Self {

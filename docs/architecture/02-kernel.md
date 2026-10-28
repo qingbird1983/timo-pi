@@ -23,7 +23,7 @@
 - **StreamEvent（富枚举，接缝 #6）**：TextDelta / ThinkingDelta / ToolCallDelta{index,...} / ToolCallComplete / Usage{input,output,cache} / Done / Error。
 - **ToolDefinition**：name（命名空间强制）、description、parameters: JSON Schema、execute(ctx, params, cancel_token, on_update)、exposure、annotations。
 - **SessionEntry**：见 architecture/05。
-- **AuthMethod（枚举）**：ApiKey{value_ref} / EnvVar{name} / Command{cmd} / OAuth{flow}（Phase 5+ 实现，枚举先占位）。
+- **凭证解析**：`AuthResolver` 按「显式 key > 供应商引用 > 内置环境变量表」三级解析；OAuth 属 Phase 5+ backlog（2026-10-28 删除零调用的 `AuthMethod` 占位枚举）。
 
 ## 3. 事件总线（全项目最重要的一条设计）
 

@@ -4,11 +4,9 @@
 //! 与 pi 的生成管线同源；生成管线接入记 backlog——见 roadmap §3）。
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::AiError;
 use crate::types::{Cost, Usage};
 
 /// 协议实现类型（接缝 #3：新增协议 = 新实现文件 + 目录数据）。
@@ -353,17 +351,6 @@ pub fn calculate_cost(card: &RateCard, usage: &Usage) -> Cost {
         total: c.input + c.output + c.cache_read + c.cache_write,
         ..c
     }
-}
-
-/// 目录装载错误（供调用方诊断；损坏条目跳过不致 panic）。
-#[must_use]
-pub fn catalog_load_error(raw: &str) -> Option<Arc<AiError>> {
-    serde_json::from_str::<CatalogFile>(raw).err().map(|e| {
-        Arc::new(AiError::Json {
-            context: "builtin catalog".to_string(),
-            detail: e.to_string(),
-        })
-    })
 }
 
 #[cfg(test)]

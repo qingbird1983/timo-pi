@@ -74,9 +74,7 @@ pub struct UsageSummary {
 
 ```rust
 impl Kernel {
-    pub fn usage_totals(&self) -> UsageTotals;
-    pub fn usage_breakdown(&self) -> Vec<UsageBucket>;
-    pub fn usage_summary(&self) -> UsageSummary;   // 二者合一，界面用
+    pub fn usage_summary(&self) -> UsageSummary;   // 总计 + 分桶，界面用
 }
 ```
 

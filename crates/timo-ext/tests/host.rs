@@ -369,7 +369,7 @@ module.exports = function (pi) {
 };
 "#;
     let fixture = Fixture::new("diag-ext", source);
-    let entries = fixture.host.diagnostics();
+    let entries = fixture.host.diagnostics_for("diag-ext");
     assert!(
         entries.iter().any(
             |entry| entry.code == ErrorCode::E202 && entry.message.contains("registerProvider")

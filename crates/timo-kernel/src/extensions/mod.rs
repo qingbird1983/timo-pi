@@ -11,8 +11,8 @@ use serde_json::json;
 use timo_config::Clock;
 use timo_ext::{
     BasicServices, Capabilities, DiagnosticEntry, DiagnosticReport, Discovered, DiscoveryOptions,
-    ErrorCode, ExtHooks, ExtensionDiagnostic, ExtensionHost, Grants, LoadedExtension, Manifest,
-    PackOptions, PermissionStore, Scope, Status, discover, pack, validate_capabilities,
+    ErrorCode, ExtHooks, ExtensionDiagnostic, ExtensionHost, Grants, Manifest, PackOptions,
+    PermissionStore, Scope, Status, discover, pack, validate_capabilities,
 };
 
 mod cli;
@@ -49,8 +49,6 @@ pub struct ExtensionRuntime {
     pub host: Option<Arc<ExtensionHost>>,
     /// 循环/供应商钩子桥（随宿主一同缺席）。
     pub hooks: Option<Arc<ExtHooks>>,
-    /// 成功装载的扩展。
-    pub loaded: Vec<LoadedExtension>,
     /// 诊断报告。
     pub report: DiagnosticReport,
     /// 全部已注册命令。
@@ -103,7 +101,6 @@ impl ExtensionRuntime {
 /// 装载全部扩展；单个失败不影响其他扩展。
 pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
     let mut report = DiagnosticReport::new(now(), env!("CARGO_PKG_VERSION"));
-    let mut loaded: Vec<LoadedExtension> = Vec::new();
     let absorbed = std::collections::HashMap::new();
     let grants_path = options.data_dir.join("permissions.json");
     let mut grants = PermissionStore::load(&grants_path).unwrap_or_default();
@@ -157,7 +154,6 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
             return ExtensionRuntime {
                 host: None,
                 hooks: None,
-                loaded,
                 report,
                 commands: vec![],
                 grants_path,
@@ -243,7 +239,6 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
                             extension.tools.iter().map(|t| t.name.clone()).collect();
                         diagnostic.registered.commands = extension.commands.clone();
                         diagnostic.registered.hooks = extension.hooks.clone();
-                        loaded.push(extension);
                     }
                     Err(error) => {
                         diagnostic.status = Status::Failed;
@@ -266,7 +261,6 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
     let runtime = ExtensionRuntime {
         host: Some(host),
         hooks: Some(hooks),
-        loaded,
         report,
         commands,
         grants_path,

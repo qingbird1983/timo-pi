@@ -10,6 +10,7 @@ use tokio_util::sync::CancellationToken;
 use crate::Result;
 use crate::definition::{ToolCallCtx, ToolDefinition, ToolOutput};
 use crate::error::ToolError;
+use crate::tools::write::str_param;
 use crate::truncate::truncate_head;
 
 /// 图像自动缩放默认档（pi 全局 fallback 2000×2000；jpeg 质量 85）。
@@ -59,15 +60,6 @@ async fn execute(ctx: ToolCallCtx, cwd: Arc<Path>) -> Result<ToolOutput> {
     let _ = ctx.updates; // read 无进度更新
     let path = resolve(&ctx.cwd, str_param(&ctx.params, "path")?)?;
     sniff_and_read(&path, &ctx, cwd).await
-}
-
-fn str_param<'a>(params: &'a Value, key: &str) -> Result<&'a str> {
-    params
-        .get(key)
-        .and_then(Value::as_str)
-        .ok_or_else(|| ToolError::InvalidParams {
-            reason: format!("missing string param `{key}`"),
-        })
 }
 
 fn num_param(params: &Value, key: &str) -> Result<Option<u64>> {

@@ -180,15 +180,6 @@ impl AssistantMessage {
             timestamp,
         }
     }
-
-    /// 是否携带工具调用块。
-    #[must_use]
-    pub fn tool_calls(&self) -> Vec<&Content> {
-        self.content
-            .iter()
-            .filter(|c| matches!(c, Content::ToolCall { .. }))
-            .collect()
-    }
 }
 
 /// user 消息。

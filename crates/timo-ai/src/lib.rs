@@ -19,7 +19,7 @@ pub mod types;
 pub type Result<T> = std::result::Result<T, errors::AiError>;
 
 pub use api::{ByteStream, ProviderApi, SseRequest, SseTransport, api_for, api_with_transport};
-pub use auth::{AuthMethod, AuthResolver};
+pub use auth::AuthResolver;
 pub use catalog::{ApiKind, Catalog, Compat, Model, RateCard, calculate_cost};
 pub use errors::AiError;
 pub use hooks::{ProviderHooks, apply_header_patch, merge_headers};

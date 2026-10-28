@@ -4,48 +4,6 @@ use timo_config::ValueRef;
 
 use crate::errors::AiError;
 
-/// 认证方式枚举（OAuth 为 Phase 5+ 占位，构造即报 [`AiError::Unsupported`]）。
-#[derive(Debug, Clone)]
-pub enum AuthMethod {
-    /// API key（三形态引用）。
-    ApiKey {
-        /// 值引用（字面量/`$ENV`/`!cmd`）。
-        value_ref: ValueRef,
-    },
-    /// 指名环境变量。
-    EnvVar {
-        /// 变量名。
-        name: String,
-    },
-    /// 命令输出。
-    Command {
-        /// 命令行。
-        cmd: String,
-    },
-    /// OAuth（Phase 5+，占位不实现）。
-    OAuth,
-}
-
-impl AuthMethod {
-    /// 解析为最终凭证字符串。
-    ///
-    /// # Errors
-    /// OAuth 返回 [`AiError::Unsupported`]；引用解析失败透传 [`AiError::Config`]。
-    pub async fn resolve(&self) -> Result<String, AiError> {
-        match self {
-            Self::ApiKey { value_ref } => value_ref.resolve().await.map_err(AiError::Config),
-            Self::EnvVar { name } => {
-                std::env::var(name).map_err(|_| AiError::NoApiKey(format!("env {name} unset")))
-            }
-            Self::Command { cmd } => ValueRef::Command(cmd.clone())
-                .resolve()
-                .await
-                .map_err(AiError::Config),
-            Self::OAuth => Err(AiError::Unsupported("provider OAuth".to_string())),
-        }
-    }
-}
-
 /// 认证解析器：按优先级（显式 > 供应商引用 > 内置环境变量表）产出 api key。
 #[derive(Debug, Clone, Default)]
 pub struct AuthResolver {
@@ -71,7 +29,7 @@ impl AuthResolver {
     /// 按优先级解析凭证；全部未命中返回 [`AiError::NoApiKey`]。
     ///
     /// # Errors
-    /// 见 [`AuthMethod::resolve`] 与 [`AiError::NoApiKey`]。
+    /// 全部未命中 → [`AiError::NoApiKey`]；引用解析失败按未命中处理。
     pub async fn resolve(&self) -> Result<String, AiError> {
         if let Some(k) = &self.explicit {
             return Ok(k.clone());

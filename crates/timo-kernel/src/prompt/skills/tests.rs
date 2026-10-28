@@ -146,5 +146,4 @@ fn reader_wording_follows_tool() {
     let skills = vec![sample("a", false)];
     assert!(format_for_prompt(&skills, Reader::Read).contains("with the read tool"));
     assert!(format_for_prompt(&skills, Reader::Bash).contains("with bash"));
-    assert!(format_for_prompt(&skills, Reader::Indirect).contains("Load a skill's file"));
 }

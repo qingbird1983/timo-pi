@@ -2,7 +2,7 @@
 //! 草稿会话退回内存历史（压缩后仍保留压缩前的记账）。
 
 use super::Kernel;
-use crate::usage::{self, UsageBucket, UsageSummary, UsageTotals};
+use crate::usage::{self, UsageSummary};
 
 impl Kernel {
     /// 总计 + 分桶。
@@ -23,17 +23,5 @@ impl Kernel {
                 .collect();
         }
         self.history.clone().unwrap_or_default()
-    }
-
-    /// 仅总计。
-    #[must_use]
-    pub fn usage_totals(&self) -> UsageTotals {
-        self.usage_summary().totals
-    }
-
-    /// 仅分桶（成本降序，同价按 key 升序）。
-    #[must_use]
-    pub fn usage_breakdown(&self) -> Vec<UsageBucket> {
-        self.usage_summary().buckets
     }
 }

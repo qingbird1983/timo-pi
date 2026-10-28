@@ -263,13 +263,6 @@ impl DiagnosticEntry {
         self.path = Some(path.into());
         self
     }
-
-    /// 附加补充信息。
-    #[must_use]
-    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
-        self.detail = Some(detail.into());
-        self
-    }
 }
 
 /// 单个扩展的诊断。

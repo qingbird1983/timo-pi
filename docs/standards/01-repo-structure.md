@@ -28,7 +28,7 @@ scripts/              构建/检查脚本（CI 用）
 |---|---|---|
 | crate / app | `timo-` 前缀 + kebab-case | `timo-session` |
 | Rust 文件/模块 | snake_case | `tool_registry.rs` |
-| 类型 | UpperCamelCase；Kind 后缀表枚举类别 | `StreamEvent`、`AuthMethodKind` |
+| 类型 | UpperCamelCase；Kind 后缀表枚举类别 | `StreamEvent`、`ThinkingLevel` |
 | 文档文件 | 两位序号 + kebab-case（adr 用 ADR-XXXX 前缀） | `03-critical-seams.md` |
 | 分支 | `feat|fix|docs|chore/<短横线描述>` | `feat/session-writer` |
 | tag | `phase-N.start` / `phase-N.end`（annotated）；发布用 `vX.Y.Z` | `phase-1.end` |

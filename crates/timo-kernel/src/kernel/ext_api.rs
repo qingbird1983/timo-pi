@@ -13,14 +13,6 @@ impl Kernel {
         self.ext.as_ref().map(|runtime| &runtime.report)
     }
 
-    /// 扩展诊断 JSON（未装载时为 None）。
-    #[must_use]
-    pub fn extension_report_json(&self) -> Option<String> {
-        self.ext
-            .as_ref()
-            .map(|runtime| runtime.report.to_json_pretty().unwrap_or_default())
-    }
-
     /// 扩展诊断人读表。
     #[must_use]
     pub fn extension_report_human(&self) -> Option<String> {

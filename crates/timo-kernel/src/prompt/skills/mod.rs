@@ -37,10 +37,6 @@ pub(crate) enum Reader {
     Read,
     /// `bash` 工具。
     Bash,
-    /// 不点名工具（隐藏读取器）。
-    // dead-code: only constructed in tests until a hidden reader is exposed
-    #[allow(dead_code)]
-    Indirect,
 }
 
 /// 技能根，按发现顺序；重复路径只保留第一次（约定见 `prompt::resources`）。
@@ -327,7 +323,6 @@ pub(crate) fn format_for_prompt(skills: &[Skill], reader: Reader) -> String {
             "When a task matches a description, load that skill's file with the read tool."
         }
         Reader::Bash => "When a task matches a description, load that skill's file with bash.",
-        Reader::Indirect => "Load a skill's file when a task matches its description.",
     };
 
     let mut out = String::from("Skills listed below provide task-specific instructions.\n");

@@ -270,21 +270,6 @@ impl ExtensionHost {
             .unwrap_or_default()
     }
 
-    /// 当前诊断快照（合并全部扩展）。
-    #[must_use]
-    pub fn diagnostics(&self) -> Vec<DiagnosticEntry> {
-        self.state
-            .lock()
-            .map(|state| {
-                state
-                    .diagnostics
-                    .iter()
-                    .map(|(_, entry)| entry.clone())
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
     /// 指定扩展的诊断快照。
     #[must_use]
     pub fn diagnostics_for(&self, id: &str) -> Vec<DiagnosticEntry> {

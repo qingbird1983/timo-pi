@@ -365,7 +365,7 @@ mod tests {
         assert_eq!(kernel.list_sessions().len(), 1);
         kernel.resume(&id).await.unwrap();
         assert_eq!(kernel.history().unwrap().len(), 2);
-        assert_eq!(kernel.usage_totals().input, 7);
+        assert_eq!(kernel.usage_summary().totals.input, 7);
 
         let target = data.join("out.jsonl");
         assert_eq!(kernel.export_session(Some(&target)).unwrap(), target);

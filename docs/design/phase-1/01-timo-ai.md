@@ -122,6 +122,8 @@ pub struct StreamOptions { api_key: Option<String>, cancel: CancellationToken,
 
 ## 7. 认证（auth.rs）
 
+> **2026-10-28 修订**：下方 `AuthMethod` 枚举为零调用占位，已随审查收债 D3 删除；实现只保留 `AuthResolver`（显式 > 供应商引用 > 环境变量表）。OAuth 属 Phase 5+ backlog，需要时随新 ADR 加回。以下枚举代码保留作历史记录。
+
 ```rust
 pub enum AuthMethod { ApiKey { value_ref: ValueRef }, EnvVar { name: String },
                       Command { cmd: String }, OAuth { /* Phase 5+，占位不实现 */ } }
