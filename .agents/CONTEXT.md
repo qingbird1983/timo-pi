@@ -1,6 +1,6 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**审查收债完成**——2026-10-27 三路审查的 A/B/C/D 清单全部清零）。
+- 更新：2026-10-28（会话主题：**Phase 4 设计**——市场 + 已安装管理形态落盘，市场卡片定为错落式瀑布流）。
 
 ## 当前阶段与状态
 
@@ -17,11 +17,12 @@
 - **复杂度清理**：删除未接线执行模式/队列模式、零调用 API、未消费配置等约 330 行与 1 个无关依赖；`timo sessions` 时间格式化复用 `time`（下沉 `timo-session::format_utc_minutes`），`fs_scope` 通配换 `globset`（先证 `**` 吞 0 段/`*`/`?` 等价，`[]`/`{}` 转义为字面量防授权面扩大）。
 - **验证**：workspace **419 tests** 全绿；fmt/clippy `-D warnings`/check-size 通过；`clean-build` 从 22.1GiB 清到 14.0GiB（释放 8.1GiB）。行为测试做了变异验证：B5 隔离、`globset` 两层语义、A1 修复均确认「恢复前红/恢复后绿」；内核取消分支的破坏性变异被工具分类器拦截，改由宿主层变异 + 内核测试双覆盖。
 - 每批独立提交：A1、B1、D3~D7、D1/D2+B6/B7/B8、D8/D9+C10、B2~B5+C9（最新提交见 git log）。
-- **Phase 4 详设草稿（01~08）**：统一管理器、manifest/签名包、slot/动作、宿主 API v1、运行时隔离、devkit、自证插件、插件市场；全部为草稿，待评审后定稿再写码。市场形态与分发边界见 [ADR-0016](../docs/adr/ADR-0016-plugin-marketplace.md)。
+- **Phase 4 详设草稿（01~08）**：统一管理器、manifest/签名包、slot/动作、宿主 API v1、运行时隔离、devkit、自证插件、插件市场；全部为草稿，待评审后定稿再写码。市场卡片排版按所有者要求定为**错落式瀑布流**（08 §3.1，原型已改三列不等高）。
+- **市场形态与分发边界**见 [ADR-0016](../docs/adr/ADR-0016-plugin-marketplace.md)：静态索引只提供元数据，安装仍以签名包为准；屏蔽 ≠ 卸载。
 
 ## 下一步（按优先级）
 
-1. **Phase 4 设计评审**：先让所有者看 `docs/design/phase-4/00-overview.md` 与 `prototype.html`（两轨统一入口、权限挡位、安装流程），确认后写 01~07 详设并定稿。
+1. **Phase 4 设计评审**：看 `docs/design/phase-4/00-overview.md`、`08-marketplace.md` 与 `prototype.html`（市场瀑布流 + 已安装分组）；三个默认值待确认（市场索引 URL、评论只外链、实验性插件按自家 backlog），定稿后写码。
 2. **桌面壳视觉精修**（3.5 与 4 均收口后）：research/07 → 设计稿 → 批次实现。
 3. **推送与远端核验**：本地收债提交尚未 push（远端停在 `8bd0a18` / tag `phase-3.5.end`），推送后必须核远端 CI 为绿。
 4. docs 实测篇数与整合评审待办（删除面需所有者确认）。
@@ -40,6 +41,7 @@
 ## 关键提醒
 
 - **内核零 GUI**：`crates/` 不得出现 gpui-kit/NSH；桌面只 import `timo-kernel`。
+- **市场卡片错落式瀑布流**：卡片高度随内容，三/二/单列，新卡片进最短列；不用等高网格；已安装页保持分组列表，两种排版不混用。
 - **审阅前无副作用**：拒绝必须不写文件、不 spawn；等待中取消/关窗 → 拒绝。
 - **CLI 等价**：`tool_review = None` 时 Phase 1/2 测试一字不改全绿。
 - **取消三层**：MCP 用 `select!` 等 `ctx.cancel`；扩展工具把 per-call `AtomicBool` 交给 QuickJS 中断处理器（宿主无预算，取消是唯一收敛手段）；Unix 子进程 `process_group(0)` + `kill -KILL -- -pid`。

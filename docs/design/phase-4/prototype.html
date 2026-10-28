@@ -92,8 +92,9 @@
   .notice { padding: 0 24px 8px; font-size: 11.5px; color: var(--muted); }
   .cards {
     flex: 1; min-height: 0; padding: 4px 24px 18px; overflow: hidden;
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-content: start;
+    display: flex; gap: 12px; align-items: flex-start;
   }
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
   .card {
     border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
     padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 0;
@@ -230,107 +231,134 @@
         </div>
         <div class="notice">正在检查宿主要求 96/128；未声明或无法确认的插件仍会显示</div>
         <div class="cards">
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <div class="card-title">会话搜索</div>
-                <div class="card-author">timo · v1.0.0</div>
+          <div class="col">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">会话搜索</div>
+                  <div class="card-author">timo · v1.0.0</div>
+                </div>
+                <button class="btn dark small">打开</button>
               </div>
-              <button class="btn dark small">打开</button>
-            </div>
-            <div class="card-stats">↓ 1.2k / 近 30 天 · ★ 36</div>
-            <div class="card-desc">在侧栏搜索历史会话，按标题与首条消息匹配，回车直接打开。</div>
-            <div class="shot">截图占位</div>
-            <div class="card-foot">
-              <span class="tag">会话与消息</span>
-              <span class="muted" style="font-size:11px">Timo ≥ 0.4 · API v1</span>
-            </div>
-          </article>
+              <div class="card-stats">↓ 1.2k / 近 30 天 · ★ 36</div>
+              <div class="card-desc">在侧栏搜索历史会话，按标题与首条消息匹配，回车直接打开。</div>
+              <div class="shot">截图占位</div>
+              <div class="card-foot"><span class="tag">会话与消息</span><span class="muted" style="font-size:11px">Timo ≥ 0.4 · API v1</span></div>
+            </article>
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <div class="card-title">用量看板</div>
-                <div class="card-author">community · v0.4.2</div>
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">终端工具卡</div>
+                  <div class="card-author">community · v0.1.0</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
               </div>
-              <button class="btn primary small" onclick="openInstall()">安装</button>
-            </div>
-            <div class="card-stats">↓ 860 / 近 30 天 · ★ 21</div>
-            <div class="card-desc">按供应商与模型统计 Token、缓存命中与估算费用，支持自定义价格表。</div>
-            <div class="shot">截图占位</div>
-            <div class="card-foot">
-              <span class="tag">用量与计费</span>
-              <span class="muted" style="font-size:11px">Timo ≥ 0.4</span>
-            </div>
-          </article>
+              <div class="card-stats">↓ 430 / 近 30 天 · ★ 9</div>
+              <div class="card-desc">把 bash 工具结果渲染成带退出码与耗时的终端卡片。</div>
+              <div class="card-foot"><span class="tag">UI 增强</span><span class="muted" style="font-size:11px">API v1</span></div>
+            </article>
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <div class="card-title">主题：暖灰</div>
-                <div class="card-author">community · v0.2.0</div>
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Git 工作树</div>
+                  <div class="card-author">community · v0.8.1</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
               </div>
-              <button class="btn primary small" onclick="openInstall()">安装</button>
-            </div>
-            <div class="card-stats">↓ 540 / 近 30 天 · ★ 18</div>
-            <div class="card-desc">覆盖宿主颜色与圆角 token，提供低对比的暖灰配色。</div>
-            <div class="shot">预览占位</div>
-            <div class="card-foot">
-              <span class="tag">主题与外观</span>
-              <span class="muted" style="font-size:11px">Timo ≥ 0.4</span>
-            </div>
-          </article>
+              <div class="card-stats">↓ 1.1k / 近 30 天 · ★ 44</div>
+              <div class="card-desc">为任务创建独立 worktree 与分支，结束后汇总 diff。</div>
+              <div class="shot" style="height:64px">截图占位</div>
+              <div class="card-foot"><span class="tag">工具与能力</span><span class="muted" style="font-size:11px">Timo ≥ 0.4</span></div>
+            </article>
+          </div>
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <div class="card-title">终端工具卡</div>
-                <div class="card-author">community · v0.1.0</div>
+          <div class="col">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">用量看板</div>
+                  <div class="card-author">community · v0.4.2</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
               </div>
-              <button class="btn primary small" onclick="openInstall()">安装</button>
-            </div>
-            <div class="card-stats">↓ 430 / 近 30 天 · ★ 9</div>
-            <div class="card-desc">把 bash 工具结果渲染成带退出码与耗时的终端卡片。</div>
-            <div class="shot">截图占位</div>
-            <div class="card-foot">
-              <span class="tag">UI 增强</span>
-              <span class="muted" style="font-size:11px">Timo ≥ 0.4 · API v1</span>
-            </div>
-          </article>
+              <div class="card-stats">↓ 860 / 近 30 天 · ★ 21</div>
+              <div class="card-desc">按供应商与模型统计 Token、缓存命中与估算费用，支持自定义价格表。可切换按天/按会话视图，并导出 CSV。</div>
+              <div class="shot" style="height:118px">截图占位</div>
+              <div class="shot" style="height:56px">第二张截图占位</div>
+              <div class="card-foot"><span class="tag">用量与计费</span><span class="muted" style="font-size:11px">Timo ≥ 0.4</span></div>
+            </article>
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <div class="card-title">Git 工作树</div>
-                <div class="card-author">community · v0.8.1</div>
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">主题：暖灰</div>
+                  <div class="card-author">community · v0.2.0</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
               </div>
-              <button class="btn primary small" onclick="openInstall()">安装</button>
-            </div>
-            <div class="card-stats">↓ 1.1k / 近 30 天 · ★ 44</div>
-            <div class="card-desc">为任务创建独立 worktree 与分支，结束后汇总 diff。</div>
-            <div class="shot">截图占位</div>
-            <div class="card-foot">
-              <span class="tag">工具与能力</span>
-              <span class="muted" style="font-size:11px">Timo ≥ 0.4</span>
-            </div>
-          </article>
+              <div class="card-stats">↓ 540 / 近 30 天 · ★ 18</div>
+              <div class="card-desc">覆盖宿主颜色与圆角 token，提供低对比的暖灰配色。</div>
+              <div class="card-foot"><span class="tag">主题与外观</span><span class="muted" style="font-size:11px">Timo ≥ 0.4</span></div>
+            </article>
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <div class="card-title">语音输入</div>
-                <div class="card-author">community · v0.1.0</div>
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">语音输入</div>
+                  <div class="card-author">community · v0.1.0</div>
+                </div>
+                <button class="btn small" disabled style="opacity:.5">需 0.5</button>
               </div>
-              <button class="btn small" disabled style="opacity:.5">需 0.5</button>
-            </div>
-            <div class="card-stats">↓ 210 / 近 30 天 · ★ 7</div>
-            <div class="card-desc">本地转写输入，首次使用需要下载语音模型。</div>
-            <div class="shot">截图占位</div>
-            <div class="card-foot">
-              <span class="tag">UI 增强</span>
-              <span class="muted" style="font-size:11px">Timo ≥ 0.5</span>
-            </div>
-          </article>
+              <div class="card-stats">↓ 210 / 近 30 天 · ★ 7</div>
+              <div class="card-desc">本地转写输入，首次使用需要下载语音模型。</div>
+              <div class="shot" style="height:84px">截图占位</div>
+              <div class="card-foot"><span class="tag">UI 增强</span><span class="muted" style="font-size:11px">Timo ≥ 0.5</span></div>
+            </article>
+          </div>
+
+          <div class="col">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">Lint 助手</div>
+                  <div class="card-author">community · v0.1.4</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
+              </div>
+              <div class="card-stats">↓ 320 / 近 30 天 · ★ 5</div>
+              <div class="card-desc">保存后自动跑 lint，把问题显示在工具卡片里。</div>
+              <div class="card-foot"><span class="tag">工具与能力</span><span class="muted" style="font-size:11px">API v1</span></div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">工作流编排</div>
+                  <div class="card-author">community · v0.3.0</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
+              </div>
+              <div class="card-stats">↓ 680 / 近 30 天 · ★ 27</div>
+              <div class="card-desc">用可视化节点编排多步任务：读取、分析、改写与提交。支持条件分支、失败重试与运行日志；节点可引用插件提供的动作。</div>
+              <div class="card-foot"><span class="tag">AGI 架构探索</span><span class="muted" style="font-size:11px">Timo ≥ 0.5</span></div>
+            </article>
+
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <div class="card-title">模型快速切换</div>
+                  <div class="card-author">community · v0.2.1</div>
+                </div>
+                <button class="btn primary small" onclick="openInstall()">安装</button>
+              </div>
+              <div class="card-stats">↓ 940 / 近 30 天 · ★ 33</div>
+              <div class="card-desc">输入区上方加一排模型按钮，按最近使用排序。</div>
+              <div class="shot" style="height:104px">截图占位</div>
+              <div class="card-foot"><span class="tag">模型与账号接入</span><span class="muted" style="font-size:11px">Timo ≥ 0.4</span></div>
+            </article>
+          </div>
         </div>
       </section>
 
