@@ -42,12 +42,23 @@ pub fn tool_definition(meta: &ToolMeta, host: Arc<ExtensionHost>) -> timo_tools:
             let name = call_name.clone();
             Box::pin(async move {
                 let args = ctx.params.clone();
-                let result = tokio::task::spawn_blocking(move || host.call_tool(&name, args))
-                    .await
-                    .map_err(|error| {
+                let cancel_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                let flag = Arc::clone(&cancel_flag);
+                let task = tokio::task::spawn_blocking(move || {
+                    host.call_tool_cancellable(&name, args, Some(flag))
+                });
+                // 接缝 #7：本侧及时返回；中断处理器让在跑的 JS 收敛后自行结束。
+                let result = tokio::select! {
+                    () = ctx.cancel.cancelled() => {
+                        cancel_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        return Err(timo_tools::ToolError::Cancelled);
+                    }
+                    joined = task => joined.map_err(|error| {
                         timo_tools::ToolError::Execution(format!("extension host join: {error}"))
-                    })?
-                    .map_err(|error| timo_tools::ToolError::Execution(error.to_string()))?;
+                    })?,
+                };
+                let result =
+                    result.map_err(|error| timo_tools::ToolError::Execution(error.to_string()))?;
                 let content = serde_json::from_value::<Vec<timo_ai::Content>>(result.content)
                     .map_err(|error| {
                         timo_tools::ToolError::Execution(format!(
@@ -177,4 +188,68 @@ pub fn split_command(line: &str) -> Option<(String, JsonValue)> {
     let name = parts.next()?.to_string();
     let args: Vec<&str> = parts.collect();
     Some((name, json!(args)))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    use timo_ext::{BasicServices, Grants, HostServices};
+    use timo_tools::ToolCallCtx;
+    use tokio_util::sync::CancellationToken;
+
+    const SPIN: &str = r#"
+module.exports = function (pi) {
+  pi.registerTool({
+    name: "spin",
+    label: "Spin",
+    description: "",
+    parameters: {},
+    execute: async () => { while (true) {} },
+  });
+};
+"#;
+
+    #[tokio::test]
+    async fn cancel_token_stops_extension_tool_execution() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bundle.cjs");
+        std::fs::write(&path, SPIN).unwrap();
+        let services: Arc<dyn HostServices> = Arc::new(BasicServices::new(
+            dir.path().to_path_buf(),
+            Grants::default(),
+            json!({}),
+        ));
+        let host = Arc::new(ExtensionHost::start(services, Duration::from_secs(30)).unwrap());
+        host.load("spin", &path).unwrap();
+        let meta = host
+            .tools()
+            .into_iter()
+            .find(|tool| tool.js_name == "spin")
+            .expect("spin tool registered");
+        let definition = tool_definition(&meta, Arc::clone(&host));
+        let token = CancellationToken::new();
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let ctx = ToolCallCtx {
+            tool_call_id: "t1".into(),
+            params: json!({}),
+            cancel: token.clone(),
+            updates: tx,
+            cwd: Arc::from(dir.path()),
+            review: None,
+            nested: None,
+        };
+        let task = tokio::spawn(definition.run(ctx));
+        token.cancel();
+        let joined = tokio::time::timeout(Duration::from_secs(5), task)
+            .await
+            .expect("cancel must return promptly")
+            .expect("tool task panicked");
+        assert!(
+            matches!(joined, Err(timo_tools::ToolError::Cancelled)),
+            "{joined:?}"
+        );
+    }
 }

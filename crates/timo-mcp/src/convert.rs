@@ -160,6 +160,7 @@ pub fn rmcp_tool_to_definition(
         execute: Arc::new(move |ctx: timo_tools::ToolCallCtx| {
             let call = call.clone();
             Box::pin(async move {
+                let cancel = ctx.cancel.clone();
                 let args = match ctx.params {
                     Value::Object(m) => m,
                     other => {
@@ -168,9 +169,13 @@ pub fn rmcp_tool_to_definition(
                         )));
                     }
                 };
-                let result = call(Value::Object(args))
-                    .await
-                    .map_err(|e| timo_tools::ToolError::Mcp(e.to_string()))?;
+                // 接缝 #7：本侧等待受取消约束；底层 rmcp 请求的收尾由客户端负责。
+                let result = tokio::select! {
+                    () = cancel.cancelled() => return Err(timo_tools::ToolError::Cancelled),
+                    result = call(Value::Object(args)) => {
+                        result.map_err(|e| timo_tools::ToolError::Mcp(e.to_string()))?
+                    }
+                };
                 Ok(result_to_output(&result))
             })
         }),
@@ -213,5 +218,31 @@ mod tests {
         fn big() -> CallToolResult {
             CallToolResult::success(vec![ContentBlock::text("x".repeat(64 * 1024))])
         }
+    }
+
+    #[tokio::test]
+    async fn cancelled_call_returns_without_waiting_for_rmcp() {
+        let tool = Tool::new("slow", "slow tool", serde_json::Map::new());
+        let call: BoundCall = Arc::new(|_args| {
+            Box::pin(async {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                Ok(CallToolResult::success(vec![ContentBlock::text("late")]))
+            })
+        });
+        let def = rmcp_tool_to_definition("srv", &tool, timo_tools::Exposure::Direct, call);
+        let token = tokio_util::sync::CancellationToken::new();
+        token.cancel();
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let ctx = timo_tools::ToolCallCtx {
+            tool_call_id: "t1".into(),
+            params: serde_json::json!({}),
+            cancel: token,
+            updates: tx,
+            cwd: Arc::from(std::path::Path::new(".")),
+            review: None,
+            nested: None,
+        };
+        let err = def.run(ctx).await.unwrap_err();
+        assert!(matches!(err, timo_tools::ToolError::Cancelled), "{err}");
     }
 }

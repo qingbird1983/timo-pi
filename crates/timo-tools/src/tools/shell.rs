@@ -143,6 +143,9 @@ async fn execute_process(
         .stderr(std::process::Stdio::piped())
         .stdin(std::process::Stdio::null())
         .kill_on_drop(true);
+    // 接缝 #7：Unix 让子进程自成进程组，超时/取消可整组清理（Windows 走 taskkill /T）。
+    #[cfg(unix)]
+    cmd.process_group(0);
     let mut child = cmd
         .spawn()
         .map_err(|e| ToolError::Subprocess { source: e })?;
@@ -211,7 +214,7 @@ fn timed_out(ms: u64) -> ToolError {
     }
 }
 
-/// 杀进程树（Windows taskkill /T；unix 分支 Phase 3 打包时补 killpg）。
+/// 杀进程树（Windows taskkill /T；Unix 杀整个进程组）。
 fn kill_tree(pid: Option<u32>) {
     if let Some(pid) = pid {
         kill_tree_impl(pid);
@@ -227,9 +230,17 @@ fn kill_tree_impl(pid: u32) {
         .output();
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+fn kill_tree_impl(pid: u32) {
+    // 负 pid = 整个进程组（spawn 时 process_group(0) 已建组）；`--` 防止被当成选项。
+    let _ = std::process::Command::new("kill")
+        .args(["-KILL", "--", &format!("-{pid}")])
+        .status();
+}
+
+#[cfg(not(any(windows, unix)))]
 fn kill_tree_impl(_pid: u32) {
-    // kill_on_drop 已覆盖单进程；进程组级清理随 Phase 3 平台打包补齐。
+    // 其余平台仅 kill_on_drop 覆盖直接子进程。
 }
 
 fn finish_output(

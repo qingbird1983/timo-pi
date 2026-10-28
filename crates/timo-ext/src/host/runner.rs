@@ -290,7 +290,9 @@ pub(super) fn dispatch_all(
                         ),
                     ));
                 }
-                return Err(error);
+                // 设计 phase-2/04 §8：单个 handler（这里按扩展粒度）失败只记诊断，
+                // 同事件后续扩展照常派发。
+                continue;
             }
         };
         match event {

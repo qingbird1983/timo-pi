@@ -206,11 +206,19 @@ module.exports = function (pi) {
 };
 "#;
     let fixture = Fixture::with_budget("slow", source, Duration::from_millis(50));
-    let error = fixture
+    // B5：单个 handler 失败不再中断整次派发，错误进诊断。
+    let value = fixture
         .host
         .dispatch("tool_call", json!({ "input": {} }))
-        .unwrap_err();
-    assert_eq!(error.code(), Some(ErrorCode::E301));
+        .expect("dispatch survives a failing handler");
+    assert!(value.is_null());
+    let codes: Vec<ErrorCode> = fixture
+        .host
+        .diagnostics_for("slow")
+        .iter()
+        .map(|entry| entry.code)
+        .collect();
+    assert!(codes.contains(&ErrorCode::E301), "{codes:?}");
 }
 
 #[test]
@@ -228,11 +236,18 @@ module.exports = function (pi) {
 };
 "#;
     let fixture = Fixture::with_budget("spin", source, Duration::from_millis(100));
-    let error = fixture
+    let value = fixture
         .host
         .dispatch("tool_call", json!({ "input": {} }))
-        .unwrap_err();
-    assert_eq!(error.code(), Some(ErrorCode::E301));
+        .expect("dispatch survives a failing handler");
+    assert!(value.is_null());
+    let codes: Vec<ErrorCode> = fixture
+        .host
+        .diagnostics_for("spin")
+        .iter()
+        .map(|entry| entry.code)
+        .collect();
+    assert!(codes.contains(&ErrorCode::E301), "{codes:?}");
     let next = fixture
         .host
         .dispatch("tool_call", json!({ "input": {} }))

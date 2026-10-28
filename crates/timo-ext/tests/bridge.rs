@@ -34,16 +34,22 @@ module.exports = function (pi) {
 "#;
 
 fn setup(source: &str) -> (tempfile::TempDir, Arc<ExtensionHost>) {
+    setup_many(&[("bridge", source)])
+}
+
+fn setup_many(entries: &[(&str, &str)]) -> (tempfile::TempDir, Arc<ExtensionHost>) {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("bundle.cjs");
-    std::fs::write(&path, source).unwrap();
     let services: Arc<dyn HostServices> = Arc::new(BasicServices::new(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")),
         Grants::default(),
         json!({}),
     ));
     let host = Arc::new(ExtensionHost::start(services, Duration::from_secs(5)).unwrap());
-    host.load("bridge", &path).unwrap();
+    for (id, source) in entries {
+        let path = dir.path().join(format!("{id}.cjs"));
+        std::fs::write(&path, source).unwrap();
+        host.load(id, &path).unwrap();
+    }
     (dir, host)
 }
 
@@ -160,6 +166,42 @@ async fn provider_hooks_round_trip() {
     assert!(
         !host_errors(&hooks).contains(&ErrorCode::E302),
         "unexpected handler errors"
+    );
+}
+
+const BROKEN: &str = r#"
+module.exports = function (pi) {
+  pi.on("tool_call", async () => ({}));
+  Object.defineProperty(globalThis.__timo_state, "handlers", {
+    get() { throw new Error("broken dispatch state"); },
+  });
+};
+"#;
+
+const PATCHING: &str = r#"
+module.exports = function (pi) {
+  pi.on("tool_call", async (event) => ({
+    input: { ...event.input, marker: "after-error" },
+  }));
+};
+"#;
+
+#[tokio::test]
+async fn failing_extension_does_not_stop_later_ones() {
+    let (_dir, host) = setup_many(&[("bad", BROKEN), ("good", PATCHING)]);
+    let hooks = ExtHooks::new(Arc::clone(&host));
+    let out = hooks
+        .before_tool_call(&tool_call(json!({ "path": "a" })))
+        .await
+        .unwrap();
+    assert_eq!(out.args.unwrap()["marker"], "after-error");
+    assert!(
+        hooks
+            .host()
+            .diagnostics_for("bad")
+            .iter()
+            .any(|entry| entry.code == ErrorCode::E302),
+        "failing extension should leave an E302 diagnostic"
     );
 }
 

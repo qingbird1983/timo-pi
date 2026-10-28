@@ -14,9 +14,10 @@ pub use api::{DirItem, ExecOutput, ExecRequest, FetchOutput, Grants, HostService
 pub use services::BasicServices;
 pub use types::{LoadedExtension, ToolCallResult, ToolMeta, VirtualModelMeta};
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -50,6 +51,7 @@ enum Request {
     CallTool {
         name: String,
         args: JsonValue,
+        cancel: Option<Arc<AtomicBool>>,
         reply: Sender<Result<ToolCallResult>>,
     },
     Dispatch {
@@ -153,11 +155,25 @@ impl ExtensionHost {
     /// # Errors
     /// 工具不存在/E303（JS 抛错）/E301（无法收敛）。
     pub fn call_tool(&self, name: &str, args: JsonValue) -> Result<ToolCallResult> {
+        self.call_tool_cancellable(name, args, None)
+    }
+
+    /// 执行一个已注册工具；`cancel` 置位后 QuickJS 中断处理器结束本次执行。
+    ///
+    /// # Errors
+    /// 工具不存在/E303（JS 抛错）/E301（无法收敛或取消）。
+    pub fn call_tool_cancellable(
+        &self,
+        name: &str,
+        args: JsonValue,
+        cancel: Option<Arc<AtomicBool>>,
+    ) -> Result<ToolCallResult> {
         let (reply, rx) = mpsc::channel();
         self.tx
             .send(Request::CallTool {
                 name: name.to_string(),
                 args,
+                cancel,
                 reply,
             })
             .map_err(|_| runtime(ErrorCode::E305, "extension host is not running"))?;
@@ -342,8 +358,15 @@ fn actor(
     let deadline: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
     let handler_deadline = Rc::clone(&deadline);
     let handler_services = Arc::clone(&services);
+    // 当前工具调用的取消标志（per-call；普通 hook 派发为 None）。
+    let call_cancel: Rc<RefCell<Option<Arc<AtomicBool>>>> = Rc::new(RefCell::new(None));
+    let handler_cancel = Rc::clone(&call_cancel);
     runtime.set_interrupt_handler(Some(Box::new(move || {
         handler_services.is_aborted()
+            || handler_cancel
+                .borrow()
+                .as_ref()
+                .is_some_and(|flag| flag.load(Ordering::Relaxed))
             || handler_deadline
                 .get()
                 .is_some_and(|at| Instant::now() >= at)
@@ -376,8 +399,26 @@ fn actor(
                     }
                 }
             }
-            Request::CallTool { name, args, reply } => {
-                let result = call_one(&contexts, &state, &name, &args, &deadline);
+            Request::CallTool {
+                name,
+                args,
+                cancel,
+                reply,
+            } => {
+                let cancelled = cancel.clone();
+                *call_cancel.borrow_mut() = cancel;
+                let mut result = call_one(&contexts, &state, &name, &args, &deadline);
+                *call_cancel.borrow_mut() = None;
+                if cancelled
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(Ordering::Relaxed))
+                    && result.is_err()
+                {
+                    result = Err(crate::host::runtime(
+                        ErrorCode::E301,
+                        "extension tool call cancelled",
+                    ));
+                }
                 let _ = reply.send(result);
             }
             Request::Dispatch {

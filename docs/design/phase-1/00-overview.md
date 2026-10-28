@@ -1,7 +1,7 @@
 # 设计 00：Phase 1 总览与跨 crate 决策
 
 - 状态：定稿
-- 日期：2026-10-26
+- 日期：2026-10-28（2026-10-26 定稿；2026-10-28 补依赖列修订注记）
 - 关联：roadmap/phase-1；architecture/01~05；ADR-0001/0005/0007/0009/0011；本目录 01~07
 
 ## 1. 定位
@@ -23,6 +23,8 @@
 
 - **timo-ext 不在 Phase 1 建立**（Phase 2 首个提交建立）——空壳 crate 违反防膨胀纪律（standards/08 §4 死代码零容忍）。standards/01 §1 目录树是终态布局，非 day-1 清单。
 - crate lib 名一律 `timo_xxx`（连字符转下划线，Rust 惯例）。
+
+> **2026-10-28 修订（依赖列按实现校正，原表保留）**：`timo-session` 实际依赖 `timo-ai` + `timo-config`（entry 复用消息表示、读写设置与数据目录）；`timo-tools` 实际依赖 `timo-ai`（工具输出复用 `Content`）。上文「无」是 Phase 1 开工时的计划值。
 
 ## 3. pi ↔ timo 对应总表（crate 级）
 

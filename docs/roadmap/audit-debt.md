@@ -39,14 +39,14 @@
 | # | 问题 | 证据 | 验收标准 |
 |---|---|---|---|
 | B1 ✅ | 桌面壳直接依赖 `timo-config`，绕过门面（违反 architecture/01 §2 原则 2） | `apps/timo-desktop/Cargo.toml:19`；调用点 13 处（`bridge.rs`、`bridge_providers.rs`、`settings.rs`、`features/nsh_poc/mod.rs`） | 门面补齐凭证/路径 API；`apps/timo-desktop` 的 `[dependencies]` 不再出现 `timo-config`；或按 ADR 正式豁免并回填 architecture/01 §2（2026-10-28 已修：新增 `timo_kernel::config`，路径改走 `data_dir()`） |
-| B2 | 命名空间前缀无校验；`builtin_` 前缀不存在 | `crates/timo-tools/src/registry.rs:36-38`（仅 `insert`）；内置工具裸名见 `tools/read.rs:36` 等 | 注册期校验前缀合法性，非法即拒并写诊断；或修订 architecture/02/04 措辞为「约定」而非「强制」 |
-| B3 | 「权限/信任检查」不是管线环节 | `crates/timo-agent/src/run/tools.rs:55-145`；`timo-tools/src/review.rs:3` 自述不参与权限 | 二选一：管线加入统一检查点；或修订 architecture/02 §4，明示审阅仅在写类工具内部触发 |
-| B4 | 取消未贯穿：MCP 工具执行不接 `ctx.cancel`；扩展工具用 `AtomicBool`；非 Windows 无进程组清理 | `crates/timo-mcp/src/convert.rs:158-174`；`crates/timo-kernel/src/extensions/events.rs:40-65`；`crates/timo-tools/src/tools/shell.rs:278-290` | MCP/扩展工具执行受 `ctx.cancel` 约束；非 Windows 子进程可整组终止；或以 ADR 说明接受该限制 |
-| B5 | 扩展钩子错误隔离不达设计：单个 handler 出错即中断同事件后续 handler | `crates/timo-ext/src/host/runner.rs:228-241`；设计要求 `docs/design/phase-2/04-hook-semantics.md` §8 | 单 handler 失败仅记诊断并继续下一个 |
+| B2 ✅ | 命名空间前缀无校验；`builtin_` 前缀不存在 | `crates/timo-tools/src/registry.rs:36-38`（仅 `insert`）；内置工具裸名见 `tools/read.rs:36` 等 | 已修订 architecture/02 §2/§4 与 04 §3：前缀是**注册期约定**（对齐 pi），不做强制校验；`builtin_` 不存在（2026-10-28） |
+| B3 ✅ | 「权限/信任检查」不是管线环节 | `crates/timo-agent/src/run/tools.rs:55-145`；`timo-tools/src/review.rs:3` 自述不参与权限 | 已修订 architecture/02 §4：审阅器只在写类工具内部触发（`read`/`grep`/`find` 不经过），不另设管线检查点（对齐 pi，2026-10-28） |
+| B4 ✅ | 取消未贯穿：MCP 工具执行不接 `ctx.cancel`；扩展工具用 `AtomicBool`；非 Windows 无进程组清理 | 原 `crates/timo-mcp/src/convert.rs:158-174`；`crates/timo-kernel/src/extensions/events.rs:40-65`；`crates/timo-tools/src/tools/shell.rs:278-290` | 已接：MCP 等待 `select!` 受 `ctx.cancel` 约束；扩展工具 per-call 标志交给 QuickJS 中断处理器（宿主层 E301，内核层返回 `Cancelled`）；Unix 子进程 `process_group(0)` + 整组 `kill`。测试：MCP/内核取消均立即返回（`convert.rs`、`extensions/events.rs`、`tests/cancel.rs`）。Unix 分支无 Windows CI 覆盖，随平台打包实测（2026-10-28） |
+| B5 ✅ | 扩展钩子错误隔离不达设计：单个 handler 出错即中断同事件后续 handler | 原 `crates/timo-ext/src/host/runner.rs:228-241`；设计要求 `docs/design/phase-2/04-hook-semantics.md` §8 | 已改为记诊断后 `continue`；新增跨扩展测试：前一个扩展派发失败（E302）时后一个仍生效；原两个预算超时测试改为断言 E301 诊断（派发不再整体报错）（2026-10-28） |
 | B6 ✅ | 进度回调空管道：`ToolCallUpdate` 无任何生产者 | 全仓无向 `ToolCallCtx.updates` 发送的实现 | codemode 已在 P2 批 C 产出嵌套调用进度（`→ tools.x` / `← x ok`），接口保留（2026-10-28 核实） |
 | B7 ✅ | `settings.session_dir` 字段无消费者 | `crates/timo-config/src/settings.rs`；`crates/timo-kernel/src/kernel.rs` 只用 `options.session_dir` | 已删字段；目录覆盖只走 `TIMO_AGENT_DIR` / CLI `--session-dir`，docs 与 architecture/05 同步（2026-10-28） |
 | B8 ✅ | ULID 生成器为「每写入器一个」，非文档承诺的「进程内单调」 | `crates/timo-session/src/writer.rs`；`kernel/sessions.rs` 各自 `new` | 新增 `IdGen::shared()` 进程级单例，内核两处写入器改用它（2026-10-28） |
-| B9 | 事件总线错误事件覆盖窄：供应商/认证/流错误不发 `Error` | 仅 `run/mod.rs:296`、`kernel.rs:270`、`kernel/prompt_api.rs:53` 三处 | 与 architecture/02 §5「一切错误进事件总线」对齐，或修订该措辞 |
+| B9 ✅ | 事件总线错误事件覆盖窄：供应商/认证/流错误不发 `Error` | 仅 `run/mod.rs:296`、`kernel.rs:270`、`kernel/prompt_api.rs:53` 三处 | 已修订 architecture/02 §5：error 事件仅循环级，供应商/认证/流错误走 `stop_reason=Error` 终态消息（与 §3 一致，2026-10-28） |
 
 ### C 组 —— 文档回填
 
@@ -60,7 +60,7 @@
 | C6 | architecture/05 §3/§4 | 类型名 `model.change`/`model.thinking_level_change`；字段 `created_ms` | ✅ 2026-10-27 已修订 |
 | C7 | architecture/05 §2 | 布局已按 cwd 分区（phase-3.5/07 D45/D46） | ✅ 2026-10-27 已修订 |
 | C8 | architecture/05 §4 | `usage` 实为 cache_warm 记账，非「轮次记账快照」 | ✅ 2026-10-27 已修订 |
-| C9 | design/phase-1/00 §2 | `timo-session`/`timo-tools` 记为「无内部依赖」，实为 `{ai,config}` / `{ai}` | 待收债（历史阶段文档：加修订注记，不重写原表） |
+| C9 ✅ | design/phase-1/00 §2 | `timo-session`/`timo-tools` 记为「无内部依赖」，实为 `{ai,config}` / `{ai}` | 已加修订注记，原表保留（2026-10-28） |
 | C10 ✅ | standards/04 附录 A | `time` 依赖已引入但未登记 | 已补 `time` 准入行，并同步补登同缺口 `globset`、`unicode-normalization`（2026-10-28） |
 
 ### D 组 —— 复杂度与过度工程（2026-10-27 全仓审计，10 条发现去重后 9 项）
