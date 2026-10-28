@@ -78,6 +78,21 @@ review:
   accept: Accept
   reject: Reject
 
+trust:
+  title: Trust this project?
+  intro: This project contains executable or injectable project-level resources. Confirm before they are loaded.
+  cwd: Working directory
+  resources: Project resources to load
+  accept: Trust
+  accept_parent: Trust parent folder (%{path})
+  accept_once: Trust this session only
+  deny: Do not trust
+  deny_once: Do not trust this session only
+  saved_trusted: Saved decision (trusted)
+  saved_untrusted: Saved decision (untrusted)
+  notice_untrusted: "Project not trusted (%{count} resources skipped; source: %{source})"
+  notice_trusted: "Project trusted (source: %{source})"
+
 settings:
   title: Settings
   close: Back

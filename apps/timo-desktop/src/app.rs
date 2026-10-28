@@ -11,10 +11,10 @@ use gpui_kit::component::{
     ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::*;
-use timo_kernel::{KernelEvent, KernelOptions, SessionInfo, SlashCommand, UsageSummary};
+use timo_kernel::{KernelOptions, SessionInfo, SlashCommand, UsageSummary};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo};
+use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo, TrustReport};
 use crate::features::chat::ChatState;
 use crate::features::palette::{
     AcceptReviewAction, CloseOverlayAction, NewSessionAction, OpenSettingsAction,
@@ -22,8 +22,12 @@ use crate::features::palette::{
 };
 use crate::features::review::ReviewState;
 use crate::features::settings_view::SettingsTab;
+use crate::features::trust::TrustState;
 use crate::settings::{DesktopSettings, ThemePref};
 use crate::theme;
+
+#[path = "app_events.rs"]
+mod events;
 
 /// 侧栏默认宽度（设计 01 §2：240~360，默认 248）。
 pub const SIDEBAR_WIDTH: Pixels = px(248.);
@@ -51,6 +55,8 @@ pub struct DesktopApp {
     pub(crate) font_scale: f32,
     pub(crate) settings_reset: bool,
     pub(crate) review: ReviewState,
+    pub(crate) trust: TrustState,
+    pub(crate) trust_report: Option<TrustReport>,
     pub(crate) palette: Entity<CommandState>,
     pub(crate) palette_open: bool,
     pub(crate) settings_open: bool,
@@ -204,6 +210,8 @@ impl DesktopApp {
             font_scale: settings.font_scale,
             settings_reset,
             review: ReviewState::new(window, cx),
+            trust: TrustState::new(cx),
+            trust_report: None,
             palette: cx.new(|cx| CommandState::new(window, cx)),
             palette_open: false,
             settings_open: false,
@@ -223,102 +231,6 @@ impl DesktopApp {
         }
     }
 
-    /// 当前是否为深色外观（测试与后续设置页读取）。
-    fn handle_bridge(&mut self, event: BridgeEvent, cx: &mut Context<Self>) {
-        match event {
-            BridgeEvent::Ready { model, sessions } => {
-                self.ready = true;
-                self.fatal = None;
-                self.model = Some(model);
-                self.sessions = sessions;
-            }
-            BridgeEvent::Sessions(sessions) => {
-                self.sessions = sessions;
-            }
-            BridgeEvent::Commands(commands) => {
-                self.slash_commands = commands;
-            }
-            BridgeEvent::Usage(usage) => {
-                self.usage = usage;
-            }
-            BridgeEvent::Deleted(id) => {
-                if self.session_id.as_deref() == Some(id.as_str()) {
-                    self.session_id = None;
-                    self.session_title = t!("chat.empty_session").to_string();
-                    self.chat.update(cx, |chat, _| chat.reset());
-                    self.sync_scroller(cx);
-                }
-            }
-            BridgeEvent::Opened { id, history } => {
-                self.session_id = id;
-                self.chat.update(cx, |chat, _| chat.load_history(&history));
-                self.sync_scroller(cx);
-                self.refresh_title(cx);
-            }
-            BridgeEvent::Running => {
-                self.chat.update(cx, |chat, _| chat.running = true);
-            }
-            BridgeEvent::Finished => {
-                self.chat.update(cx, |chat, _| chat.running = false);
-                self.cancel_pending_reviews(cx);
-                self.refresh_title(cx);
-            }
-            BridgeEvent::Kernel(event) => {
-                let before = self.chat.read(cx).rows.len();
-                self.chat.update(cx, |chat, _| chat.apply(&event));
-                let after = self.chat.read(cx).rows.len();
-                if after != before {
-                    self.sync_scroller(cx);
-                }
-                if matches!(event, KernelEvent::AgentFinished { .. }) {
-                    self.refresh_title(cx);
-                }
-            }
-            BridgeEvent::Review { request, respond } => {
-                self.handle_review_request(request, respond, cx);
-            }
-            BridgeEvent::Providers(providers) => {
-                self.providers = providers;
-                self.provider_error = None;
-            }
-            BridgeEvent::ProviderSaved(provider) => {
-                self.provider_error = None;
-                self.provider_feedback =
-                    Some(t!("settings.key_saved", provider = provider).to_string());
-                self.notice = Some(t!("settings.key_saved", provider = provider).to_string());
-            }
-            BridgeEvent::ProviderRemoved(provider) => {
-                self.provider_feedback =
-                    Some(t!("settings.key_removed", provider = provider).to_string());
-                self.notice = Some(t!("settings.key_removed", provider = provider).to_string());
-            }
-            BridgeEvent::ProviderError(message) => {
-                self.provider_error = Some(message);
-                self.provider_feedback = None;
-            }
-            BridgeEvent::Fatal(message) => {
-                self.ready = false;
-                self.fatal = Some(message);
-            }
-            BridgeEvent::OpenFailed(message) => {
-                self.notice = Some(t!("chat.open_failed", message = message).to_string());
-            }
-            BridgeEvent::DeleteFailed(message) => {
-                self.notice = Some(t!("chat.delete_failed", message = message).to_string());
-            }
-            BridgeEvent::RunFailed(message) => {
-                self.notice = Some(t!("chat.run_failed", message = message).to_string());
-            }
-            BridgeEvent::Busy => {
-                self.notice = Some(t!("chat.busy").to_string());
-            }
-            BridgeEvent::Lagged(skipped) => {
-                self.notice = Some(t!("chat.lagged", n = skipped).to_string());
-            }
-        }
-    }
-
-    /// 运行结束/取消时丢弃未决审阅：回传通道 drop → 工具收到取消，不执行副作用。
     fn title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         TitleBar::new().child(
             h_flex()
@@ -443,6 +355,17 @@ impl Render for DesktopApp {
         if !self.review.queue.is_empty() && !self.review.open {
             cx.defer_in(window, |this, window, cx| {
                 this.open_next_review(window, cx);
+            });
+        }
+        if self.trust.pending.is_none() && self.trust.open {
+            self.trust.open = false;
+            if window.has_active_sheet(cx) {
+                cx.defer_in(window, |_, window, cx| window.close_sheet(cx));
+            }
+        }
+        if self.trust.pending.is_some() && !self.trust.open {
+            cx.defer_in(window, |this, window, cx| {
+                this.open_trust_sheet(window, cx);
             });
         }
         let center = {

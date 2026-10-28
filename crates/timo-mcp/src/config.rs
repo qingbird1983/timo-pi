@@ -138,15 +138,18 @@ fn parse_entry(v: &serde_json::Value) -> std::result::Result<RegistryEntry, Stri
 
 /// 加载全局 + 项目 mcp.json：全局为基底；项目文件仅可覆盖同名 server 的
 /// `enabled/exposure/tool_exposure`（pi 同构）。文件缺失返回空注册表。
+/// 项目文件未受信任时传 `None`（phase-3.5/12）。
 ///
 /// # Errors
 /// 文件非法 JSON / server 名违规 / 项目文件新增 server（越权）→ [`crate::McpError`]。
 pub fn load_server_registry(
     global: &Path,
-    project: &Path,
+    project: Option<&Path>,
 ) -> crate::Result<std::collections::BTreeMap<String, RegistryEntry>> {
     let mut out = parse_file(global)?;
-    if project.exists() {
+    if let Some(project) = project
+        && project.exists()
+    {
         for (name, entry) in parse_file(project)? {
             match out.get_mut(&name) {
                 Some(base) => {
@@ -245,7 +248,7 @@ mod tests {
     #[test]
     fn missing_files_are_empty() {
         let base = std::env::temp_dir().join(format!("timo-mcp-missing-{}", std::process::id()));
-        let reg = load_server_registry(&base.join("a.json"), &base.join("b.json")).unwrap();
+        let reg = load_server_registry(&base.join("a.json"), Some(&base.join("b.json"))).unwrap();
         assert!(reg.is_empty());
     }
 
@@ -266,7 +269,7 @@ mod tests {
             r#"{"servers": {"docs": {"command": "npx", "args": ["x"], "enabled": false}}}"#,
         )
         .unwrap();
-        let reg = load_server_registry(&g, &p).unwrap();
+        let reg = load_server_registry(&g, Some(&p)).unwrap();
         assert!(!reg["docs"].enabled);
         assert_eq!(reg["docs"].timeout, 30); // 项目不可覆盖 timeout
     }

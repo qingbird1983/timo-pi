@@ -9,26 +9,29 @@ use std::path::{Path, PathBuf};
 /// 一类资源的发现根，按优先级：用户级 `<data_dir>/<dir_name>` → 项目级
 /// `.timo/<dir_name>` 与 `.pi/<dir_name>` → 自 cwd 向上每层 `.agents/<dir_name>`
 /// （遇 `.git` 停止）→ 显式路径（相对 cwd）。重复路径只保留第一次。
+///
+/// `project = false`（项目未受信任）时只保留用户级与显式路径（phase-3.5/12）。
 pub(crate) fn resource_roots(
     data_dir: &Path,
     cwd: &Path,
     extra: &[String],
     dir_name: &str,
+    project: bool,
 ) -> Vec<PathBuf> {
-    let mut roots = vec![
-        data_dir.join(dir_name),
-        cwd.join(".timo").join(dir_name),
-        cwd.join(".pi").join(dir_name),
-    ];
+    let mut roots = vec![data_dir.join(dir_name)];
+    if project {
+        roots.push(cwd.join(".timo").join(dir_name));
+        roots.push(cwd.join(".pi").join(dir_name));
 
-    let start = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let mut current = Some(start.as_path());
-    while let Some(dir) = current {
-        roots.push(dir.join(".agents").join(dir_name));
-        if dir.join(".git").exists() {
-            break;
+        let start = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+        let mut current = Some(start.as_path());
+        while let Some(dir) = current {
+            roots.push(dir.join(".agents").join(dir_name));
+            if dir.join(".git").exists() {
+                break;
+            }
+            current = dir.parent();
         }
-        current = dir.parent();
     }
 
     for raw in extra {
@@ -150,6 +153,7 @@ mod tests {
             &cwd,
             &["extra/prompts".into()],
             "prompts",
+            true,
         );
         assert_eq!(roots[0], PathBuf::from("/agent/prompts"));
         assert!(

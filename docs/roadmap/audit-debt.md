@@ -1,0 +1,107 @@
+# 审查收债：代码—文档一致性与复杂度清偿
+
+- 状态：待启动（前置：Phase 3.5 收口）
+- 日期：2026-10-27（同日两轮：三路一致性审查 + 全仓复杂度审计）
+- 关联：architecture/01~05、architecture/03-critical-seams；standards/03/04/07/08；`.agents/handoff/H-010-audit-debt.md`；`.agents/pitfalls/P-012-session-half-line-append.md`
+
+## 1. 背景
+
+2026-10-27 对 `crates/` 与 `apps/` 做了三路只读审查（依赖分层 / 事件总线与工具管线 / 会话与取消传播），逐条比对 `docs/architecture/01~05` 的书面承诺。结论：
+
+- **主体一致**：事件总线、工具元模型、会话格式骨架、QuickJS 扩展宿主均为真实实现，不是骨架。
+- **1 项数据级缺陷**：崩溃恢复存在半行拼接路径（A1），可导致会话文件永久不可读。
+- **9 项代码缺口**：文档承诺的能力未落地或只落一半（B 组）。
+- **10 项文档滞后**：文档写旧了或写满了（C 组；本轮已回填 8 项，余 2 项待收债）。
+
+**同日第二轮：全仓复杂度审计（2026-10-27）**。范围 `crates/` + `apps/`（150 个 `.rs`、29.5k 行，跳过 vendored 与构建产物）。结论：
+
+- **主体不臃肿**：无 TODO/FIXME，`#[allow(dead_code)]` 仅 1 处（有注释归属），依赖表基本零冗余。问题集中在"接口齐、语义无"的预留面与手写标准库，合计可删约 **330 行 + 1 个未用依赖**，归入 **D 组**（§3）。
+- **与既有组重叠项不重复登记**：`ToolCallCtx.updates` 空管道见 B6，`settings.session_dir` 无消费者见 B7。
+- **不在删除面**：扩展对 JS 的公开契约（`HostServices` trait、`pi.registerProvider` 等 no-op + `E202` 诊断、manifest/permissions 校验链）是书面承诺，一律保留——即使本阶段未实现，也必须"no-op + 诊断"而非静默成功。
+
+本清单是**清偿台账**：每项给出证据位置与可执行验收标准。全部清零即本批次完成。
+
+## 2. 范围
+
+- 做：逐条清偿 A/B/C/D；补最小回归测试；文档与实现重新对齐；D 组删除面按"先改文档、再删代码"的顺序执行。
+- 不做：新功能、架构重构、依赖升级、UI 改动；不借 D 组之机重写模块（只删不重设计）。任何超出清单的改动须先登记 backlog 或 ADR（standards/07 §范围纪律）。
+
+## 3. 清单
+
+### A 组 —— 数据安全（P0，优先于一切）
+
+| # | 问题 | 证据 | 验收标准 |
+|---|---|---|---|
+| A1 | `SessionWriter::open` 以追加模式续写，不清除文件末尾残留半行。崩溃留下的半行会被新 entry 拼成「带换行的非法中间行」，此后 `read_entries` 恒报 `CorruptEntry`，该会话永久不可读 | `crates/timo-session/src/writer.rs:115-134`；读取端容忍见 `reader.rs:32-39` | 打开续写前截断末尾非完整行；新增测试：写半行 → open → 追加 → 全量可读 |
+
+### B 组 —— 代码缺口
+
+| # | 问题 | 证据 | 验收标准 |
+|---|---|---|---|
+| B1 | 桌面壳直接依赖 `timo-config`，绕过门面（违反 architecture/01 §2 原则 2） | `apps/timo-desktop/Cargo.toml:19`；调用点 13 处（`bridge.rs`、`bridge_providers.rs`、`settings.rs`、`features/nsh_poc/mod.rs`） | 门面补齐凭证/路径 API；`apps/timo-desktop` 的 `[dependencies]` 不再出现 `timo-config`；或按 ADR 正式豁免并回填 architecture/01 §2 |
+| B2 | 命名空间前缀无校验；`builtin_` 前缀不存在 | `crates/timo-tools/src/registry.rs:36-38`（仅 `insert`）；内置工具裸名见 `tools/read.rs:36` 等 | 注册期校验前缀合法性，非法即拒并写诊断；或修订 architecture/02/04 措辞为「约定」而非「强制」 |
+| B3 | 「权限/信任检查」不是管线环节 | `crates/timo-agent/src/run/tools.rs:55-145`；`timo-tools/src/review.rs:3` 自述不参与权限 | 二选一：管线加入统一检查点；或修订 architecture/02 §4，明示审阅仅在写类工具内部触发 |
+| B4 | 取消未贯穿：MCP 工具执行不接 `ctx.cancel`；扩展工具用 `AtomicBool`；非 Windows 无进程组清理 | `crates/timo-mcp/src/convert.rs:158-174`；`crates/timo-kernel/src/extensions/events.rs:40-65`；`crates/timo-tools/src/tools/shell.rs:278-290` | MCP/扩展工具执行受 `ctx.cancel` 约束；非 Windows 子进程可整组终止；或以 ADR 说明接受该限制 |
+| B5 | 扩展钩子错误隔离不达设计：单个 handler 出错即中断同事件后续 handler | `crates/timo-ext/src/host/runner.rs:228-241`；设计要求 `docs/design/phase-2/04-hook-semantics.md` §8 | 单 handler 失败仅记诊断并继续下一个 |
+| B6 | 进度回调空管道：`ToolCallUpdate` 无任何生产者 | 全仓无向 `ToolCallCtx.updates` 发送的实现 | 删除接口，或至少一个工具真正产出 partial |
+| B7 | `settings.session_dir` 字段无消费者 | `crates/timo-config/src/settings.rs:100` 定义；`crates/timo-kernel/src/kernel.rs:131` 只用 `options.session_dir` | 接线或删除字段（二选一，不留死字段；standards/08 §4 死代码零容忍） |
+| B8 | ULID 生成器为「每写入器一个」，非文档承诺的「进程内单调」 | `crates/timo-session/src/writer.rs:16-18`；`kernel.rs:346`、`kernel/sessions.rs:86` 各自 `new` | 改为进程级单例，或修订 architecture/05 §6 措辞 |
+| B9 | 事件总线错误事件覆盖窄：供应商/认证/流错误不发 `Error` | 仅 `run/mod.rs:296`、`kernel.rs:270`、`kernel/prompt_api.rs:53` 三处 | 与 architecture/02 §5「一切错误进事件总线」对齐，或修订该措辞 |
+
+### C 组 —— 文档回填
+
+| # | 文档 | 偏差 | 处置 |
+|---|---|---|---|
+| C1 | architecture/01 §1 图 | `tools→ext`、`agent→mcp` 两条边不存在；`ext` 层级错位；缺 `config` 相关边 | ✅ 2026-10-27 已修订 |
+| C2 | architecture/02 §4 | 管线次序（Schema 校验在 veto 之后）与缺失环节 | ✅ 2026-10-27 已修订 |
+| C3 | architecture/02 §3 | `compaction_event` 已成 `Compacted` 且已实现；veto 走钩子不走事件 | ✅ 2026-10-27 已修订 |
+| C4 | architecture/04 §3 | `mcp_<server>_<name>` → 实际 `mcp__<server>__<tool>`；`builtin_` 不存在 | ✅ 2026-10-27 已修订 |
+| C5 | architecture/04 §1.1 | `registerProvider`/`registerMcpServer`/`registerVirtualModel`/`events` 列为真实实现，实为 no-op + 诊断 | ✅ 2026-10-27 已修订 |
+| C6 | architecture/05 §3/§4 | 类型名 `model.change`/`model.thinking_level_change`；字段 `created_ms` | ✅ 2026-10-27 已修订 |
+| C7 | architecture/05 §2 | 布局已按 cwd 分区（phase-3.5/07 D45/D46） | ✅ 2026-10-27 已修订 |
+| C8 | architecture/05 §4 | `usage` 实为 cache_warm 记账，非「轮次记账快照」 | ✅ 2026-10-27 已修订 |
+| C9 | design/phase-1/00 §2 | `timo-session`/`timo-tools` 记为「无内部依赖」，实为 `{ai,config}` / `{ai}` | 待收债（历史阶段文档：加修订注记，不重写原表） |
+| C10 | standards/04 附录 A | `time` 依赖已引入但未登记 | 待收债（补准入行） |
+
+### D 组 —— 复杂度与过度工程（2026-10-27 全仓审计，10 条发现去重后 9 项）
+
+> 处置原则：**纯死码直接删**；**pi 对齐项先改设计文档/ADR 再接线或删**（铁律 6 / ADR-0011）；**换实现项须先证明行为等价**（安全边界不得削弱）。`ToolCallCtx.updates` 空管道已在 B6、`settings.session_dir` 已在 B7，此处不重复。
+
+| # | 问题 | 证据 | 验收标准 |
+|---|---|---|---|
+| D1 | 两个未接线的执行模式：`ToolExecutionMode::Sequential`（生产恒 `Parallel`，无配置读取）、`QueueMode::All`（生产只用 `new()`） | `timo-agent/src/run/mod.rs:19-26,41`、`run/tools.rs:14-36`、`timo-kernel/src/kernel.rs:331`；`timo-agent/src/queue.rs:8-14,32-37,53-56`（`with_mode` 仅 `queue.rs:106` 测试） | 二选一：接线（pi `toolExecution` / `steeringMode` 配置）或删枚举、分支与字段；删前先改 `design/phase-1/02-timo-agent.md` §85 |
+| D2 | 三处未消费配置：`images.auto_resize`（消费端写死 `true`）、`shell_path`、`shell_command_prefix`（零读取；`session_dir` 见 B7） | `timo-config/src/settings.rs:38-50,101-104,108,131-132`；`timo-tools/src/tools/read.rs:148`（唯一赋值点，else 不可达） | 删字段与恒真分支（缺键由 `#[serde(default)]` 兼容）或接线；先确认 pi settings 同名键的对齐义务并回填文档 |
+| D3 | `timo-ai` 四个零调用 API：`AuthMethod` 及 `resolve`、`Catalog::all`、`catalog_load_error`、`AssistantMessage::tool_calls` | `timo-ai/src/auth.rs:9-47`（全仓仅定义 + `lib.rs:22` re-export）；`catalog.rs:263-268,297-306`；`types.rs:184-192` | 删除；只留 `AuthResolver`，取全量用 `by_provider`；OAuth 占位随枚举删除，Phase 5 需要时按新 ADR 加回 |
+| D4 | 宿主内部零消费面：`BasicServices::with_model`、`ExtensionHost::diagnostics()`（仅两处测试）、`ExtensionRuntime.loaded`（无读取）、`DiagnosticEntry::with_detail` | `timo-ext/src/host/services.rs:160-165`、`host.rs:239-252`、`diag.rs:266-272`；`timo-kernel/src/extensions/mod.rs:51,155,163,241,264` | 删除；诊断统一走 `diagnostics_for`；`HostServices` 契约与 `pi.*` no-op 诊断不动（非删除面） |
+| D5 | `timo-tools` 小项：`ToolOutput::error_text` 零调用、`ToolRegistry::all()` 仅测试、`read.rs` 复制 `str_param`、`sha2` 依赖零引用 | `definition.rs:88-96`、`registry.rs:62-66`；`tools/read.rs:64-71` vs `tools/write.rs:141-148`；`Cargo.toml:21` | 删前两者与依赖；`read` 改用 `crate::tools::write::str_param`（grep/find/edit/shell 已复用） |
+| D6 | `Kernel` 五个零生产消费者的查询 API：`usage_totals`（仅测试）、`usage_breakdown`、`mcp_servers`、`retry_settings`、`extension_report_json` | `timo-kernel/src/kernel/usage_api.rs:28-38`；`kernel.rs:212-216,462-466`；`kernel/ext_api.rs:16-22`；消费者只用 `usage_summary` / `extension_report`（CLI `commands.rs:85`、桌面 `bridge.rs:277,288,297,307,433`） | 删除冗余查询，只留 `usage_summary` 与 `extension_report`；删前先改 `design/phase-3.5/03-usage.md:77-79` |
+| D7 | `Reader::Indirect` 死枚举变体：生产只返回 `Read` / `Bash`，仅测试构造 | `timo-kernel/src/prompt/skills/mod.rs:41-42,442`；`prompt/mod.rs:328,330` | 删变体、match 臂与测试断言；或实际暴露隐藏读取器（二选一，不留 `#[allow(dead_code)]` 无主豁免） |
+| D8 | `timo sessions` 手写 29 行 Hinnant 公历换算，而 `time` 0.3 已在 `timo-session` 做同样换算 | `apps/timo-cli/src/sessions_cmd.rs:46-75`；对照 `timo-session/src/entry.rs:102-122`、`timo-session/Cargo.toml:15` | 复用 `time`（或由内核门面重导出格式化），删 `format_ms` + `civil_from_days`；CLI 不新增重复日期库 |
+| D9 | `fs_scope` 手写 36 行 glob 引擎（`**`/`*`/`?`），工作区已有 `ignore`/globset 可用而本 crate 未依赖 | `timo-ext/src/fs_scope.rs:111-146`，唯一调用点 `fs_scope.rs:106` | 先证明与 globset 语义等价（`**` 吞 0..n 段、单段 `*`、`?`、E403 边界），再替换手写匹配；`fs_scope.rs:185-192` 的权限测试全部保留 |
+
+## 4. 排序与前置
+
+1. **A1 最先**：唯一会丢数据的项；单独提交 + 单独测试，不与其它改动混。
+2. **B1 次之**：`apps/timo-desktop/src/settings.rs:146` 用的是 `timo_config::agent_dir()`，门面已有等价的 `timo_kernel::data_dir()`，可零成本先消一处；余下等门面 API 补齐。
+3. **D 组与 B6/B7/B8 同批清**（都是「接口有、语义无」的小口子）：
+   - 先做纯死码 **D3/D4/D5/D6/D7**（零消费者、最低风险，可一次提交，靠 `cargo test --workspace` 兜底）；
+   - 再做 **D1/D2**——先在设计文档标注「本阶段不接线」，再删或接线（pi 对齐义务，不能默默删）；
+   - **D8/D9** 单独提交，D9 必须先补语义等价对照（权限边界）。
+4. **B2/B3/B4/B5** 涉及公共契约，各自独立提交，可能引出 ADR。
+5. **C9/C10** 随收债文档批次一起做。
+
+**前置**：Phase 3.5 收口（D6 四批已落地并真机验收，见 `.agents/CONTEXT.md`；余 P2 定稿与实现），避免与在跑的会话存储/压缩改动撞车。C 组已于 2026-10-27 提前回填（纯文档，无代码冲突）。
+
+## 5. 验收
+
+- A/B/D 组全部清零；`cargo test --workspace` 全绿；新增测试至少覆盖 A1。
+- D 组清零判据：删除后无新增 `#[allow(dead_code)]` 豁免；`scripts/check-size` 通过；被删除的公共 API 在 docs 中的引用已先行改掉（先文档后代码）。
+- C 组全部回填；`docs/README.md` 清单状态同步。
+- 《阶段进度报告》按 standards/03 附录模板填写，含接缝核对与体量核对（体量核对里记 D 组净减行数）。
+
+## 6. 风险
+
+- B3/B4 触及公共契约，可能引出 ADR；若选择「修订文档而非改代码」，须在 ADR 或本清单登记豁免理由（standards/08 §6 豁免流程）。
+- **D 组的最大风险是「把 pi 对齐面当垃圾删」**：D1/D2/D3 涉及 pi 的 `toolExecution`/`steeringMode`/settings 字段与 OAuth 占位。删前必须先在设计文档写明「本阶段不做、Phase N 再接线」，否则等于悄悄丢掉行为承诺（铁律 6 / ADR-0011）。
+- **D9 触碰权限边界**：换 glob 实现后 E403 行为可能改变，现有 `fs_scope.rs:185-192` 测试必须逐条通过；不得以「简化」为名放宽 `**` 段匹配。安全边界不适用 ponytail 精简（standards/06）。
+- 本条目**不新增阶段编号**，作为 Phase 3.5 与 Phase 4 之间的**清偿批次**执行；范围不得膨胀为新功能（standards/07 范围纪律）。

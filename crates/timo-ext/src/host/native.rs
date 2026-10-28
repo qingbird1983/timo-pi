@@ -311,6 +311,13 @@ fn install_actions<'js>(
             Function::new(ctx.clone(), move || services.is_running())?,
         )?;
     }
+    {
+        let services = Arc::clone(&services);
+        native.set(
+            "isProjectTrusted",
+            Function::new(ctx.clone(), move || services.is_project_trusted())?,
+        )?;
+    }
     native.set(
         "toolUpdate",
         Function::new(ctx.clone(), move |_json: String| {})?,

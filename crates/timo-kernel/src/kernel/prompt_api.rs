@@ -17,13 +17,14 @@ impl Kernel {
     ) -> (String, Vec<prompt::Skill>, Vec<prompt::ResourceWarning>) {
         let (context_files, mut warnings) =
             prompt::discover_context_files(&self.work_dir, &self.data_dir);
-        let roots = prompt::skill_roots(&self.data_dir, &self.work_dir, &self.skill_paths);
+        let trusted = self.project_trust.trusted;
+        let roots = prompt::skill_roots(&self.data_dir, &self.work_dir, &self.skill_paths, trusted);
         let skill_set = prompt::discover(&roots);
         warnings.extend(skill_set.warnings);
         let skills = skill_set.skills;
-        let custom = prompt::custom_prompt(&self.data_dir, &self.work_dir);
-        let mut append =
-            prompt::append_system_prompt(&self.data_dir, &self.work_dir).unwrap_or_default();
+        let custom = prompt::custom_prompt(&self.data_dir, &self.work_dir, trusted);
+        let mut append = prompt::append_system_prompt(&self.data_dir, &self.work_dir, trusted)
+            .unwrap_or_default();
         // `--append-system-prompt` 的命令行文本接在同一节尾部（设计 08 §4.2 / D52）。
         for extra in &self.append_prompt {
             if extra.is_empty() {
@@ -71,6 +72,7 @@ impl Kernel {
             &self.work_dir,
             &self.template_paths,
             self.template_defaults,
+            self.project_trust.trusted,
         );
         let set = prompt::templates::load(&roots);
         self.templates = set.templates;
@@ -84,11 +86,15 @@ impl Kernel {
     }
 
     /// 重新发现上下文、技能与模板并重建提示；内容变化时下次运行重建 agent。
+    /// 信任告警随重载重新生成（不会被覆盖掉，设计 12 §3.5）。
     pub fn reload_resources(&mut self) {
         let (text, skills, warnings) = self.build_prompt();
-        self.prompt_warnings = warnings;
+        let mut all =
+            super::trust_api::warnings(&self.project_trust, &self.data_dir, &self.work_dir);
+        all.extend(warnings);
         let template_warnings = self.load_templates();
-        self.prompt_warnings.extend(template_warnings);
+        all.extend(template_warnings);
+        self.prompt_warnings = all;
         self.skills = skills;
         if text != self.prompt_text {
             self.prompt_text = text;

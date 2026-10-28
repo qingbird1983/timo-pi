@@ -44,8 +44,13 @@ pub(crate) enum Reader {
 }
 
 /// 技能根，按发现顺序；重复路径只保留第一次（约定见 `prompt::resources`）。
-pub(crate) fn skill_roots(data_dir: &Path, cwd: &Path, extra: &[String]) -> Vec<PathBuf> {
-    super::resources::resource_roots(data_dir, cwd, extra, "skills")
+pub(crate) fn skill_roots(
+    data_dir: &Path,
+    cwd: &Path,
+    extra: &[String],
+    project: bool,
+) -> Vec<PathBuf> {
+    super::resources::resource_roots(data_dir, cwd, extra, "skills", project)
 }
 
 /// 发现技能：目录含 `SKILL.md` 即技能根、不再下钻；根级 `*.md` 视为独立技能。

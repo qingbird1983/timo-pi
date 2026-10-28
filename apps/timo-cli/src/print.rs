@@ -39,7 +39,7 @@ pub(crate) struct PrintArgs {
 /// `-p` 入口；返回进程退出码（0 成功 / 1 运行失败 / 2 用法）。
 pub(crate) async fn run(args: PrintArgs) -> i32 {
     let mode = args.mode.unwrap_or(PrintMode::Text);
-    let options = match build_options(&args.common, args.max_turns) {
+    let options = match build_options(&args.common, args.max_turns, Some(false)) {
         Ok(options) => options,
         Err(message) => {
             eprintln!("[error] {message}");

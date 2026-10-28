@@ -7,9 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use timo_agent::{
-    AgentHandle, EventBus, KernelEvent, PendingMessageQueue, SessionSink, ToolExecutionMode,
-};
+use timo_agent::{AgentHandle, EventBus, KernelEvent, PendingMessageQueue, SessionSink};
 use timo_config::Clock;
 use timo_tools::{ToolDefinition, ToolRegistry};
 
@@ -25,7 +23,9 @@ mod compaction_api;
 mod ext_api;
 mod options;
 mod prompt_api;
+mod ready;
 mod sessions;
+mod trust_api;
 mod usage_api;
 mod warm_api;
 
@@ -93,6 +93,12 @@ pub struct Kernel {
     compaction: timo_config::CompactionSettings,
     /// 缓存预热器（settings.cache_warming）。
     warmer: crate::warmer::CacheWarmer,
+    /// 本次装配的项目信任结论（设计 12）。
+    project_trust: crate::trust::ProjectTrust,
+    /// pre-trust 阶段装载的扩展（批 B；首次装配时复用，避免二次初始化）。
+    pre_trust_ext: Option<ExtensionRuntime>,
+    /// 项目信任共享槽（`ctx.isProjectTrusted()`）。
+    ext_project_trust: Arc<AtomicBool>,
 }
 
 impl Kernel {
@@ -123,12 +129,88 @@ impl Kernel {
             .work_dir
             .clone()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-        let settings = timo_config::load_settings(
-            &settings_path,
-            &timo_config::project_settings_path(&work_dir),
-        )?;
+        // 项目信任先于项目资源加载（设计 12 §3.2）：`default_project_trust` 只读全局层。
+        let global_settings = timo_config::load_global_settings(&settings_path)?;
         let custom = timo_config::load_custom_providers(&models_path)?;
         let catalog = load_catalog(&custom)?;
+        let extensions_interactive = options.extensions_interactive.unwrap_or_else(|| {
+            use std::io::IsTerminal;
+            std::io::stdin().is_terminal()
+        });
+        let ext_abort = Arc::new(AtomicBool::new(false));
+        let ext_running = Arc::new(AtomicBool::new(false));
+        let ext_flags: std::collections::BTreeMap<String, String> =
+            options.ext_flags.iter().cloned().collect();
+        // 批 B：需要询问时先以"未信任"视图装载用户级扩展，让 `project_trust` 事件回答。
+        let ext_project_trust = Arc::new(AtomicBool::new(false));
+        let mut pre_trust_ext = None;
+        let mut ext_decision = None;
+        let mut ext_trust_notice = None;
+        if !options.no_extensions
+            && crate::trust::needs_extension_decision(
+                &work_dir,
+                &data_dir,
+                &global_settings,
+                options.trust_override,
+            )
+        {
+            let pre = extensions::load_extensions(ExtensionOptions {
+                data_dir: data_dir.clone(),
+                work_dir: work_dir.clone(),
+                explicit: options.extension_paths.clone(),
+                interactive: extensions_interactive,
+                include_project_pi: true,
+                include_project: false,
+                abort: Arc::clone(&ext_abort),
+                running: Arc::clone(&ext_running),
+                flags: ext_flags.clone(),
+                models: ext_api::models_snapshot(&catalog),
+                project_trusted: Arc::clone(&ext_project_trust),
+            })
+            .await;
+            if let Some(host) = &pre.host {
+                match host.dispatch(
+                    "project_trust",
+                    serde_json::json!({ "cwd": work_dir.display().to_string() }),
+                ) {
+                    Ok(value) => {
+                        if let Some(trusted) = match value.get("trusted").and_then(|v| v.as_str()) {
+                            Some("yes") => Some(true),
+                            Some("no") => Some(false),
+                            _ => None,
+                        } {
+                            ext_decision = Some(crate::trust::ExtensionDecision {
+                                trusted,
+                                remember: value
+                                    .get("remember")
+                                    .and_then(serde_json::Value::as_bool)
+                                    .unwrap_or(false),
+                            });
+                        }
+                    }
+                    Err(error) => {
+                        ext_trust_notice = Some(format!("project_trust event failed: {error}"));
+                    }
+                }
+            }
+            pre_trust_ext = Some(pre);
+        }
+        let trust = crate::trust::resolve(crate::trust::ResolveInput {
+            cwd: &work_dir,
+            data_dir: &data_dir,
+            global: &global_settings,
+            override_decision: options.trust_override,
+            extension: ext_decision,
+            prompt: options.trust_prompt.as_deref(),
+            interactive: options.trust_interactive.unwrap_or(extensions_interactive),
+        })
+        .await;
+        ext_project_trust.store(trust.trusted, Ordering::Relaxed);
+        let project_settings = trust
+            .trusted
+            .then(|| timo_config::project_settings_path(&work_dir));
+        let settings =
+            timo_config::load_settings_with(&settings_path, project_settings.as_deref())?;
         let selection_explicit = options.model_override.is_some();
         let dispatch: Arc<dyn timo_agent::ModelDispatch> = Arc::new(CatalogDispatch::new(
             catalog.clone(),
@@ -176,11 +258,21 @@ impl Kernel {
             }
             registry.register(def);
         }
-        // MCP：只读配置；连接延后到首次枚举（设计 06 §1.2）
-        let mcp_entries =
-            timo_mcp::load_server_registry(&mcp_path, &work_dir.join(".timo").join("mcp.json"))?;
+        // MCP：只读配置；连接延后到首次枚举（设计 06 §1.2）；项目文件随信任门控（12）。
+        let project_mcp = trust
+            .trusted
+            .then(|| work_dir.join(".timo").join("mcp.json"));
+        let mcp_entries = timo_mcp::load_server_registry(&mcp_path, project_mcp.as_deref())?;
         let mcp = timo_mcp::McpRuntime::new(mcp_entries).shared();
         let clock: Arc<dyn Clock> = Arc::new(timo_config::SystemClock);
+        let mut prompt_warnings = trust_api::warnings(&trust, &data_dir, &work_dir);
+        if let Some(message) = ext_trust_notice {
+            prompt_warnings.push(prompt::ResourceWarning {
+                kind: prompt::WarningKind::TrustStore,
+                message,
+                path: data_dir.clone(),
+            });
+        }
         let mut kernel = Self {
             work_dir,
             resolved,
@@ -206,12 +298,9 @@ impl Kernel {
             extension_paths: options.extension_paths,
             ext_flags: options.ext_flags.into_iter().collect(),
             extensions_enabled: !options.no_extensions,
-            extensions_interactive: options.extensions_interactive.unwrap_or_else(|| {
-                use std::io::IsTerminal;
-                std::io::stdin().is_terminal()
-            }),
-            ext_abort: Arc::new(AtomicBool::new(false)),
-            ext_running: Arc::new(AtomicBool::new(false)),
+            extensions_interactive,
+            ext_abort,
+            ext_running,
             ext: None,
             tool_review: options.tool_review,
             no_session: options.no_session,
@@ -219,7 +308,7 @@ impl Kernel {
             codemode_active: active.iter().any(|name| name == "codemode"),
             append_prompt: options.append_system_prompt,
             prompt_text: String::new(),
-            prompt_warnings: Vec::new(),
+            prompt_warnings,
             skills: Vec::new(),
             skill_paths,
             skill_commands_enabled,
@@ -228,6 +317,9 @@ impl Kernel {
             template_defaults,
             compaction: settings.compaction,
             warmer: crate::warmer::CacheWarmer::new(settings.cache_warming),
+            project_trust: trust,
+            pre_trust_ext,
+            ext_project_trust,
         };
         // 模板在装配期就装载：`/模板名` 在首轮输入也要能认出来（09 G5）。
         let template_warnings = kernel.load_templates();
@@ -295,100 +387,6 @@ impl Kernel {
     fn commit_outcome(&mut self, outcome: timo_agent::RunOutcome) -> Vec<timo_ai::Message> {
         self.history = Some(outcome.context);
         outcome.new_messages
-    }
-
-    /// 首次使用前装齐 MCP 工具并构建 agent（bus/队列在 `new` 中已就位，
-    /// 因此订阅先于首个事件）。
-    async fn ensure_ready(&mut self) {
-        let ext_events = self.bus.subscribe();
-        // 占位注册（`Hidden`）：让 `--tools codemode` 不被当成未知工具；allowlist 收敛后再按最终注册表重建。
-        self.register_codemode(false);
-        if !self.mcp_loaded {
-            self.mcp_loaded = true;
-            for server in self.mcp.enabled_servers() {
-                match self.mcp.definitions(&server).await {
-                    Ok(defs) => self.registry.register_all(defs),
-                    Err(e) => self.bus.emit(KernelEvent::Error {
-                        context: format!("mcp server `{server}`: {e}"),
-                    }),
-                }
-            }
-        }
-        if self.ext.is_none() && self.extensions_enabled {
-            let runtime = extensions::load_extensions(ExtensionOptions {
-                data_dir: self.data_dir.clone(),
-                work_dir: self.work_dir.clone(),
-                explicit: self.extension_paths.clone(),
-                interactive: self.extensions_interactive,
-                include_project_pi: true,
-                abort: Arc::clone(&self.ext_abort),
-                running: Arc::clone(&self.ext_running),
-                flags: self.ext_flags.clone(),
-                models: self.extension_models(),
-            })
-            .await;
-            if let Some(host) = &runtime.host {
-                for meta in host.tools() {
-                    self.registry
-                        .register(extensions::tool_definition(&meta, Arc::clone(host)));
-                }
-                extensions::forward_events(ext_events, Arc::clone(host));
-            }
-            self.ext = Some(runtime);
-        }
-        // `--tools`：内置 + MCP + 扩展全部注册完再收敛声明面（设计 08 §4.2）。
-        let stray = self
-            .tool_allowlist
-            .clone()
-            .map(|allowlist| self.registry.apply_allowlist(&allowlist))
-            .unwrap_or_default();
-        self.apply_codemode_activation();
-        if self.agent.is_none() {
-            let (hooks, provider_hooks) =
-                match self.ext.as_ref().and_then(|runtime| runtime.hooks.clone()) {
-                    Some(hooks) => (
-                        Some(Arc::clone(&hooks) as Arc<dyn timo_agent::LoopHooks>),
-                        Some(hooks as Arc<dyn timo_ai::ProviderHooks>),
-                    ),
-                    None => (None, None),
-                };
-            let (system_prompt, skills, warnings) = self.build_prompt();
-            self.prompt_warnings = warnings;
-            for stray in &stray {
-                self.prompt_warnings.push(prompt::ResourceWarning {
-                    kind: prompt::WarningKind::UnknownTool,
-                    message: format!("unknown tool `{stray}`"),
-                    path: self.work_dir.clone(),
-                });
-            }
-            self.skills = skills;
-            let agent = AgentHandle::with_parts(
-                timo_agent::LoopConfig {
-                    model: self.resolved.model.clone(),
-                    api: timo_ai::api_for(self.resolved.model.api),
-                    tools: Arc::new(self.registry.clone()),
-                    thinking_level: self.resolved.thinking,
-                    auth: Arc::clone(&self.resolved.auth),
-                    tool_execution: ToolExecutionMode::Parallel,
-                    retry: self.retry.clone(),
-                    cwd: Arc::from(self.work_dir.as_path()),
-                    system_prompt: system_prompt.clone(),
-                    clock: Arc::clone(&self.clock),
-                    max_turns: self.max_turns,
-                    compaction: Some(self.compaction.clone()),
-                    hooks,
-                    provider_hooks,
-                    review: self.tool_review.clone(),
-                    dispatch: Some(Arc::clone(&self.dispatch)),
-                    route_state: Arc::clone(&self.route_state),
-                },
-                self.bus.clone(),
-                Arc::clone(&self.steering),
-                Arc::clone(&self.follow_up),
-            );
-            self.prompt_text = system_prompt;
-            self.agent = Some(agent);
-        }
     }
 
     /// 当前会话 id（未开跑为 None）。

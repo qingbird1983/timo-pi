@@ -1,6 +1,6 @@
 # Phase 3.5：内核深化——编排层与交互数据层对齐 pi
 
-- 状态：P0 完成（批 1~5，D1/D2/D4/D7 验收通过 2026-10-27）；P1 完成（P1.1~P1.4，D3/D5 与 D4 缓存半场验收通过 2026-10-27）；**D6 完成**（详设 08 定稿 + 实现四批落地：宿主 `readFile`/`listDir`/`execParallel` → CLI 三参数 → 工具用量回报 → subagent 扩展；真机 DeepSeek 三模式验收通过 2026-10-27，读数见 `docs/design/phase-3.5/report.md`）；**P2 第一题完成**（prompt 模板：详设 09 定稿 + 实现落地，D56 workflow 预设 `/implement` 等真机跑通，同日读数同报告）；**P2 第二题完成**（详设 10 定稿；批 A provider 配置面与虚拟模型 B1~B3 全部落地：目录条目 → 路由契约/reason/扩展注册 → 状态与分支选择）；**P2 第三题详设定稿**（codemode 与嵌套工具调用：详设 11，2026-10-27；D72~D79 已登记），**批 A 嵌套接缝已落地**（`ToolCallCtx.nested`/记录/顺序/取消/用量；380 tests，11 变异），**批 B 沙箱与工具面已落地**（QuickJS 沙箱、脚本全局、输出/资源限制、激活面；406 tests，19 变异，2026-10-28），**批 C 接线与真机完成**（CLI/桌面嵌套进度、Windows 外壳探测修正；DeepSeek 三场景；413 tests，26 变异，2026-10-28），**P2 第三题完成**。P2 余下信任门控待定稿。报告 `docs/design/phase-3.5/report.md`。**对应批次设计文档定稿前禁止写实现代码**（standards/03）。
+- 状态：P0 完成（批 1~5，D1/D2/D4/D7 验收通过 2026-10-27）；P1 完成（P1.1~P1.4，D3/D5 与 D4 缓存半场验收通过 2026-10-27）；**D6 完成**（详设 08 定稿 + 实现四批落地：宿主 `readFile`/`listDir`/`execParallel` → CLI 三参数 → 工具用量回报 → subagent 扩展；真机 DeepSeek 三模式验收通过 2026-10-27，读数见 `docs/design/phase-3.5/report.md`）；**P2 第一题完成**（prompt 模板：详设 09 定稿 + 实现落地，D56 workflow 预设 `/implement` 等真机跑通，同日读数同报告）；**P2 第二题完成**（详设 10 定稿；批 A provider 配置面与虚拟模型 B1~B3 全部落地：目录条目 → 路由契约/reason/扩展注册 → 状态与分支选择）；**P2 第三题详设定稿**（codemode 与嵌套工具调用：详设 11，2026-10-27；D72~D79 已登记），**批 A 嵌套接缝已落地**（`ToolCallCtx.nested`/记录/顺序/取消/用量；380 tests，11 变异），**批 B 沙箱与工具面已落地**（QuickJS 沙箱、脚本全局、输出/资源限制、激活面；406 tests，19 变异，2026-10-28），**批 C 接线与真机完成**（CLI/桌面嵌套进度、Windows 外壳探测修正；DeepSeek 三场景；413 tests，26 变异，2026-10-28），**P2 第三题完成**。**P2 第四题批 A 落地**（项目信任门控：详设 12，2026-10-28；D80~D87；trust 模块 + 六面门控 + CLI 参数/告警 + `/trust` + 真机对照；438 tests，36 累计变异），**批 B 已落地**（扩展 `project_trust` 事件与首决定语义、`ctx.isProjectTrusted()` 活值、pre-trust 宿主复用、子代理与项目 `.timo/agents` 随信任；446 tests，累计 44 变异；DeepSeek 含 T10 子进程 argv 读数，2026-10-28），**批 C 落地**（桌面 `TrustPrompt` 回调与 `BridgeEvent::Trust/TrustReport`、五项选择 sheet、Esc=仅本次不信任；CLI 矩阵 T1/T5/T6/T7；451 tests，累计 48 变异，2026-10-28）；剩 T9 桌面实机（GUI 启动需人工）与 T8 TTY 复验。报告 `docs/design/phase-3.5/report.md`。**对应批次设计文档定稿前禁止写实现代码**（standards/03）。
 - 前置：Phase 3 整体验收通过（tag `phase-3.end`）。Phase 4（GUI 插件）顺延至本阶段之后，编号不变（ADR-0013 §决策 2）。
 - 参考估时：3~6 周
 - 关联：ADR-0011/0013；research/01 §5、research/06；architecture/02/03
@@ -55,7 +55,7 @@
 ## 4. 文档交付物
 
 - research/06 定稿（R1 完成，2026-10-27：交互语义清单、数据流图、提示词工程合同、会话工作流、审批对照）。
-- `design/phase-3.5/00-overview.md` + 按模块拆分详设（单文件 ≤500 行），全部定稿后开工。P0 详设 00~03 已定稿（2026-10-27）；P1 详设 04~07 已定稿（compaction/缓存/无头/会话存储）；D6 标尺详设 08 已定稿（subagent 扩展）；P2 详设随批次补写：09 已定稿（prompt 模板，含 D56 workflow 预设），10 已定稿（provider composer / 虚拟模型），11 已定稿（codemode 与嵌套工具调用），12（信任门控）待写。
+- `design/phase-3.5/00-overview.md` + 按模块拆分详设（单文件 ≤500 行），全部定稿后开工。P0 详设 00~03 已定稿（2026-10-27）；P1 详设 04~07 已定稿（compaction/缓存/无头/会话存储）；D6 标尺详设 08 已定稿（subagent 扩展）；P2 详设随批次补写：09 已定稿（prompt 模板，含 D56 workflow 预设），10 已定稿（provider composer / 虚拟模型），11 已定稿（codemode 与嵌套工具调用），12 已定稿（项目信任门控，2026-10-28；D80~D87）。
 
 ## 5. 验收场景
 

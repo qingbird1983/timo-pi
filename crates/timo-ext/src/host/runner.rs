@@ -14,7 +14,11 @@ use crate::Result;
 use crate::diag::{DiagnosticEntry, ErrorCode};
 use crate::error::ExtError;
 
-const RUNTIME_JS: &str = include_str!("../shim/runtime.js");
+/// 宿主运行时：核心 API 与事件派发分两文件，按序拼接后一次求值。
+const RUNTIME_JS: &str = concat!(
+    include_str!("../shim/runtime.js"),
+    include_str!("../shim/runtime_dispatch.js")
+);
 
 pub(super) fn load_one(
     runtime_handle: &rquickjs::Runtime,
@@ -325,6 +329,16 @@ pub(super) fn dispatch_all(
                     object.insert("systemPrompt".into(), prompt.clone());
                 }
                 merged = current.clone();
+            }
+            "project_trust" => {
+                // 第一个 yes/no 拥有决定；undecided/null 继续。
+                if matches!(
+                    result.get("trusted").and_then(JsonValue::as_str),
+                    Some("yes" | "no")
+                ) {
+                    merged = result;
+                    break;
+                }
             }
             _ => {
                 if !result.is_null() {

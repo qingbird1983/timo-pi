@@ -396,3 +396,82 @@ fn settings_page_lists_credentials(cx: &mut TestAppContext) {
     })
     .unwrap();
 }
+
+fn trust_request() -> timo_kernel::trust::TrustRequest {
+    use timo_kernel::trust::{ProjectResource, ResourceKind};
+    timo_kernel::trust::TrustRequest {
+        cwd: std::path::PathBuf::from("/work/demo"),
+        resources: vec![ProjectResource {
+            kind: ResourceKind::SystemPrompt,
+            path: std::path::PathBuf::from("/work/demo/.timo/SYSTEM.md"),
+        }],
+        saved: None,
+    }
+}
+
+/// 信任询问到达后弹出 sheet，点“信任”回传目录级决定（设计 12 §3.4）。
+#[gpui_kit::test]
+fn trust_sheet_accept_returns_directory_choice(cx: &mut TestAppContext) {
+    use timo_kernel::{TrustChoice, TrustScopeChoice};
+    cx.update(gpui_kit::init);
+    crate::i18n::init();
+    let (handle, _app, events_tx, _commands) = open(cx);
+    let (respond, mut choice) = tokio::sync::oneshot::channel();
+    events_tx
+        .send(BridgeEvent::Trust {
+            request: trust_request(),
+            respond,
+        })
+        .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(window.try_find("trust-accept").is_some());
+        window.click("trust-accept", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        choice.try_recv().unwrap(),
+        Some(TrustChoice {
+            trusted: true,
+            scope: TrustScopeChoice::Directory,
+        })
+    );
+}
+
+/// 关窗/Esc 走“仅本次不信任”，且不会写盘（设计 12 §3.4）。
+#[gpui_kit::test]
+fn escape_denies_trust_for_session_only(cx: &mut TestAppContext) {
+    use timo_kernel::{TrustChoice, TrustScopeChoice};
+    cx.update(gpui_kit::init);
+    crate::i18n::init();
+    let (handle, _app, events_tx, _commands) = open(cx);
+    let (respond, mut choice) = tokio::sync::oneshot::channel();
+    events_tx
+        .send(BridgeEvent::Trust {
+            request: trust_request(),
+            respond,
+        })
+        .unwrap();
+    cx.run_until_parked();
+    cx.update_window(handle, |_, window, cx| window.render_frame(cx))
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        window.press("escape", cx);
+        window.render_frame(cx);
+    })
+    .unwrap();
+    assert_eq!(
+        choice.try_recv().unwrap(),
+        Some(TrustChoice {
+            trusted: false,
+            scope: TrustScopeChoice::Session,
+        })
+    );
+}

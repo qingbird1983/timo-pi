@@ -24,7 +24,7 @@ async fn stdio_echo_server_roundtrip() {
     });
     std::fs::write(&config, serde_json::to_string(&json).unwrap()).unwrap();
 
-    let entries = timo_mcp::load_server_registry(&config, &dir.join("project.json")).unwrap();
+    let entries = timo_mcp::load_server_registry(&config, Some(&dir.join("project.json"))).unwrap();
     let runtime = timo_mcp::McpRuntime::new(entries).shared();
     assert_eq!(runtime.enabled_servers(), vec!["echo"]);
 

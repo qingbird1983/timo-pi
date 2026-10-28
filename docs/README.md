@@ -40,7 +40,7 @@ docs/
 | research/06-pi-interaction-logic.md | 定稿 | pi 交互逻辑/数据流向/提示词工程调查（Phase 3.5 R1 产出：提示词合同、数据流图、17 条交互对照） |
 | research/07-ui-references.md | **草稿** | 桌面壳 UI 参考清单（三类产品图链+设计语言笔记；视觉精修批次前置素材，随时增补） |
 | research/08-zcode-desktop-study.md | **草稿** | ZCode 桌面端交互逻辑与数据流源码调查（Apache-2.0 同类实现，330 篇设计文档库；分三批执行） |
-| adr/ADR-0001 ~ 0013 | 定稿 | 13 项重大决策（见各文件；0013 = 内核深化阶段立项） |
+| adr/ADR-0001 ~ 0014 | 定稿 | 14 项重大决策（见各文件；0013 = 内核深化阶段立项，0014 = docs 文档总数软上限 60→120） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
 | architecture/02-kernel.md | 定稿 | 内核模块划分与关键设计 |
 | architecture/03-critical-seams.md | 定稿 | MVP 必须预留的接缝清单（防返工核心） |
@@ -81,10 +81,12 @@ docs/
 | design/phase-3.5/09-prompt-templates.md | 定稿 | P2 第一题：prompt 模板发现与 `$@` 占位展开、命令清单接线、D56 workflow 预设 |
 | design/phase-3.5/10-provider-composer.md | 定稿 | P2 第二题：请求头/认证头/兼容性配置面，虚拟模型的目录/路由/状态三步 |
 | design/phase-3.5/11-codemode.md | 定稿 | P2 第三题：脚本沙箱、嵌套工具调用接缝、输出截断与资源限制（D72~D79） |
-| design/phase-3.5/report.md | 进度中（P0+P1+D6 完成，P2 两题在落地） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板与 provider 配置面，含真机读数与体量核对 |
+| design/phase-3.5/12-project-trust.md | 定稿 | P2 第四题：项目信任门控的决策链、门控面清单、`trust.json` 存储、交互通道与批次（D80~D87） |
+| design/phase-3.5/report.md | 进度中（P0+P1+D6 完成，P2 前三题落地、第四题定稿） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板/provider/codemode 实现，含真机读数与体量核对 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
-| roadmap/phase-0 ~ phase-4 | phase-3.5 进行中（P0 完成）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
+| roadmap/audit-debt.md | 待启动（Phase 3.5 收口后） | 审查收债：代码—文档一致性与复杂度清偿台账（A 数据缺陷 1 项 + B 代码缺口 9 项 + C 文档滞后 2 项 + D 复杂度清理 9 项） |
+| roadmap/phase-0 ~ phase-4 | phase-3.5 进行中（P0/P1/D6/P2 前三题完成）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
 | standards/01 ~ 07 | 定稿 | 仓库/提交/文档/代码/测试/安全/协作规范 |
 | standards/08-size-control.md | 定稿 | 体量与防膨胀管理（docs/.agents/代码/依赖的预算与清理机制） |
 | standards/09-standards-review.md | 定稿 | 规范自身的复查与进化（漏洞/过严/过松的例行与触发复查、修正分级） |

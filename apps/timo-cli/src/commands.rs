@@ -1,6 +1,6 @@
 //! CLI 输入分发（设计 phase-3.5/02 §6.2 + 09 G5）：扩展命令 → 内建 → `/skill:` → 模板 → 普通提示。
 
-use timo_kernel::{Kernel, WarmingState};
+use timo_kernel::{Kernel, TrustSource, WarmingState};
 
 use crate::run_prompt;
 
@@ -130,6 +130,29 @@ pub(crate) async fn handle_command(kernel: &mut Kernel, text: &str) -> CommandOu
             eprintln!("[reload] context files and skills reloaded");
             CommandOutcome::Handled
         }
+        "trust" => {
+            let request = kernel.trust_request();
+            if request.resources.is_empty() {
+                eprintln!("[trust] no project resources to gate in this folder");
+                return CommandOutcome::Handled;
+            }
+            let Some(choice) = timo_kernel::trust::ask_stdin(&request) else {
+                eprintln!("[trust] no choice made");
+                return CommandOutcome::Handled;
+            };
+            match kernel.save_project_trust(choice) {
+                Ok(()) => eprintln!(
+                    "[trust] saved: {}. Restart for it to take effect.",
+                    if choice.trusted {
+                        "trusted"
+                    } else {
+                        "untrusted"
+                    }
+                ),
+                Err(error) => eprintln!("[error] {error}"),
+            }
+            CommandOutcome::Handled
+        }
         "export" => {
             let target = (!rest.is_empty()).then(|| std::path::Path::new(rest));
             match kernel.export_session(target) {
@@ -202,6 +225,15 @@ fn warming_line(state: WarmingState) -> String {
 }
 
 pub(crate) fn print_resource_warnings(kernel: &Kernel) {
+    let trust = kernel.project_trust();
+    if trust.trusted
+        && !matches!(
+            trust.source,
+            TrustSource::NoResources | TrustSource::Override
+        )
+    {
+        eprintln!("[trust] project trusted (source: {})", trust.source.label());
+    }
     for warning in kernel.resource_warnings() {
         eprintln!("[warn] {}: {}", warning.path.display(), warning.message);
     }

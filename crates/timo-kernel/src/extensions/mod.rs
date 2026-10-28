@@ -33,6 +33,8 @@ pub struct ExtensionOptions {
     pub interactive: bool,
     /// 是否扫描 `<cwd>/.pi/extensions/`。
     pub include_project_pi: bool,
+    /// 是否扫描项目级扩展目录（项目未受信任时为 false，phase-3.5/12）。
+    pub include_project: bool,
     /// 共享取消标志（与内核 run 同一个 epoch）。
     pub abort: Arc<AtomicBool>,
     /// `ctx.isIdle` 依据。
@@ -41,6 +43,8 @@ pub struct ExtensionOptions {
     pub flags: std::collections::BTreeMap<String, String>,
     /// 目录快照（`ctx.modelRegistry`；设计 10 §4.2）。
     pub models: Vec<serde_json::Value>,
+    /// 项目信任共享槽（`ctx.isProjectTrusted()`；pre-trust 装载时为 false）。
+    pub project_trusted: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// 装载结果。
@@ -102,6 +106,29 @@ impl ExtensionRuntime {
 
 /// 装载全部扩展；单个失败不影响其他扩展。
 pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
+    load_extensions_with(options, None).await
+}
+
+/// 同 [`load_extensions`]，可复用 pre-trust 装载的宿主与已装载扩展：
+/// 只补装新出现的项目扩展，用户级不重复初始化（对齐 pi 的两遍装载，设计 12 §6）。
+pub async fn load_extensions_with(
+    options: ExtensionOptions,
+    pre: Option<ExtensionRuntime>,
+) -> ExtensionRuntime {
+    let (pre_host, mut report, mut loaded, absorbed, already) = match pre {
+        Some(pre) => {
+            let already: std::collections::HashSet<String> =
+                pre.loaded.iter().map(|ext| ext.id.clone()).collect();
+            (pre.host, pre.report, pre.loaded, pre.absorbed, already)
+        }
+        None => (
+            None,
+            DiagnosticReport::new(now(), env!("CARGO_PKG_VERSION")),
+            Vec::new(),
+            std::collections::HashMap::new(),
+            std::collections::HashSet::new(),
+        ),
+    };
     let grants_path = options.data_dir.join("permissions.json");
     let mut grants = PermissionStore::load(&grants_path).unwrap_or_default();
     let outcome = discover(&DiscoveryOptions {
@@ -109,8 +136,8 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
         data_dir: Some(options.data_dir.clone()),
         explicit: options.explicit.clone(),
         include_project_pi: options.include_project_pi,
+        include_project: options.include_project,
     });
-    let mut report = DiagnosticReport::new(now(), env!("CARGO_PKG_VERSION"));
     for issue in &outcome.issues {
         report.push(ExtensionDiagnostic {
             id: issue
@@ -134,37 +161,43 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
         .with_abort_flag(Arc::clone(&options.abort))
         .with_running(Arc::clone(&options.running))
         .with_flags(options.flags.clone())
-        .with_models(options.models.clone());
+        .with_models(options.models.clone())
+        .with_project_trusted(Arc::clone(&options.project_trusted));
     let budget = std::env::var("TIMO_EXT_BUDGET_MS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .map(Duration::from_millis)
         .unwrap_or(HOOK_BUDGET);
-    let host = match ExtensionHost::start(Arc::new(base), budget) {
-        Ok(host) => Arc::new(host),
-        Err(error) => {
-            report.push(ExtensionDiagnostic {
-                id: "extensions".to_string(),
-                path: String::new(),
-                status: Status::Failed,
-                source_hash: None,
-                registered: Default::default(),
-                degraded: vec![],
-                errors: vec![DiagnosticEntry::new(ErrorCode::E202, error.to_string())],
-            });
-            return ExtensionRuntime {
-                host: None,
-                hooks: None,
-                loaded: vec![],
-                report,
-                commands: vec![],
-                grants_path,
-                absorbed: std::collections::HashMap::new(),
-            };
-        }
+    let host = match pre_host {
+        Some(host) => host,
+        None => match ExtensionHost::start(Arc::new(base), budget) {
+            Ok(host) => Arc::new(host),
+            Err(error) => {
+                report.push(ExtensionDiagnostic {
+                    id: "extensions".to_string(),
+                    path: String::new(),
+                    status: Status::Failed,
+                    source_hash: None,
+                    registered: Default::default(),
+                    degraded: vec![],
+                    errors: vec![DiagnosticEntry::new(ErrorCode::E202, error.to_string())],
+                });
+                return ExtensionRuntime {
+                    host: None,
+                    hooks: None,
+                    loaded,
+                    report,
+                    commands: vec![],
+                    grants_path,
+                    absorbed,
+                };
+            }
+        },
     };
-    let mut loaded = Vec::new();
     for discovered in outcome.extensions {
+        if already.contains(&discovered.id) {
+            continue;
+        }
         let id = discovered.id.clone();
         let path = discovered.root.display().to_string();
         let mut diagnostic = ExtensionDiagnostic::new(&id, &path, Status::Loaded);
@@ -216,7 +249,8 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
                     .with_abort_flag(Arc::clone(&options.abort))
                     .with_running(Arc::clone(&options.running))
                     .with_flags(options.flags.clone())
-                    .with_models(options.models.clone()),
+                    .with_models(options.models.clone())
+                    .with_project_trusted(Arc::clone(&options.project_trusted)),
                 );
                 let bundle = root.join(&manifest.bundle);
                 match host.load_with(&id, &bundle, services) {
@@ -269,7 +303,7 @@ pub async fn load_extensions(options: ExtensionOptions) -> ExtensionRuntime {
         report,
         commands,
         grants_path,
-        absorbed: std::collections::HashMap::new(),
+        absorbed,
     };
     runtime.save_report();
     runtime

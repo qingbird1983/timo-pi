@@ -174,13 +174,13 @@ fn switching_off_defaults_keeps_explicit_paths() {
     );
     let extra = vec![explicit.to_string_lossy().to_string()];
 
-    let all = template_roots(&dir.join("agent"), &dir, &extra, true);
+    let all = template_roots(&dir.join("agent"), &dir, &extra, true, true);
     assert!(all.contains(&dir.join("agent").join("prompts")));
     assert!(all.contains(&dir.join(".timo").join("prompts")));
     assert!(all.contains(&dir.join(".pi").join("prompts")));
     assert_eq!(all.last().unwrap(), &explicit);
 
-    let only_explicit = template_roots(&dir.join("agent"), &dir, &extra, false);
+    let only_explicit = template_roots(&dir.join("agent"), &dir, &extra, false, true);
     assert_eq!(only_explicit, vec![explicit.clone()]);
     let set = load(&only_explicit);
     assert_eq!(set.templates.len(), 1);

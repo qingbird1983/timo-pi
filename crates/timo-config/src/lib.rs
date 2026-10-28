@@ -27,8 +27,8 @@ pub use paths::{
     sessions_dir, settings_path,
 };
 pub use settings::{
-    CacheWarmingMode, CompactionSettings, ImageSettings, RetrySettings, Settings, load_settings,
-    resolve_default_tools,
+    CacheWarmingMode, CompactionSettings, DefaultProjectTrust, ImageSettings, RetrySettings,
+    Settings, load_global_settings, load_settings, load_settings_with, resolve_default_tools,
 };
 pub use thinking::ThinkingLevel;
 

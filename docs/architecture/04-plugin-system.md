@@ -1,7 +1,7 @@
 # 架构 04：插件系统设计（双轨制）
 
 - 状态：定稿（A 轨矩阵定稿；B 轨为框架级定稿，Phase 4 开工前出详细设计并定稿）
-- 日期：2026-10-26
+- 日期：2026-10-27（2026-10-26 初稿；2026-10-27 按实现校正命名空间写法与 §1.1 实现清单；同日第二轮：`registerVirtualModel` 落地）
 - 关联：ADR-0003/0004/0006；research/02、research/04
 
 ## 0. 双轨总览
@@ -20,14 +20,18 @@
 
 | 分类 | 成员 |
 |---|---|
-| 注册 | `registerTool`、`registerCommand`、`registerFlag`、`registerProvider`/`unregisterProvider`、`registerMcpServer`、`registerVirtualModel`、`events` 总线 |
+| 注册 | `registerTool`、`registerCommand`、`registerFlag`、`registerVirtualModel`/`unregisterVirtualModel`（真实实现；虚拟条目由 `models.json` 声明，注册只提供路由函数——设计 10 D69）；`registerProvider`/`unregisterProvider`、`registerMcpServer`、`events` 总线 → **no-op + 诊断，见 §1.2** |
 | 事件钩子 | `on()`：before_agent_start（含 systemPrompt 替换）、context、before_provider_request/headers、after_provider_response、tool_call（veto/改参）、tool_result（改写）、agent_start/end、turn_start/end、session_start、compact、error |
-| 动作 | `exec`、`sendUserMessage`、`setActiveTools`/`getAllTools`/`getActiveTools`、`setModel`、`getThinkingLevel`/`setThinkingLevel`、`getSettings`、`getCommands` |
+| 动作 | `exec`、`sendUserMessage`、`setActiveTools`/`getAllTools`/`getActiveTools`、`setModel`、`getThinkingLevel`/`setThinkingLevel`、`getSettings`、`getCommands`、`ctx.modelRegistry.find`/`getModels`/`getAllModels`（目录快照） |
 | 工具定义 | TypeBox/JSON Schema 参数、execute、outputSchema、exposure、namespace、annotations、promptSnippet/promptGuidelines |
 
 ### 1.2 缓做（deferred v2，成员存在、返回"未实现"诊断）
 
 `sendMessage`、`appendEntry`、sessionManager 读接口、`switchSession`/`newSession`/`fork`、`registerShortcut`、markdown transformer、editor 读写、autocomplete。
+
+> **2026-10-27 修订（逐项状态按实现校正；当时口径，已被下一条部分覆盖）**：`registerProvider`/`unregisterProvider`、`registerMcpServer`、`registerVirtualModel`、`events` 总线**不在"真实实现"之列**——当前为 no-op + 诊断（`E202`），且 `route_model` 恒返回空；`registerVirtualModel` 的"受限支持"亦未落地。已从 §1.1 移入本口径。详见 `docs/design/phase-2/report.md` §4 与 `docs/roadmap/audit-debt.md`。
+>
+> **2026-10-27 第二轮修订（P2 第二题 B2）**：`registerVirtualModel`/`unregisterVirtualModel` 已实装真实路由（JS `route(request, ctx)` 每次请求前同步调用，reason ∈ user/continuation/retry/direct），`ctx.modelRegistry` 提供目录快照；`route_model` 不再是恒空占位。`registerProvider`/`registerMcpServer`/`events` 总线仍为 no-op + 诊断。契约见 `docs/design/phase-3.5/10-provider-composer.md` §4.2。
 
 ### 1.3 不支持（TUI 面：成员存在但 no-op，永不 throw，每扩展每成员一条诊断）
 
@@ -59,7 +63,7 @@
 - **声明 + 授予双闸**：manifest 声明能力 → 用户逐项批准；高风险能力（文件写删、网络、执行）默认拒绝。
 - fs 作用域 glob：**写/删禁止全树声明**（读可）；网络：域名白名单 **fail-closed**（未声明 = 无网）。
 - 硬拒：`.env*`、SSH 凭证、`.git/**`。
-- 命名空间强制：工具/命令一律 `plugin_<id>_<name>` / `mcp_<server>_<name>`。
+- 命名空间：扩展工具/命令为 `plugin_<id>_<name>`；MCP 工具为 `mcp__<server>__<tool>`（**双下划线**，避免工具名内下划线造成歧义）；内置工具**无前缀**（裸名 `read`/`write`/`edit`/`bash`/`powershell`/`grep`/`find`）。注册期当前**不做前缀校验**（约定而非强制），清偿项见 `docs/roadmap/audit-debt.md` B2。
 
 ## 4. B 轨：GUI 原生插件（框架级定稿，细节 Phase 4 设计文档定）
 

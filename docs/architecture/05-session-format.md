@@ -1,7 +1,7 @@
 # 架构 05：会话磁盘格式（定稿）
 
 - 状态：**定稿**（2026-10-26；实现级细节与测试计划见 design/phase-1/04、07）
-- 日期：2026-10-26
+- 日期：2026-10-27（2026-10-26 定稿；2026-10-27 按实现校正布局、类型名与字段名；同日补 `session.virtual_model_state`）
 - 关联：ADR-0007；architecture/02/03；design/phase-1/04
 
 ## 1. 设计目标（最终形态，一步到位）
@@ -15,10 +15,12 @@
 ## 2. 存储布局（定稿）
 
 ```
-<数据目录>/sessions/<session-id>.jsonl     会话主体 = 唯一权威（append-only entry 流）
+<数据目录>/sessions/--<encoded-cwd>--/<session-id>.jsonl   新会话（Phase 3.5 D45，按 cwd 分区）
+<数据目录>/sessions/<session-id>.jsonl                     旧平铺（只读兼容，D46）
 ```
 
-- 数据目录：Windows `%APPDATA%\timo-pi` / macOS `~/Library/Application Support/Timo-pi` / Linux `$XDG_DATA_HOME/timo-pi`；`TIMO_AGENT_DIR` 与 settings `session_dir` 可覆盖。
+- 数据目录：Windows `%APPDATA%\timo-pi` / macOS `~/Library/Application Support/timo-pi` / Linux `$XDG_DATA_HOME/timo-pi`；`TIMO_AGENT_DIR`（及 CLI `--session-dir`）可覆盖。settings 中的 `session_dir` 字段当前**无消费者**，清偿项见 `docs/roadmap/audit-debt.md` B7。
+- **2026-10-27 修订（布局按实现校正）**：Phase 3.5 D45/D46 起，新会话写入 `sessions/--<encoded-cwd>--/` 项目分区，旧平铺文件只读兼容、不迁移；列表与恢复跨分区（详见 `docs/design/phase-3.5/07-session-storage.md`）。
 - 草案中的 `<id>.meta.json` 与 `index.json` **删除**：元信息并入首条 `session.header`；会话列表 = 扫描 `.jsonl` 文件头（单文件读取上限 1MB）。单一权威 = entry 流本身。
 
 ## 3. Entry 信封（定稿）
@@ -37,15 +39,17 @@
 
 | type | payload 要点 |
 |---|---|
-| session.header | 首条：format_version、session_id、created_ts、cwd、parent_session_id?、initial_model? |
+| session.header | 首条：format_version、session_id、created_ms、cwd、parent_session_id?、initial_model? |
 | message | 完整消息（role 判别 user/assistant/tool_result/system；assistant content 含 ToolCall 块；tool_result 为独立 role）——同一事实单处表达 |
-| model_change | provider、model_id |
-| thinking_level_change | level |
-| usage | 轮次记账快照（kind、provider、model、usage） |
+| model.change | provider、model_id |
+| model.thinking_level_change | level |
+| usage | 当前仅缓存预热记账（`{"kind":"cache_warm",…}`）；**不是**轮次记账——phase-3.5/03 §1 明确"不做写 usage entry" |
 | custom | 扩展私有状态（不入 LLM 上下文）；custom_message 变体入上下文（Phase 2 起用） |
+| session.virtual_model_state | provider、model_id、state；虚拟模型路由状态（只增不改；`Direct` 不写；恢复取最后一条同 pair 的记录） |
 
 - 相对草案的修订：草案 `message.user/assistant/tool.call/tool.result` 四型**合并**为单一 `message` 型（pi 同构，防同一事实两处表达）；草案 `system.notice` **取消**（错误/取消由 assistant 终态消息承载）。
 - compaction（Phase 5+）落点：新增 `session.compaction` 型，引用被摘要区间——原区间不删除，天然可回溯。
+- 虚拟模型：选择复用 `model.change`（响应只记物理模型，虚拟选择靠它保持）；路由状态追加 `session.virtual_model_state`（phase-3.5/10 §4.2）。
 
 ## 5. 演进规则（ADR-0007 的执行细则）
 

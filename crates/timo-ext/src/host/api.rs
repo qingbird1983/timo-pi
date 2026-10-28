@@ -115,4 +115,8 @@ pub trait HostServices: Send + Sync {
     fn is_running(&self) -> bool {
         false
     }
+    /// 当前项目是否受信任（`ctx.isProjectTrusted()`；设计 phase-3.5/12 §6）。
+    fn is_project_trusted(&self) -> bool {
+        true
+    }
 }

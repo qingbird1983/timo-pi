@@ -1,7 +1,7 @@
 # 架构 02：内核设计
 
 - 状态：定稿（crate 划分为预留命名，Phase 1 定稿可微调，需 ADR）
-- 日期：2026-10-26
+- 日期：2026-10-27（2026-10-26 初稿；2026-10-27 按实现校正事件集、管线次序与取消覆盖）
 - 关联：ADR-0001/0005/0006/0009；architecture/01、03、05
 
 ## 1. crate 划分与职责
@@ -28,21 +28,27 @@
 ## 3. 事件总线（全项目最重要的一条设计）
 
 - 内核在所有关键节点 **emit 事件**，不在循环里硬编码任何 hook 调用点；扩展宿主、GUI、日志都是订阅者。
-- MVP 事件集（emit 全集、消费方渐进）：agent_started/finished、turn_started/finished、message_added、stream_event、tool_call_requested（可 veto，Phase 2 起向扩展开放）、tool_call_started/finished、provider_request（元数据）、provider_response、compaction_event（预留）、error。
+- MVP 事件集（emit 全集、消费方渐进）：agent_started/finished、turn_started/finished、message_added、stream_event、tool_call_requested（**仅通告**；veto 走 `LoopHooks` 请求-响应，见 §4）、tool_call_started/update/finished、provider_request（元数据）、provider_response、compacted（实现名 `Compacted`，Phase 3.5 已落地）、error（**仅循环级**：压缩失败、MCP 装配失败、系统提示装载失败；供应商/认证/流错误走 `stop_reason=Error` 终态消息，不进总线）。
 - 事件携带 payload **快照**（不可变），订阅者不得直接改内核态；需要修改的节点（如 tool_call veto）走显式请求-响应式 API。
 - 语义约束（Phase 2 落地）：单订阅者 handler 预算 30s；abort 后订阅者退休；payload 与内核态隔离（detach 拷贝）——参照 research/04 §4。
 
 ## 4. 工具执行管线（统一入口）
 
 ```
-模型请求工具 → 命名空间路由（plugin_/mcp_/builtin_）→ 校验参数(JSON Schema)
-→ 权限/信任检查 → tool_call_requested 事件（扩展可 veto，Phase 2）
-→ 执行（取消令牌 + 进度回调）→ tool_result → 事件 → 回填消息流
+模型请求工具
+→ tool_call_requested 事件（仅通告）
+→ LoopHooks::before_tool_call（扩展可 veto / 改参 / 终止；Phase 2）
+→ 按完整名查表 → 校验参数（JSON Schema）
+→ 执行（取消令牌；审阅器仅在 write/edit/bash 内部调用）
+→ LoopHooks::after_tool_call → tool_call_finished 事件 → 回填消息流
 ```
+
+> **2026-10-27 修订（管线次序按实现校正）**：实现无独立「命名空间路由」层——前缀在注册期拼好，运行期按完整名查表，且注册期**无前缀强制校验**；「权限/信任检查」**不是管线环节**，审阅器只在写类工具内部触发（`read`/`grep`/`find` 不经过）；Schema 校验发生在 veto **之后**。`builtin_` 前缀不存在，MCP 实际命名为 `mcp__<server>__<tool>`（双下划线）。进度回调通道已建但当前无生产者。清偿项见 `docs/roadmap/audit-debt.md` B2/B3/B6。
 
 MCP 工具与扩展工具与内置工具走**同一条管线**（对齐 pi 行为，research/02 §3）。
 
 ## 5. 取消与错误
 
 - CancellationToken 从用户动作一路传到 HTTP 流、子进程、工具执行；中断后会话文件必须完好（append-only 保证）。
+- **2026-10-27 修订（覆盖范围按实现校正）**：内置工具（`shell`/`write`/`edit`）、HTTP 发送与流读取、子进程（Windows `taskkill /T`）已接取消；**MCP 工具执行与扩展工具执行当前未接** `CancellationToken`——前者完全不响应取消，后者走 `AtomicBool` + QuickJS 中断处理器。非 Windows 子进程无进程组清理。清偿项见 `docs/roadmap/audit-debt.md` B4。
 - 库层错误 thiserror 类型化；壳层加上下文展示；一切错误进事件总线（error 事件），不 panic（standards/04）。
