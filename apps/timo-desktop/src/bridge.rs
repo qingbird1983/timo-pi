@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use timo_kernel::config::KEYCHAIN_SERVICE;
+use timo_kernel::plugins::market::{self, MarketIndex, MarketState};
+use timo_kernel::plugins::{self, PermissionTier, PluginEntry};
 use timo_kernel::{
     Kernel, KernelEvent, KernelOptions, Message, ReviewDecision, ReviewKind, SessionInfo,
     SlashCommand, ToolReview, ToolReviewRequest, UsageSummary,
@@ -56,6 +58,51 @@ pub enum BridgeCommand {
         /// 供应商 id。
         provider: String,
     },
+    /// 重新扫描统一插件清单。
+    ListPlugins,
+    /// 启用/禁用插件。
+    SetPluginEnabled {
+        /// 插件 id。
+        id: String,
+        /// 目标状态。
+        enabled: bool,
+    },
+    /// 收紧插件挡位。
+    SetPluginTier {
+        /// 插件 id。
+        id: String,
+        /// 目标挡位。
+        tier: PermissionTier,
+    },
+    /// 卸载插件。
+    UninstallPlugin {
+        /// 插件 id。
+        id: String,
+    },
+    /// 撤销插件授权（保留文件，置为禁用）。
+    RevokePlugin {
+        /// 插件 id。
+        id: String,
+    },
+    /// 读取市场缓存与本地状态。
+    LoadMarket,
+    /// 拉取市场索引（失败保留缓存）。
+    RefreshMarket,
+    /// 保存市场索引地址（`None` = 清除）。
+    SaveMarketIndex {
+        /// HTTPS 地址。
+        url: Option<String>,
+    },
+    /// 切换收藏。
+    ToggleMarketFavorite {
+        /// 插件 id。
+        id: String,
+    },
+    /// 切换屏蔽。
+    ToggleMarketBlocked {
+        /// 插件 id。
+        id: String,
+    },
 }
 
 /// 供应商凭证来源（不含值；设计 02 §5）。
@@ -91,6 +138,21 @@ pub struct ProviderInfo {
     pub credential: CredentialInfo,
     /// 是否来自 models.json（可写钥匙串引用）。
     pub editable: bool,
+}
+
+/// 市场页快照（索引 + 本地状态 + 最近错误）。
+#[derive(Debug, Clone)]
+pub struct MarketSnapshot {
+    /// 缓存或新拉取的索引。
+    pub index: Option<MarketIndex>,
+    /// 索引解析警告（已格式化）。
+    pub warnings: Vec<String>,
+    /// 离线原因（有值表示本次刷新失败）。
+    pub offline: Option<String>,
+    /// 收藏/屏蔽/已安装记录。
+    pub state: MarketState,
+    /// 当前索引地址。
+    pub index_url: Option<String>,
 }
 
 /// 内核发给 UI 的事件。
@@ -139,6 +201,14 @@ pub enum BridgeEvent {
     ProviderRemoved(String),
     /// 钥匙串/配置操作失败。
     ProviderError(String),
+    /// 统一插件清单。
+    Plugins(Vec<PluginEntry>),
+    /// 插件操作失败（E7xx）。
+    PluginError(String),
+    /// 市场快照。
+    Market(MarketSnapshot),
+    /// 市场操作失败。
+    MarketError(String),
     /// 打开会话失败。
     OpenFailed(String),
     /// 删除会话失败。
@@ -360,8 +430,140 @@ async fn run(
                     }
                 }
             }
+            BridgeCommand::ListPlugins => send_plugins(&kernel, &event_tx),
+            BridgeCommand::SetPluginEnabled { id, enabled } => {
+                match plugins::set_enabled(kernel.data_dir(), &id, enabled) {
+                    Ok(()) => send_plugins(&kernel, &event_tx),
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::PluginError(error.to_string()));
+                    }
+                }
+            }
+            BridgeCommand::SetPluginTier { id, tier } => {
+                match plugins::set_tier(kernel.data_dir(), &id, tier) {
+                    Ok(()) => send_plugins(&kernel, &event_tx),
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::PluginError(error.to_string()));
+                    }
+                }
+            }
+            BridgeCommand::UninstallPlugin { id } => {
+                match plugins::uninstall_plugin(kernel.data_dir(), kernel.work_dir(), &id) {
+                    Ok(()) => {
+                        send_plugins(&kernel, &event_tx);
+                        send_market(&kernel, &event_tx, None);
+                    }
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::PluginError(error.to_string()));
+                    }
+                }
+            }
+            BridgeCommand::RevokePlugin { id } => {
+                match plugins::revoke_plugin(kernel.data_dir(), kernel.work_dir(), &id) {
+                    Ok(()) => send_plugins(&kernel, &event_tx),
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::PluginError(error.to_string()));
+                    }
+                }
+            }
+            BridgeCommand::LoadMarket => send_market(&kernel, &event_tx, None),
+            BridgeCommand::RefreshMarket => refresh_market(&kernel, &event_tx).await,
+            BridgeCommand::SaveMarketIndex { url } => {
+                match market::set_index_url(kernel.data_dir(), url.as_deref()) {
+                    Ok(()) if url.is_some() => refresh_market(&kernel, &event_tx).await,
+                    Ok(()) => send_market(&kernel, &event_tx, None),
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::MarketError(error.to_string()));
+                    }
+                }
+            }
+            BridgeCommand::ToggleMarketFavorite { id } => {
+                match market::toggle_favorite(kernel.data_dir(), &id) {
+                    Ok(_) => send_market(&kernel, &event_tx, None),
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::MarketError(error.to_string()));
+                    }
+                }
+            }
+            BridgeCommand::ToggleMarketBlocked { id } => {
+                match market::toggle_blocked(kernel.data_dir(), &id) {
+                    Ok(_) => send_market(&kernel, &event_tx, None),
+                    Err(error) => {
+                        let _ = event_tx.send(BridgeEvent::MarketError(error.to_string()));
+                    }
+                }
+            }
         }
     }
+}
+
+fn send_plugins(kernel: &Kernel, event_tx: &UnboundedSender<BridgeEvent>) {
+    let entries = plugins::list_plugins(kernel.data_dir(), kernel.work_dir());
+    let _ = event_tx.send(BridgeEvent::Plugins(entries));
+}
+
+fn market_snapshot(
+    kernel: &Kernel,
+    index: Option<MarketIndex>,
+    warnings: Vec<String>,
+    offline: Option<String>,
+) -> MarketSnapshot {
+    let data_dir = kernel.data_dir();
+    MarketSnapshot {
+        index,
+        warnings,
+        offline,
+        state: market::load_state(data_dir),
+        index_url: market::index_url(data_dir),
+    }
+}
+
+fn send_market(kernel: &Kernel, event_tx: &UnboundedSender<BridgeEvent>, offline: Option<String>) {
+    let data_dir = kernel.data_dir();
+    let (index, warnings) = match market::load_cached(data_dir) {
+        Ok(Some(load)) => (Some(load.index), warning_lines(&load.warnings)),
+        Ok(None) => (None, vec![]),
+        Err(error) => (None, vec![error.to_string()]),
+    };
+    let _ = event_tx.send(BridgeEvent::Market(market_snapshot(
+        kernel, index, warnings, offline,
+    )));
+}
+
+async fn refresh_market(kernel: &Kernel, event_tx: &UnboundedSender<BridgeEvent>) {
+    let Some(url) = market::index_url(kernel.data_dir()) else {
+        send_market(
+            kernel,
+            event_tx,
+            Some("market index url is not configured".into()),
+        );
+        return;
+    };
+    match market::refresh(kernel.data_dir(), &url).await {
+        Ok(market::RefreshOutcome::Updated(load)) => {
+            let snapshot = market_snapshot(
+                kernel,
+                Some(load.index),
+                warning_lines(&load.warnings),
+                None,
+            );
+            let _ = event_tx.send(BridgeEvent::Market(snapshot));
+        }
+        Ok(market::RefreshOutcome::NotModified) => send_market(kernel, event_tx, None),
+        Ok(market::RefreshOutcome::Offline(message)) => {
+            send_market(kernel, event_tx, Some(message));
+        }
+        Err(error) => {
+            let _ = event_tx.send(BridgeEvent::MarketError(error.to_string()));
+        }
+    }
+}
+
+fn warning_lines(warnings: &[market::MarketWarning]) -> Vec<String> {
+    warnings
+        .iter()
+        .map(|warning| format!("{}: {}", warning.code, warning.message))
+        .collect()
 }
 
 fn forward_events(kernel: &Kernel, event_tx: UnboundedSender<BridgeEvent>) {

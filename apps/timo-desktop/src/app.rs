@@ -11,6 +11,8 @@ use gpui_kit::component::{
     ActiveTheme as _, Icon, IconName, Sizable as _, StyledExt as _, WindowExt as _, h_flex, v_flex,
 };
 use gpui_kit::*;
+use timo_kernel::plugins::PluginEntry;
+use timo_kernel::plugins::market::{MarketIndex, MarketSort, MarketState};
 use timo_kernel::{KernelOptions, SessionInfo, SlashCommand, UsageSummary};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -20,6 +22,7 @@ use crate::features::palette::{
     AcceptReviewAction, CloseOverlayAction, NewSessionAction, OpenSettingsAction,
     RejectReviewAction, StopAction, TogglePalette,
 };
+use crate::features::plugins::{MarketTabView, PluginsView};
 use crate::features::review::ReviewState;
 use crate::features::settings_view::SettingsTab;
 use crate::settings::{DesktopSettings, ThemePref};
@@ -64,6 +67,22 @@ pub struct DesktopApp {
     pub(crate) provider_feedback: Option<String>,
     pub(crate) key_provider: Option<String>,
     pub(crate) key_input: Entity<InputState>,
+    pub(crate) plugins_view: Option<PluginsView>,
+    pub(crate) plugins: Vec<PluginEntry>,
+    pub(crate) plugins_error: Option<String>,
+    pub(crate) plugins_selected: Option<String>,
+    pub(crate) market_index: Option<MarketIndex>,
+    pub(crate) market_state: MarketState,
+    pub(crate) market_warnings: Vec<String>,
+    pub(crate) market_offline: Option<String>,
+    pub(crate) market_error: Option<String>,
+    pub(crate) market_url: Option<String>,
+    pub(crate) market_tab: MarketTabView,
+    pub(crate) market_category: Option<String>,
+    pub(crate) market_search: String,
+    pub(crate) market_sort: MarketSort,
+    pub(crate) market_search_input: Entity<InputState>,
+    pub(crate) market_url_input: Entity<InputState>,
     #[cfg(feature = "nsh-poc")]
     pub(crate) nsh_page: bool,
     #[cfg(feature = "nsh-poc")]
@@ -172,6 +191,21 @@ impl DesktopApp {
         });
         let key_input = cx.new(|cx| InputState::new(window, cx));
         key_input.update(cx, |input, cx| input.set_masked(true, window, cx));
+        let market_search_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("market.search_placeholder").to_string())
+        });
+        let market_url_input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(t!("market.url_placeholder").to_string())
+        });
+        subscriptions.push(cx.subscribe_in(
+            &market_search_input,
+            window,
+            |this, _state, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    this.apply_market_search(cx);
+                }
+            },
+        ));
         cx.bind_keys([
             KeyBinding::new("secondary-k", TogglePalette, None),
             KeyBinding::new("secondary-n", NewSessionAction, None),
@@ -217,6 +251,22 @@ impl DesktopApp {
             provider_feedback: None,
             key_provider: None,
             key_input,
+            plugins_view: None,
+            plugins: vec![],
+            plugins_error: None,
+            plugins_selected: None,
+            market_index: None,
+            market_state: MarketState::default(),
+            market_warnings: vec![],
+            market_offline: None,
+            market_error: None,
+            market_url: None,
+            market_tab: MarketTabView::Discover,
+            market_category: None,
+            market_search: String::new(),
+            market_sort: MarketSort::Recommended,
+            market_search_input,
+            market_url_input,
             #[cfg(feature = "nsh-poc")]
             nsh_page: false,
             #[cfg(feature = "nsh-poc")]
@@ -308,13 +358,11 @@ impl DesktopApp {
     }
 
     /// 中央区域（设置页或对话）；预览页由 `nsh-poc` feature 的包装接入。
-    pub(crate) fn main_panel(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    pub(crate) fn main_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         if self.settings_open {
             self.settings_page(cx)
+        } else if self.plugins_view.is_some() {
+            self.plugins_page(window, cx)
         } else {
             let notice = self.notice_bar(cx);
             v_flex()

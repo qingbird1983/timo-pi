@@ -10,6 +10,7 @@ use timo_kernel::SessionInfo;
 
 use crate::app::{DesktopApp, SIDEBAR_WIDTH};
 use crate::bridge::BridgeCommand;
+use crate::features::plugins::PluginsView;
 
 impl DesktopApp {
     pub(crate) fn sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -43,6 +44,25 @@ impl DesktopApp {
                             .disabled(self.chat.read(cx).running)
                             .on_click(cx.listener(|this, _, _, cx| this.new_session(cx))),
                     ),
+            )
+            .child(
+                v_flex()
+                    .pb_2()
+                    .gap_1()
+                    .child(self.plugin_nav_row(
+                        "nav-installed",
+                        t!("plugins.nav").to_string(),
+                        IconName::Settings,
+                        self.plugins_view == Some(PluginsView::Installed),
+                        cx,
+                    ))
+                    .child(self.plugin_nav_row(
+                        "nav-market",
+                        t!("market.nav").to_string(),
+                        IconName::Search,
+                        self.plugins_view == Some(PluginsView::Market),
+                        cx,
+                    )),
             )
             .child(
                 v_flex()

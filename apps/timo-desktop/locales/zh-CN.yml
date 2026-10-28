@@ -170,3 +170,80 @@ nsh:
   trust_failed: "读取信任状态失败：%{error}"
   root_read_failed: "读取根公钥失败：%{error}"
   root_invalid: "根公钥无效：%{error}"
+
+plugins:
+  nav: 插件
+  title: 插件
+  subtitle: 安装、启用和配置插件
+  installed_tab: 已安装
+  market_tab: 插件市场
+  discover_tab: 发现
+  refresh: 刷新
+  add: 添加插件
+  add_cli: 当前版本用 `timo ext add <file>` 安装 A 轨扩展；文件选择器与 B 轨安装向导在 P1 接入。
+  close: 返回
+  group_builtin: 内置插件配置
+  group_experimental: 实验性插件
+  group_installed: 已安装插件
+  empty_builtin: 内置配置入口暂未接入。
+  empty_experimental: 暂无实验性功能。
+  empty_installed: 还没有安装第三方插件。
+  go_market: 去插件市场
+  badge_a: A 轨
+  badge_b: B 轨
+  tier_read: 只读
+  tier_workspace: 读写
+  tier_trusted: 执行
+  state_enabled: 已启用
+  state_disabled: 已禁用
+  state_error: 有诊断
+  detail: 详情
+  declared: 申请能力
+  no_caps: 未申请额外能力
+  path: "目录：%{path}"
+  tier_hint: 挡位只能收紧；放宽需重新安装。
+  revoke: 撤销授权
+  uninstall: 卸载
+  uninstall_title: "卸载「%{name}」？"
+  uninstall_body: 目录、状态与授权都会被删除，无法恢复。
+
+market:
+  nav: 插件市场
+  title: 插件市场
+  subtitle: 发现社区为 Timo 开发的插件
+  tab_discover: 发现
+  tab_theme: 主题
+  tab_favorites: 收藏
+  tab_installed: 已安装
+  tab_blocked: 已屏蔽
+  tab_advanced: 高级
+  search_placeholder: 搜索插件
+  filter: 筛选
+  clear: 清除
+  all: 全部
+  sort_recommended: 推荐
+  sort_downloads: 下载
+  sort_stars: 星标
+  refresh: 刷新索引
+  empty: 没有可显示的插件。
+  configure: 配置索引地址
+  offline: 在线目录暂不可用，正在显示本地缓存。
+  warnings: "索引有 %{n} 条警告（已忽略非法条目）。"
+  install: 安装
+  open: 打开
+  install_p1: 安装流程将在 P1 接入签名包后开放。
+  favorite: 收藏
+  favorited: 已收藏
+  block: 屏蔽
+  unblock: 取消屏蔽
+  comments: 评论
+  stats: "↓ %{downloads} / 近 30 天 · ★ %{stars}"
+  screenshot: 截图
+  url_current: "当前索引：%{url}"
+  url_none: 未配置
+  url_hint: 粘贴 HTTPS 索引地址，保存后立即刷新；索引只提供元数据，安装仍校验签名包。
+  url_placeholder: https://example.com/index.json
+  apply_url: 保存索引地址
+  url_clear: 清除
+  url_empty: 索引地址不能为空；如需清除请用「清除」。
+

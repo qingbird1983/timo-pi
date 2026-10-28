@@ -170,3 +170,80 @@ nsh:
   trust_failed: "Cannot read trust state: %{error}"
   root_read_failed: "Cannot read the root key: %{error}"
   root_invalid: "Invalid root key: %{error}"
+
+plugins:
+  nav: Plugins
+  title: Plugins
+  subtitle: Install, enable and configure plugins
+  installed_tab: Installed
+  market_tab: Marketplace
+  discover_tab: Discover
+  refresh: Refresh
+  add: Add plugin
+  add_cli: This build installs A-track extensions with `timo ext add <file>`; the file picker and B-track wizard arrive in P1.
+  close: Back
+  group_builtin: Built-in configuration
+  group_experimental: Experimental
+  group_installed: Installed plugins
+  empty_builtin: Built-in config entries are not wired yet.
+  empty_experimental: No experimental features yet.
+  empty_installed: No third-party plugins installed.
+  go_market: Browse the marketplace
+  badge_a: A track
+  badge_b: B track
+  tier_read: Read-only
+  tier_workspace: Workspace
+  tier_trusted: Trusted
+  state_enabled: Enabled
+  state_disabled: Disabled
+  state_error: Diagnostics
+  detail: Details
+  declared: Declared
+  no_caps: No extra capabilities
+  path: "Path: %{path}"
+  tier_hint: Tiers can only be tightened; widening requires a reinstall.
+  revoke: Revoke grant
+  uninstall: Uninstall
+  uninstall_title: "Uninstall \"%{name}\"?"
+  uninstall_body: The directory, state and grants will be deleted permanently.
+
+market:
+  nav: Marketplace
+  title: Marketplace
+  subtitle: Discover plugins built for Timo
+  tab_discover: Discover
+  tab_theme: Themes
+  tab_favorites: Favorites
+  tab_installed: Installed
+  tab_blocked: Blocked
+  tab_advanced: Advanced
+  search_placeholder: Search plugins
+  filter: Filter
+  clear: Clear
+  all: All
+  sort_recommended: Recommended
+  sort_downloads: Downloads
+  sort_stars: Stars
+  refresh: Refresh index
+  empty: No plugins to show.
+  configure: Configure index URL
+  offline: The online index is unavailable; showing the local cache.
+  warnings: "%{n} index warnings (invalid entries were skipped)."
+  install: Install
+  open: Open
+  install_p1: Installation opens once signed packages land in P1.
+  favorite: Favorite
+  favorited: Favorited
+  block: Block
+  unblock: Unblock
+  comments: Comments
+  stats: "↓ %{downloads} / 30 days · ★ %{stars}"
+  screenshot: Screenshot
+  url_current: "Current index: %{url}"
+  url_none: not configured
+  url_hint: Paste an HTTPS index URL; saving refreshes immediately. The index only supplies metadata; installs still verify signed packages.
+  url_placeholder: https://example.com/index.json
+  apply_url: Save index URL
+  url_clear: Clear
+  url_empty: The index URL cannot be empty; use Clear to remove it.
+

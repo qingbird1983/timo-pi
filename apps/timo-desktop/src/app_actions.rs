@@ -123,6 +123,7 @@ impl DesktopApp {
         self.session_title = t!("chat.empty_session").to_string();
         self.chat.update(cx, |chat, _| chat.reset());
         self.sync_scroller(cx);
+        self.plugins_view = None;
         #[cfg(feature = "nsh-poc")]
         {
             self.nsh_page = false;
@@ -134,6 +135,7 @@ impl DesktopApp {
             self.notice = Some(t!("chat.busy").to_string());
             return;
         }
+        self.plugins_view = None;
         #[cfg(feature = "nsh-poc")]
         {
             self.nsh_page = false;

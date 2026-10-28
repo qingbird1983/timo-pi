@@ -409,6 +409,8 @@ impl DesktopApp {
             cx.notify();
         } else if !self.review.open && self.settings_open {
             self.close_settings(window, cx);
+        } else if !self.review.open && self.plugins_view.is_some() {
+            self.close_plugins(window, cx);
         } else if !self.review.open && self.nsh_page_open() {
             self.close_nsh_page(window, cx);
         }

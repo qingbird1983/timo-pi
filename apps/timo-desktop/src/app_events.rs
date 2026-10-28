@@ -79,6 +79,24 @@ impl DesktopApp {
                 self.provider_error = Some(message);
                 self.provider_feedback = None;
             }
+            BridgeEvent::Plugins(entries) => {
+                self.plugins = entries;
+                self.plugins_error = None;
+            }
+            BridgeEvent::PluginError(message) => {
+                self.plugins_error = Some(message);
+            }
+            BridgeEvent::Market(snapshot) => {
+                self.market_index = snapshot.index;
+                self.market_warnings = snapshot.warnings;
+                self.market_offline = snapshot.offline;
+                self.market_state = snapshot.state;
+                self.market_url = snapshot.index_url;
+                self.market_error = None;
+            }
+            BridgeEvent::MarketError(message) => {
+                self.market_error = Some(message);
+            }
             BridgeEvent::Fatal(message) => {
                 self.ready = false;
                 self.fatal = Some(message);

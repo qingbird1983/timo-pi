@@ -13,6 +13,9 @@ pub mod i18n;
 pub mod settings;
 pub mod theme;
 
+#[cfg(test)]
+mod plugins_ui_tests;
+
 use gpui_kit::component::TitleBar;
 use gpui_kit::*;
 

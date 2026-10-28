@@ -375,6 +375,18 @@ impl Kernel {
         )
     }
 
+    /// 数据目录（插件状态与授权的根）。
+    #[must_use]
+    pub fn data_dir(&self) -> &std::path::Path {
+        &self.data_dir
+    }
+
+    /// 工作目录（项目级扩展与作用域基准）。
+    #[must_use]
+    pub fn work_dir(&self) -> &std::path::Path {
+        &self.work_dir
+    }
+
     /// 当前分支的虚拟模型路由状态（无则 None；设计 10 §4.2）。
     #[must_use]
     pub fn route_state(&self) -> Option<serde_json::Value> {
