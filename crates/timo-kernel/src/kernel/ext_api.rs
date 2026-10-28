@@ -6,15 +6,6 @@ use super::Kernel;
 use crate::Result;
 use crate::error::KernelError;
 
-/// 目录快照（pre-trust 装载也要用，因此独立于 `Kernel`；设计 12 §6）。
-pub(crate) fn models_snapshot(catalog: &timo_ai::Catalog) -> Vec<serde_json::Value> {
-    catalog
-        .all()
-        .into_iter()
-        .filter_map(|model| serde_json::to_value(model).ok())
-        .collect()
-}
-
 impl Kernel {
     /// 扩展诊断报告（`timo ext doctor` / 会话开头摘要）。
     #[must_use]
@@ -40,7 +31,11 @@ impl Kernel {
 
     /// 扩展目录快照（`ctx.modelRegistry`；设计 10 §4.2）。
     pub(crate) fn extension_models(&self) -> Vec<serde_json::Value> {
-        models_snapshot(&self.catalog)
+        self.catalog
+            .all()
+            .into_iter()
+            .filter_map(|model| serde_json::to_value(model).ok())
+            .collect()
     }
 
     /// 已注册扩展命令名（含 `plugin_<id>_` 前缀）。

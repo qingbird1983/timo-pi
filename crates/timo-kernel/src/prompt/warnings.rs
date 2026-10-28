@@ -1,4 +1,4 @@
-//! 资源装载告警（设计 01/02；项目信任两类见 12 §3.5）。
+//! 资源装载告警（设计 01/02）。
 
 use std::path::PathBuf;
 
@@ -17,10 +17,6 @@ pub enum WarningKind {
     Collision,
     /// `--tools` 列表项没有命中任何已注册工具。
     UnknownTool,
-    /// 项目信任存储读写问题（降级为无决策或保存失败）。
-    TrustStore,
-    /// 项目未受信任，部分项目资源被跳过。
-    UntrustedProject,
 }
 
 /// 一条资源告警：装载不中止，逐条上报（`Kernel::resource_warnings`）。

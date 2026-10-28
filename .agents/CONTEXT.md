@@ -1,22 +1,18 @@
 # 工作上下文交接卡
 
-- 更新：2026-10-28（会话主题：**Phase 3.5 P2 第四题——项目信任门控（详设定稿 + 批 A/B/C 落地，桌面实机 T9 待人工）**；同日此前为 P0/P1/D6/P2 前三题落地，另有审查收债立项 [H-010](handoff/H-010-audit-debt.md)）。
+- 更新：2026-10-28（会话主题：**Phase 3.5 P2 第四题——项目信任门控整体撤回（ADR-0015）**；同日此前为 P0/P1/D6/P2 前三题落地，另有审查收债立项 [H-010](handoff/H-010-audit-debt.md)）。
 
 ## 当前阶段与状态
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - Phase 3 六批全部完成：最小窗口与版本锁 → K0/K1 → K2 审阅接缝 → 会话/聊天流 → diff 审阅/命令面板/设置/钥匙串 → NSH PoC + C1~C6。
-- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；**D6（subagent）四批全部落地并真机验收**（详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md)）；**P2 第一题（prompt 模板）完成**（详设 [09](../docs/design/phase-3.5/09-prompt-templates.md)，D56 workflow 预设真机跑通）；**第二题完成**（[10](../docs/design/phase-3.5/10-provider-composer.md)：配置面批 A 与虚拟模型 B1~B3 全部落地）；**第三题详设定稿**（[11](../docs/design/phase-3.5/11-codemode.md)：codemode 与嵌套工具调用，D72~D79），**批 A~C 全部落地**（嵌套接缝、QuickJS 沙箱、CLI/桌面嵌套进度、DeepSeek 真机三场景；当批 413 tests / 累计 26 变异，见「门禁」）；**P2 第四题（信任门控）详设定稿**（[12](../docs/design/phase-3.5/12-project-trust.md)：D80~D87），**批 A 已落地**（trust 模块、六面门控、CLI 参数/告警、`/trust`、真机对照；累计 438 tests / 36 变异），**批 B 已落地**（pre-trust 扩展装载与 `project_trust` 事件、`ctx.isProjectTrusted()` 活值、宿主复用、子代理透传与项目 `.timo/agents` 门控；446 tests / 累计 44 变异；DeepSeek 含 T10），**批 C 落地**（桌面 `TrustPrompt` 回调、`BridgeEvent::Trust`/`TrustReport`、五项选择 sheet、Esc=仅本次不信任；CLI 矩阵 T1/T5/T6/T7；451 tests / 累计 48 变异），**剩 T9 桌面实机（GUI 启动被权限模式拦截，需人工）与 T8 TTY 复验**。
+- **Phase 3.5 P1 完成（ADR-0013）**：P0（D1/D2/D4/D7）与 P1.1~P1.4（D3/D5/D4 缓存半场）验收通过，报告 `docs/design/phase-3.5/report.md`；**D6（subagent）四批全部落地并真机验收**（详设 [design/phase-3.5/08-subagent.md](../docs/design/phase-3.5/08-subagent.md)）；**P2 第一题（prompt 模板）完成**（详设 [09](../docs/design/phase-3.5/09-prompt-templates.md)，D56 workflow 预设真机跑通）；**第二题完成**（[10](../docs/design/phase-3.5/10-provider-composer.md)：配置面批 A 与虚拟模型 B1~B3 全部落地）；**第三题详设定稿**（[11](../docs/design/phase-3.5/11-codemode.md)：codemode 与嵌套工具调用，D72~D79），**批 A~C 全部落地**（嵌套接缝、QuickJS 沙箱、CLI/桌面嵌套进度、DeepSeek 真机三场景；当批 413 tests / 累计 26 变异，见「门禁」）；**P2 第四题（项目信任门控）已整体撤回**（[ADR-0015](../docs/adr/ADR-0015-no-project-trust.md)：产品非 VS Code 式工作区模型；实现、CLI/桌面接线与文档均删除，项目资源恢复无条件加载）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；阶段文档：`docs/roadmap/phase-3-desktop-shell.md`（§6 已知限制）。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
 ## 上一轮完成了什么
 
-- **P2 第四题·批 C（桌面接线 + CLI 矩阵）**：桥接新增 `BridgeEvent::Trust { request, respond }` 与 `TrustReport`（`Ready` 前），`TrustBroker` 实现 `ProjectTrustPrompt`（断链返回 `None`）；桌面 `features/trust.rs` 五项选择 sheet（工作目录 + 资源清单 + 已保存决定，Esc/遮罩 = 仅本次不信任），未信任写 notice 行。`app.rs` 超行数后事件分发拆到 `app_events.rs`（421），桥接测试拆到 `bridge_tests.rs`（`bridge.rs` 498）。gate **451 tests**（+5）；批 C **4 组变异全红**（Esc 改保存、桥接丢选择、不弹 sheet、spawn 不接 trust_prompt），其中两次因 `blocking_recv()` 挂死后改 `try_recv()` 才拿到干净失败。真机 CLI：T1 无告警、T5 跳过 1 项、T6 `source: saved decision`、T7 无头一行告警；T8 管道输入落默认不信任（TTY 菜单仍属批 A 手工验收）。**T9 桌面实机未跑**：GUI 启动被权限模式拦截，弹框行为由 gpui 测试覆盖。
-
-- **P2 第四题·批 B（扩展接面）**：`Kernel::new` 在需要扩展决定时先以"未信任"视图装载用户级/显式扩展（不扫项目扩展），派发 `project_trust`（首个 `yes`/`no` 胜出、`remember` 才落盘），决定后复用同一宿主补装项目扩展（`load_extensions_with` + `already` 跳过）；`ExtensionOptions.include_project`、`BasicServices::with_project_trusted`（共享 `Arc<AtomicBool>` 提供 `ctx.isProjectTrusted()` 活值）；shim 与宿主 runner 双层实现首决定语义；subagent 示例按信任读项目 `.timo/agents` 并透传 `--approve`/`--no-approve`。gate **446 tests**（+8）；**批 B 8 组变异全红**、逐字节还原。**真机 DeepSeek**（临时目录 + 用户级 `trustor` 扩展）：yes/no/remember 三态读数（`TRUST=true/false`、`source: extension decision|saved decision`、`trust.json` 落盘）；T10 项目代理跑通、包装 exe 记录子进程 argv 含 `--approve`，`--no-approve` 时项目代理不可见、用户级代理可用且 argv 含 `--no-approve`。真机抓到两处接线漏线（逐扩展 services 未接信任开关、pre-trust 用独立 `Arc`），修后补两条内核级断言，登记 [P-014](pitfalls/P-014-live-flag-must-pass-at-every-construction-point.md)。体量：`shim/runtime.js` 504 拆出 `runtime_dispatch.js`；`tests/host.rs` 550 拆出 `tests/host/trust.rs`；`trust/mod.rs` 501 拆出 `trust/tests.rs`。
-- **P2 第四题·批 A（信任门控核心 + CLI）**：`timo-kernel/src/trust/{mod,gate,store}.rs`（决策链、唯一资源清单、`trust.json` 原子写）+ `kernel/ready.rs`（从 kernel.rs 拆出，体检 500 行）；`Kernel::new` 在项目设置/MCP/模板之前判定，设置/MCP/扩展/技能/模板/SYSTEM/APPEND 六面接同一开关；`--approve`/`--no-approve`（互斥、不落盘）、`/trust` 五项菜单、启动告警。gate **438 tests**（+23）；**10/10 变异全红**（设置、MCP、技能模板根、SYSTEM、APPEND、扩展、决策顺序、主目录特判、损坏降级、覆盖生效、无界面默认），逐条断言失败并逐字节还原。**真机 DeepSeek**：不信任时 4 次工具执行才说出暗号、信任时 1 次请求 0 工具直接答；模板 `MANGO`/原样 `/hello`；技能 `KIWI`/2 次读文件。新增坑 [P-013](pitfalls/P-013-msys-rewrites-slash-args.md)（Git Bash 改写 `/hello`）。体量：kernel.rs 523 拆出 `ready.rs`（429）、prompt/mod 503 拆出 `warnings.rs`（473）、CLI main 540 拆出 `main_tests.rs`（395）。
-- **P2 第四题·详细设计（项目信任门控）**：只读核对 pi 1.4.0 的 `core/project-trust.ts`、`core/trust-manager.ts`、`core/resource-loader.ts` 与 `docs/security.md`，对照本仓八类项目级加载点写出 [12](../docs/design/phase-3.5/12-project-trust.md) 并定稿：决策链（CLI 覆盖 → 扩展事件 → 最近祖先 `trust.json` → 全局 `default_project_trust` → 无 UI 拒绝）、门控面清单（设置/MCP/扩展/技能/模板/SYSTEM/APPEND/子代理定义；上下文文件与用户级资源不门控）、存储格式与原子写、CLI/桌面/`/trust` 交互、三批施工与 T1~T10 真机断言。偏离 D80~D87。同步 D33 回调（02 技能文档、00 总览、报告、看板、CHANGELOG）。**本批未改代码**；实现从批 A 起步。
+- **P2 第四题·项目信任门控整体撤回（2026-10-28）**：按所有者决定，产品不做 VS Code 式工作区信任。删除内核 `trust` 模块与决策链、CLI `/trust` 与 `--approve/--no-approve`、扩展 `project_trust` 事件与 `ctx.isProjectTrusted()` 真值（恢复恒 `true`）、子代理透传、桌面五项弹框与 `trust.json`；项目设置/MCP/扩展/技能/模板/SYSTEM/APPEND 恢复无条件加载，启动不再询问。删除详设 12、D80~D87、P-014，新增 [ADR-0015](../docs/adr/ADR-0015-no-project-trust.md)，00-overview/02-skills/report/roadmap/CHANGELOG 同步。gate：四连全绿；纯删除批不做变异。
 - **P2 第三题·批 C（进度呈现与真机验收）**：CLI `run`/交互路径把 `ToolCallUpdate` 文本块逐行缩进打印，桌面按行累积进 trace（上限 400 字符）；`-p` text 模式仍只出终答（既有语义）。DeepSeek 真机三场景：并行 `Promise.all`（墙钟 1.0s、时间戳差 1~2ms、4 行嵌套进度）、失败脚本（`before` 保留、`codemode failed`、exit 0）、`timeout_ms:1000` + `sleep 30`（1171ms 取消、无残留进程）。真机修 G9 Windows `bash` 命中 WSL / G10 `Promise.all` 续体未排空误报 / G11 超时直接 abort 留下孤儿；shell 探测改为 PATH 绝对路径 + `uname -s`，结束时子令牌取消 + 2 秒排空。gate **413 tests**（+7）；累计 **26/26 变异全红**（本批 7 条：进度行、桌面累积、WSL 跳过、原生 bash、settle 续体、子调用清理、OOM 提示），逐条确认编译通过、断言失败、逐字节还原。
 - **P2 第三题·批 B（codemode 沙箱与工具面）**：`timo-kernel/src/codemode/{mod,tool,describe,format,sandbox}.rs` + `shim.js`。`codemode` 是内核内置工具（`ModelOnly`、默认关；占位注册先于 `--tools` allowlist、最终按注册表重建；`+codemode`/`--tools` 激活）。脚本全局 `tools/text/console/return/exit/ALL_TOOLS/describeTool`；选项行 `max_output_tokens`/`timeout_ms`；输出多文本编号、console 块、超预算头尾截断 + 临时文件；`Deferred` 进 `ALL_TOOLS` 但不占描述预算；描述按 3000 token 预算轮转。资源：进程级 worker 2/等待 60 秒、256 MiB 内存、16 MiB/10 万次输出；每脚本一条 `std::thread`（不用 `spawn_blocking`），完成经 oneshot 交回，中断后 5 秒兜底。gate **406 tests**（+26）；**19 条变异全红**（逐条确认编译通过、断言失败、逐字节还原）。真机与 CLI/桌面进度留批 C。
 - **P2 第三题·批 A（嵌套工具接缝）**：`timo_tools::nested` 定义 `CallableTool`/`NestedCall`/`NestedToolHost`/记录与用量合并，`ToolCallCtx.nested` 交给工具一个执行宿主；`timo-agent/src/run/nested.rs` 复用同一条钩子/审阅/管线（不发总线事件），id `<父>/<n>`、串行队列、父取消传递、四条记录上限（256 条 / 8 KiB / 32 KiB / 500 字符）、用量并回父结果。`run_one` 抽出 `prepare_call`/`apply_after` 两处共用，既有语义不变。gate **380 tests**（+10）；**11 条变异全红**（逐条确认断言失败、改后逐字节还原）；测试按规范拆 `nested.rs` / `nested_limits.rs` + `common/mod.rs`，无超 500 行文件。本批无脚本沙箱，故无真机读数。
@@ -39,11 +35,11 @@
 - **Phase 3.5 P0 批 5（桌面接线）**：桥接启动后重载资源并下发命令清单与用量；面板「技能」组只收 `Ready` 命令，点选插入 `/skill:<name> ` 并聚焦；状态栏显示 tokens/费用；新建/打开/删除/每轮结束后刷新用量。
 - **P0 验收（真实 DeepSeek，临时数据目录）**：D1 项目 `AGENTS.md` 的暗号规则在 CLI 与桌面都生效；D2 `/skill:hello` 两边触发并遵循技能内容；D4 `cache_read=1536`、累计 token/费用与分桶可查；D7 workspace 263 tests 全绿、既有测试零改动。
 - **验收中修复**：桌面把 `/skill:` 原文发给模型 → 展开收进 `Kernel::run`（`85527d4`）。
-- **门禁**：fmt / clippy `-D warnings` / workspace tests（**451**）/ check-size 全绿；`target/` 23.6GiB（incremental 4.2 / deps 18.1，软限内、incremental 触 WARN，阶段收尾跑 `clean-build`）。累计变异 **48/48 全红**（前三批 26 + 信任批 A 10 + 批 B 8 + 批 C 4）。
+- **门禁**：fmt / clippy `-D warnings` / workspace tests（**413**）/ check-size 全绿（target 24.0GiB：incremental 4.5 / deps 18.1，软限内、incremental 触 WARN，阶段收尾跑 `clean-build`）。累计变异 **26/26 全红**（P2 第三题；信任批的 22 条随功能撤回，移除批为纯删除、不做变异）。
 
 ## 下一步（按优先级）
 
-1. **P2 信任门控收尾**：批 A/B/C 已落地；剩 **T9 桌面实机**（GUI 启动需人工：`TIMO_AGENT_DIR` 指临时目录、工作目录放 `.timo` 资源、无 `trust.json`，看是否弹框；选"信任"看项目资源生效）与 **T8 TTY 菜单复验**。两项补完即阶段收尾（`report.md` 补全 + `clean-build` + tag `phase-3.5.end`，tag 只在所有者要求时打）。
+1. **阶段收尾**：D1~D7 与 P2 各题验收 → `report.md` 补全 → `clean-build` → tag `phase-3.5.end`（tag 只在所有者要求时打）。
 2. 桌面壳视觉精修（与 3.5 并行，零冲突）：research/07 → 设计稿 → 批次实现。
 3. 体量读数只在「门禁」行登记；阶段收尾跑 `scripts/clean-build`；sccache 到位后再收紧硬限。docs 实测 82 篇，整合评审待办（删除面需所有者确认）。
 4. **审查收债**（前置：Phase 3.5 收口）：按 [docs/roadmap/audit-debt.md](../docs/roadmap/audit-debt.md) 清偿 2026-10-27 三路审查发现——**A1 会话半行拼接缺陷最先**（[P-012](pitfalls/P-012-session-half-line-append.md)，唯一会丢数据），B1 桌面壳穿透门面次之，其余排序见台账 §4。架构文档的文档侧偏差已于本轮回填。
@@ -55,8 +51,7 @@
 - NSH 渲染/热更仍为人工验收（设计 03 §8 允许），CI 只跑“未签名拒绝”。
 - 生产签名密钥分发策略未定，留 Phase 4 ADR。
 - `target/` 无 sccache 时不做全清；分类读数与清扫统一用 `scripts/target-size` / `clean-build`（当前读数见「门禁」行）。
-- **无头 stderr 噪音**（D6 批② 发现，已登记 report 已知问题）：`-p` 一次运行会打 8 条 `.agents/skills/` 的 frontmatter 告警，父代理贴 stderr 时噪音挤掉有效信息；处置方向随 P2 资源治理定。
-- **信任提示的桌面视觉**：详设 12 先给原生确认框（Review 同型），统一视觉随桌面壳精修批次；`/untrust` 快捷命令暂不做（`/trust` 菜单含"不信任"）。
+- **无头 stderr 噪音**（D6 批② 发现，已登记 report 已知问题）：`-p` 一次运行会打 8 条 `.agents/skills/` 的 frontmatter 告警，父代理贴 stderr 时噪音挤掉有效信息；处置方向留待资源治理批次定。
 - 桌面壳遗留：模型热切换、设置·扩展页、会话搜索、超大 diff 外部编辑器、trace 全文入口、审阅开关不重放（roadmap phase-3 §6）。
 
 ## 关键提醒
@@ -67,8 +62,8 @@
 - **密钥只写钥匙串**：`models.json` 只存引用；不打印、不入库；临时测试密钥文件用完即删。
 - **版本只认 registry 源码签名**；0.8.1/0.1.12 下 NSH 报 E0716，锁 0.8.0 家族 + 0.1.10；升级前重跑编译探针。
 - **NSH 只在 `nsh-poc` feature**：默认构建与 `cargo test --workspace` 不依赖 NSH。
-- **信任流程**：先 `verify_package`、健康后再 `accept_package`；不要用 `load_package`（会提前登记构建，失败无法回退）。
-- **三层信任别混**：项目信任（12，决定项目资源是否加载）、扩展能力授权（`permissions.json`，决定扩展能做什么）、NSH 包信任（签名链）互相独立，不可互相替代；项目信任不是安全边界（照 pi `security.md` 口径）。
+- **NSH 信任流程**：先 `verify_package`、健康后再 `accept_package`；不要用 `load_package`（会提前登记构建，失败无法回退）。
+- **两种信任别混**：扩展能力授权（`permissions.json`，决定扩展能做什么）与 NSH 包信任（签名链）互相独立，不可互相替代；产品不做 VS Code 式项目/工作区信任（ADR-0015）。
 - **覆盖层快捷键**：Sheet/Dialog 的焦点陷阱会让 App 根级 action 失效；焦点与 action 必须在覆盖层子树内（P-009）。
 - **UI 测试禁用 `use gpui_kit::*`**（P-007）；子模块里的普通 `#[test]` 也不要让 glob 带进 `test` 宏（P-010）。
 - **真机冒烟配置**：临时目录放 `desktop.json` + `models.json`（顶层 `{"providers": {...}}`，`base_url` 下划线命名），`api_key` 用 `$DEEPSEEK_API_KEY`，启动时 `TIMO_AGENT_DIR` 指过去；不写个人路径入库。子进程 argv 取证用包装 exe（记录参数后再 exec 真程序，`--ext-flag bin=<wrap>`），不靠日志推断。
@@ -76,4 +71,4 @@
 - **构建缓存按容量治理**：`target/` 15GiB 软 / 25GiB 硬；incremental >4GiB 先删；阶段收尾跑 `scripts/clean-build`，`check-size` 超硬限直接 FAIL；无 sccache 不全清。
 - **写中文文件后扫隐形字符**：`grep -nP '[\x{3040}-\x{30ff}\x{200b}-\x{200f}\x{feff}]'`。
 - **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对。
-- 踩坑索引：P-001 流事件静默回归；P-002 编辑重复行；P-003 Windows bash 是 WSL；P-004 上游摘要当合同；P-005 模块格式与运行时不符；P-006 依赖解析成功 ≠ API 兼容；P-007 gpui-kit 测试 glob 导入；P-008 `impl IntoElement` 生命周期捕获；P-009 sheet 焦点陷阱；P-010 gpui glob 遮蔽 `#[test]`；P-011 kill 后孙进程握着管道（读取要有界）；P-012 会话半行拼接；P-013 Git Bash 改写 `/命令` 参数（验收加 `MSYS_NO_PATHCONV=1`）；P-014 共享活值必须在每个宿主构建点透传（默认值会把漏线藏起来）。
+- 踩坑索引：P-001 流事件静默回归；P-002 编辑重复行；P-003 Windows bash 是 WSL；P-004 上游摘要当合同；P-005 模块格式与运行时不符；P-006 依赖解析成功 ≠ API 兼容；P-007 gpui-kit 测试 glob 导入；P-008 `impl IntoElement` 生命周期捕获；P-009 sheet 焦点陷阱；P-010 gpui glob 遮蔽 `#[test]`；P-011 kill 后孙进程握着管道（读取要有界）；P-012 会话半行拼接；P-013 Git Bash 改写 `/命令` 参数（验收加 `MSYS_NO_PATHCONV=1`）。

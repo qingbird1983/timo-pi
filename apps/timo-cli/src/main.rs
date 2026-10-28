@@ -83,12 +83,6 @@ pub(crate) struct Common {
     /// Skip the default prompt template directories (explicit paths still load).
     #[arg(long = "no-prompt-templates")]
     no_prompt_templates: bool,
-    /// Trust project-local resources for this run (not saved, no prompt).
-    #[arg(long = "approve", conflicts_with = "no_approve")]
-    approve: bool,
-    /// Ignore project-local resources for this run (not saved, no prompt).
-    #[arg(long = "no-approve", conflicts_with = "approve")]
-    no_approve: bool,
 }
 
 #[derive(Args)]
@@ -138,7 +132,7 @@ async fn main() {
 }
 
 async fn run_command(args: RunArgs) -> i32 {
-    let options = match build_options(&args.common, args.max_turns, Some(false)) {
+    let options = match build_options(&args.common, args.max_turns) {
         Ok(o) => o,
         Err(message) => {
             eprintln!("[error] {message}");
@@ -160,7 +154,7 @@ async fn resume_command(args: ResumeArgs) -> i32 {
         eprintln!("[error] --no-session cannot be combined with resume");
         return 2;
     }
-    let options = match build_options(&args.common, None, None) {
+    let options = match build_options(&args.common, None) {
         Ok(o) => o,
         Err(message) => {
             eprintln!("[error] {message}");
@@ -290,7 +284,6 @@ pub(crate) async fn run_prompt(kernel: &mut Kernel, prompt: &str) -> i32 {
 pub(crate) fn build_options(
     common: &Common,
     max_turns: Option<usize>,
-    trust_interactive: Option<bool>,
 ) -> Result<KernelOptions, String> {
     let model_override = match (&common.provider, &common.model) {
         (None, None) => None,
@@ -358,15 +351,6 @@ pub(crate) fn build_options(
             .collect(),
         no_prompt_templates: common.no_prompt_templates,
         tool_review: None,
-        trust_override: if common.approve {
-            Some(true)
-        } else if common.no_approve {
-            Some(false)
-        } else {
-            None
-        },
-        trust_interactive,
-        trust_prompt: None,
     })
 }
 

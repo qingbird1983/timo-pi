@@ -175,10 +175,7 @@ async function loadFromDir(pi: any, dir: string, level: "user" | "project", noti
 async function discover(pi: any, ctx: any): Promise<Agent[]> {
   const level = new Map<string, Agent>();
   const user = await loadFromDir(pi, join(pi.getAgentDir(), "agents"), "user", (m) => ctx.ui.notify(m, "warning"));
-  // 项目级代理定义随项目信任门控（设计 phase-3.5/12 §6）。
-  const project = ctx.isProjectTrusted()
-    ? await loadFromDir(pi, join(ctx.cwd, ".timo/agents"), "project", (m) => ctx.ui.notify(m, "warning"))
-    : [];
+  const project = await loadFromDir(pi, join(ctx.cwd, ".timo/agents"), "project", (m) => ctx.ui.notify(m, "warning"));
   for (const agent of user.concat(project)) {
     level.set(agent.name, agent);
   }
@@ -205,8 +202,6 @@ function modelArgs(agent: Agent): string[] {
 function buildArgs(pi: any, ctx: any, agent: Agent, task: string): string[] {
   // `-p` 在我们的 CLI 里取值（可重复）：任务文本必须紧跟其后，不能放末尾位置。
   const args = ["--mode", "json", "--no-session", "--thinking", ctx.thinkingLevel || "off"];
-  // 子进程是独立进程，必须透传主进程的项目信任决定（设计 12 §6）。
-  args.push(ctx.isProjectTrusted() ? "--approve" : "--no-approve");
   if (agent.tools) {
     args.push("--tools", agent.tools.join(","));
   }

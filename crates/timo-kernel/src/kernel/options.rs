@@ -41,10 +41,4 @@ pub struct KernelOptions {
     pub no_prompt_templates: bool,
     /// 工具执行前审阅器（桌面注入；`None` = CLI/Phase 1/2 自动执行）。
     pub tool_review: Option<Arc<dyn timo_tools::ToolReview>>,
-    /// 项目信任的命令行覆盖（`--approve`/`--no-approve`；本进程，不落盘）。
-    pub trust_override: Option<bool>,
-    /// 是否允许 stdin 信任询问（`None` = 按 stdin 是否 TTY；一次性路径显式 `false`）。
-    pub trust_interactive: Option<bool>,
-    /// 宿主信任询问回调（桌面）；`None` 时按 `trust_interactive` 走 stdin。
-    pub trust_prompt: Option<Arc<dyn crate::trust::ProjectTrustPrompt>>,
 }

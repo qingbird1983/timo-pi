@@ -9,9 +9,6 @@ use std::time::Duration;
 use serde_json::json;
 use timo_ext::{BasicServices, ErrorCode, ExtensionHost, Grants, HostServices, LoadedExtension};
 
-#[path = "host/trust.rs"]
-mod trust;
-
 fn services() -> Arc<dyn HostServices> {
     let cwd = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     Arc::new(BasicServices::new(cwd, Grants::default(), json!({})))

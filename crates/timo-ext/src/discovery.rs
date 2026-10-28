@@ -38,9 +38,6 @@ pub struct DiscoveryOptions {
     pub explicit: Vec<PathBuf>,
     /// 是否扫描 `<cwd>/.pi/extensions/`（pi 兼容目录）。
     pub include_project_pi: bool,
-    /// 是否扫描项目级目录（`.timo/extensions` 与按上一开关的 `.pi/extensions`）；
-    /// 项目未受信任时为 false（设计 phase-3.5/12）。
-    pub include_project: bool,
 }
 
 impl Default for DiscoveryOptions {
@@ -50,7 +47,6 @@ impl Default for DiscoveryOptions {
             data_dir: None,
             explicit: Vec::new(),
             include_project_pi: true,
-            include_project: true,
         }
     }
 }
@@ -97,13 +93,11 @@ pub fn discover(options: &DiscoveryOptions) -> DiscoveryOutcome {
     for path in &options.explicit {
         collector.path(path, Scope::Explicit);
     }
-    if options.include_project {
-        collector.dir(
-            &options.work_dir.join(".timo").join("extensions"),
-            Scope::Project,
-        );
-    }
-    if options.include_project && options.include_project_pi {
+    collector.dir(
+        &options.work_dir.join(".timo").join("extensions"),
+        Scope::Project,
+    );
+    if options.include_project_pi {
         collector.dir(
             &options.work_dir.join(".pi").join("extensions"),
             Scope::ProjectPi,

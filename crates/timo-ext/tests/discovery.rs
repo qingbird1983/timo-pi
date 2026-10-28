@@ -20,7 +20,6 @@ fn options(work: &Path, data: &Path) -> DiscoveryOptions {
         data_dir: Some(data.to_path_buf()),
         explicit: Vec::new(),
         include_project_pi: true,
-        include_project: true,
     }
 }
 
@@ -195,38 +194,4 @@ fn diagnostics_report_can_be_built_from_discovery() {
     let json = report.to_json_pretty().unwrap();
     assert!(json.contains("\"loaded\": 1"));
     assert!(report.render_human().contains("ok"));
-}
-
-#[test]
-fn include_project_false_skips_project_dirs() {
-    let temp = tempfile::tempdir().unwrap();
-    let work = temp.path().join("work");
-    let data = temp.path().join("data");
-    let explicit = temp.path().join("x.ts");
-    write(&explicit, "export default () => {};");
-    write(
-        &work.join(".timo/extensions/demo/index.ts"),
-        "export default () => {};",
-    );
-    write(
-        &work.join(".pi/extensions/pi-only/index.ts"),
-        "export default () => {};",
-    );
-    write(
-        &data.join("extensions/user/index.ts"),
-        "export default () => {};",
-    );
-
-    let untrusted = DiscoveryOptions {
-        explicit: vec![explicit],
-        include_project: false,
-        ..options(&work, &data)
-    };
-    let outcome = discover(&untrusted);
-    let ids: Vec<_> = outcome
-        .extensions
-        .iter()
-        .map(|ext| ext.id.as_str())
-        .collect();
-    assert_eq!(ids, vec!["user", "x"]);
 }

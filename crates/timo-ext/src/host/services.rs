@@ -124,7 +124,6 @@ pub struct BasicServices {
     aborted: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     flags: std::collections::BTreeMap<String, String>,
-    project_trusted: Arc<AtomicBool>,
 }
 
 impl BasicServices {
@@ -143,7 +142,6 @@ impl BasicServices {
             aborted: Arc::new(AtomicBool::new(false)),
             running: Arc::new(AtomicBool::new(false)),
             flags: std::collections::BTreeMap::new(),
-            project_trusted: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -199,13 +197,6 @@ impl BasicServices {
     #[must_use]
     pub fn with_flags(mut self, flags: std::collections::BTreeMap<String, String>) -> Self {
         self.flags = flags;
-        self
-    }
-
-    /// 项目信任的共享槽（pre-trust 装载时为 false，决定后由内核更新）。
-    #[must_use]
-    pub fn with_project_trusted(mut self, flag: Arc<AtomicBool>) -> Self {
-        self.project_trusted = flag;
         self
     }
 }
@@ -441,10 +432,6 @@ impl HostServices for BasicServices {
 
     fn is_running(&self) -> bool {
         self.running.load(Ordering::Relaxed)
-    }
-
-    fn is_project_trusted(&self) -> bool {
-        self.project_trusted.load(Ordering::Relaxed)
     }
 }
 

@@ -1,8 +1,8 @@
-# Phase 3.5 阶段进度报告（P0 / P1 / D6 完成；P2 进行中）
+# Phase 3.5 阶段进度报告（P0 / P1 / D6 / P2 完成）
 
 - 日期：2026-10-27
 - 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计、compaction、缓存、无头模式——装进内核，并让 CLI 与桌面共用同一份能力。
-- 状态：**P0、P1、D6 完成；P2 第一~三题完成；第四题（信任门控）详设 12 定稿、批 A/B/C 落地（C 的桌面实机 T9 待人工）**
+- 状态：**P0、P1、D6、P2 完成；第四题（项目信任门控）已整体撤回（ADR-0015）**
 
 ## 完成了什么
 
@@ -12,6 +12,7 @@
 - **用量**：从会话消息现算四项 token 与费用，assistant 按 `provider/response_model` 分桶，工具结果进 `Tools/summaries`；`/session` 与桌面状态栏可查。
 - **P1 会话深度**：会话按 cwd 分区（旧平铺只读兼容）、`/export` 原子导出、compaction 检查点与恢复投影、无头 `-p`/`--mode json`、缓存 miss 统计与预热（详见 `design/phase-3.5/04~07`）。
 - **桌面接线**：命令面板新增"技能"组（只列 Ready），点选把 `/skill:<name> ` 插入输入框；状态栏显示 `tokens · 费用 · 版本`；会话切换后刷新用量。
+- **项目信任门控撤回**：曾按详设 12 实现批 A/B/C（内核决策链、扩展 `project_trust` 事件、CLI `--approve`、桌面五选项弹框）；因产品定位并非 VS Code 式工作区模型，整体撤回（ADR-0015），项目资源恢复无条件加载，启动不再询问。
 
 ## 验收场景执行结果
 
@@ -180,52 +181,27 @@
 ## 体量核对（standards/08）
 
 - docs/：当前 82 篇（软上限 120，ADR-0014）。阶段设计稿与详设属硬流程交付物；整合评审仍待办（删除面需所有者确认）。
-- .agents/：文件 56（不含 vendored 技能为 22，上限 40）；`CONTEXT.md` 77 行（上限 150）。
-- 代码：最大文件 498 行（`timo-kernel/src/kernel.rs`、`timo-desktop/src/bridge.rs`），无超 500 行文件（批 B/C 拆出 `shim/runtime_dispatch.js`、`tests/host/trust.rs`、`trust/tests.rs`、`app_events.rs`、`bridge_tests.rs`）；最大 crate `timo-desktop` 6,243 行（含测试；上限 15,000 触发评审）。
+- .agents/：文件 55（不含 vendored 技能为 21，上限 40）；`CONTEXT.md` 74 行（上限 150）。
+- 代码：最大文件 496 行（`timo-agent/tests/routing.rs`），无超 500 行文件（批 B 拆出 `shim/runtime_dispatch.js`，批 C 拆出 `app_events.rs`）；最大 crate `timo-desktop` 5,658 行（含测试；上限 15,000 触发评审）。
 - 依赖：无新增第三方 crate；`codemode` 使用 workspace 既有的 `rquickjs`、`tempfile`。
-- 构建产物：本批前 25.2 GiB（incremental 3.0 / deps 21.0），`clean-build` 后 14.0 GiB（incremental 3.0 / deps 9.8）；批 B 收口 20.7 GiB（incremental 3.2 / deps 16.1），批 C 收口 23.6 GiB（incremental 4.2 / deps 18.1，软限内、incremental 触 WARN）；阶段收尾再跑。
-
-### 项目信任门控（批 A，2026-10-28）
-
-- 决策链：命令行覆盖 → 资源扫描 → 已保存决策（最近祖先）→ 全局 `default_project_trust` → 交互询问 → 无界面拒绝；`trust.json` 原子写、损坏降级为无决策并告警。
-- 门控面：项目设置、项目 `mcp.json`、项目扩展、技能/模板根、`SYSTEM.md`/`APPEND_SYSTEM.md`；上下文文件与用户级资源不门控。六面共用 `trust/gate.rs` 的同一清单。
-- 验证：438 tests（新增 23）；10 条变异全红并逐字节还原。DeepSeek 真机对照（JSON 事件计数）：不信任问暗号需要 4 次工具执行、4 次请求；`--approve` 后 1 次请求、0 工具直接答 `BANANA`；模板 `MANGO` vs 原样 `/hello`；技能 `KIWI`（1 请求 0 工具）vs 2 次工具执行去读文件。`--approve` 不写 `trust.json`。
-- 读数的含义：不信任时模型仍**可以自己读**项目文件（信任不是安全边界，照 pi `security.md` 口径）；差别在"是否被自动注入"。
-
-### 项目信任门控（批 B，2026-10-28）
-
-- 扩展接面：`Kernel::new` 在需要扩展决定时先以"未信任"视图装载用户级/显式扩展（项目扩展不扫），派发 `project_trust`（首个 `yes`/`no` 胜出，`remember` 才落盘）；决定后复用同一宿主补装项目扩展，不重复初始化。`ExtensionOptions` 增 `include_project`，`ctx.isProjectTrusted()` 由共享 `Arc<AtomicBool>` 提供活值。
-- 子代理：示例扩展按 `ctx.isProjectTrusted()` 读项目 `.timo/agents`，并把 `--approve`/`--no-approve` 透传子进程。
-- 真机修正两处接线（单测与既有测试均未覆盖）：① 宿主逐扩展 `BasicServices` 漏接信任活值 → `isProjectTrusted()` 恒 `true`；② pre-trust 装载用了独立 `Arc`，决定后复用宿主读旧值。修后补两条内核级断言（覆盖 / pre-trust 决定两路径，命令处理器抛 `UNTRUSTED` 作判据）。
-- 验证：workspace **446 tests**（新增 8：kernel trust 2、ext host 3 拆入 `tests/host/trust.rs`、其余随批 B 早前加入）；批 B **8 组变异全红**并逐字节还原（首决定、undecided 双层、恒 true、needs 恒 false、复用跳过、逐扩展透传、独立 Arc、shim 恒 true）。
-- 真机 DeepSeek（临时目录，用户级扩展 `trustor` 决定）：`yes` → `[trust] project trusted (source: extension decision)` 且 `probe_trust` 返回 `TRUST=true`；`no` → `3 resource(s) skipped`、`TRUST=false`；`remember:true` 写 `trust.json`，重启后 `source: saved decision`。T10：信任时项目代理 `probe` 跑通（`SUBAGENT_PROJECT_OK`），包装 exe 记录子进程 argv 含 `--approve`；`--no-approve` 时项目代理不可见（`unknown subagent`）、用户级代理可用且 argv 含 `--no-approve`。
-- 体量：`runtime.js` 超 500 行（504），按 standards/08 §4 拆出 `shim/runtime_dispatch.js`（路由与事件派发），`runner.rs` 用 `concat!(include_str!×2)` 一次求值；`tests/host.rs`（550）拆出 `tests/host/trust.rs`，`trust/mod.rs`（501）拆出 `trust/tests.rs`。
-
-### 项目信任门控（批 C，2026-10-28）
-
-- 桌面接线：桥接新增 `BridgeEvent::Trust { request, respond }`（询问）与 `BridgeEvent::TrustReport(TrustReport)`（结论，`Ready` 之前发出）；`TrustBroker` 实现 `ProjectTrustPrompt`，窗口关闭/通道断开返回 `None`（内核按不信任处理）。桌面新增 `features/trust.rs`：五项选择 sheet（信任 / 信任父目录 / 仅本次信任 / 不信任 / 仅本次不信任），展示工作目录、资源清单与已保存决定；Esc/遮罩 = 仅本次不信任；未信任结论写进既有 notice 行，状态徽标留精修批次。`app.rs` 超行数后把事件分发拆到 `app_events.rs`（421），`bridge.rs` 的测试拆到 `bridge_tests.rs`。
-- 验证：workspace **451 tests**（新增 5：桥接往返 2、桌面 sheet 点击/Esc 2、真实内核装配顺序 1）；批 C **4 组变异全红**并逐字节还原（Esc 改写为保存不信任、桥接丢弃选择、render 不弹 sheet、`spawn` 不接 `trust_prompt`）。后两条最初用 `blocking_recv()` 断言，在不弹 sheet 的变异下直接挂死，改 `try_recv()` 后才是干净的断言失败。
-- 真机 CLI 矩阵（临时目录，DeepSeek `deepseek-chat`）：T1 空目录无 `[trust]` 行；T5 保存不信任 → `1 resource(s) skipped`；T6 父目录信任 → `source: saved decision`、无告警；T7 无头 `ask` → 退出码 0、stderr 一行告警；T2/T3/T4/T10 沿用批 A/B 读数。T8 用管道喂 stdin 时 REPL 缓冲吞掉选项，落盘为默认"不信任"（安全方向），TTY 菜单仍是批 A 手工验收。
-- **T9 桌面实机未跑**：GUI 启动在当前权限模式被拦截（需人工），弹框/点击/回传由 gpui 测试覆盖（含"真实内核经桥接发问 → 回答 → 结论先于 Ready"的无 GUI 用例）；实机读数（截图）待所有者本地补。
+- 构建产物：本批前 25.2 GiB（incremental 3.0 / deps 21.0），`clean-build` 后 14.0 GiB（incremental 3.0 / deps 9.8）；批 B 收口 20.7 GiB（incremental 3.2 / deps 16.1），批 C 收口 23.6 GiB（incremental 4.2 / deps 18.1）；信任门控撤回后当前 24.0 GiB（incremental 4.5 / deps 18.1，软限内、incremental 触 WARN）；阶段收尾再跑。
 
 ## 已知问题与风险
 
 - **codemode 超时/取消用例在 GitHub Windows runner 偶发**（2026-10-28 推送 CI 发现，重跑即绿）：`codemode::tests::limits::timeout_and_cancel_interrupt_a_busy_script` 偶报 `Script sandbox failed: Exception generated by QuickJS` 而非 `Script aborted`。测试用固定 100 ms 等待后取消，冷启动慢时中断落在 QuickJS 初始化窗口；后续改为等首个执行事件再取消，或放宽为"任一中断类错误"。本机与重跑均绿，未在本轮改测试。
 
-- **项目技能无信任门控**（D33）：**已由详设 12 收口**；批 A（2026-10-28）已把设置/MCP/扩展/技能/模板/系统提示接到同一信任开关并真机对照；批 B 已收紧子代理定义（项目 `.timo/agents` 随信任读取，子进程透传决定）。
 - **工作树嵌套去重留 P2**（D36）：主仓与嵌套 worktree 各有一份 `AGENTS.md` 时可能重复注入。
 - **每轮 usage 行只显示最后一次请求**（Phase 1 既有行为）：一轮里发生工具调用时，`[usage]` 是最后一条 assistant 消息的读数；整轮/会话合计以 `/session` 为准。本阶段未改这一语义。
 - **费用依赖费率配置**：`models.json` 未写 `cost` 时费用恒为 0；不重新计价是设计选择，需在配置里给费率。
 - **缓存统计只在 CLI `/session` 呈现**，桌面暂无 cache 行；桌面状态栏的费用已含缓存计价，不新增面板（设计 05 §3.3）。
-- `target/` 无 sccache 时不做全清；当前 23.2GiB（incremental 5.2），阶段收尾需跑 `clean-build`。
+- `target/` 无 sccache 时不做全清；当前 24.0GiB（incremental 4.5），阶段收尾需跑 `clean-build`。
 - **DeepSeek 思考模式 + 工具调用的 `reasoning_content` 回放**（B2 真机发现）：从非思考模型切到 `deepseek-flash` 时，含工具调用的 assistant 历史被拒（400，要求回传 `reasoning_content`）；同一历史改投 `deepseek-reasoner` 正常。我们的 openai 适配器未把思考内容写回请求；属供应商兼容项，未在本批修，随 provider composer/codemode 的思考链处理一起定。
-- **无头 stderr 混入技能告警噪音**：`--no-session -p` 一次运行会打出项目 `.agents/skills/` 里 8 条 frontmatter 告警（README 与 ponytail 等非技能文件被扫）。资源告警本身是要出口的，但子代理场景里父进程会把 stderr 原文贴进结果，噪音挤掉有效信息。处置方向（未定）：`-p`/`--mode json` 下只出口与本次请求相关的告警，或把非技能 md 排除出扫描面——随 P2 信任与资源治理一起定。
+- **无头 stderr 混入技能告警噪音**：`--no-session -p` 一次运行会打出项目 `.agents/skills/` 里 8 条 frontmatter 告警（README 与 ponytail 等非技能文件被扫）。资源告警本身是要出口的，但子代理场景里父进程会把 stderr 原文贴进结果，噪音挤掉有效信息。处置方向（未定）：`-p`/`--mode json` 下只出口与本次请求相关的告警，或把非技能 md 排除出扫描面——随资源治理一起定。
 
 ## 下一步
 
-1. P2 第四题收尾：批 C 桌面接线与 CLI 矩阵已落地（2026-10-28）；剩 T9 桌面实机（GUI 交互需人工）与 T8 的 TTY 复验 → 全部收口后进入阶段收尾。
-2. 桌面视觉精修（并行线）：research/07 → 设计稿 → 批次实现；与内核零冲突。
-3. 阶段收尾：D1~D7 与 P2 各题验收 → 本报告补全 → `clean-build` → tag `phase-3.5.end`。
+1. 桌面视觉精修（并行线）：research/07 → 设计稿 → 批次实现；与内核零冲突。
+2. 阶段收尾：D1~D7 与 P2 各题验收 → 本报告补全 → `clean-build` → tag `phase-3.5.end`。
 
 ## 文档更新清单
 

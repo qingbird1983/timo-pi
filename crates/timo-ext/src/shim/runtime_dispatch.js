@@ -60,12 +60,6 @@ globalThis.__timo_dispatch = async function (event, payloadJson) {
           if (result && result.systemPrompt !== undefined) {
             current = { ...current, systemPrompt: result.systemPrompt };
           }
-        } else if (event === "project_trust") {
-          // 第一个给出 yes/no 的扩展拥有决定；undecided 继续问下一个。
-          if (result && (result.trusted === "yes" || result.trusted === "no")) {
-            merged = result;
-            break;
-          }
         } else if (result !== undefined && result !== null) {
           merged = result;
         }

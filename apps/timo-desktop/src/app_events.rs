@@ -60,22 +60,6 @@ impl DesktopApp {
             BridgeEvent::Review { request, respond } => {
                 self.handle_review_request(request, respond, cx);
             }
-            BridgeEvent::Trust { request, respond } => {
-                self.handle_trust_request(request, respond, cx);
-            }
-            BridgeEvent::TrustReport(report) => {
-                if !report.trusted {
-                    self.notice = Some(
-                        t!(
-                            "trust.notice_untrusted",
-                            count = report.skipped,
-                            source = report.source.clone()
-                        )
-                        .to_string(),
-                    );
-                }
-                self.trust_report = Some(report);
-            }
             BridgeEvent::Providers(providers) => {
                 self.providers = providers;
                 self.provider_error = None;

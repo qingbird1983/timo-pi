@@ -7,10 +7,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use timo_config::KEYCHAIN_SERVICE;
-use timo_kernel::trust::{ProjectTrustPrompt, TrustRequest};
 use timo_kernel::{
     Kernel, KernelEvent, KernelOptions, Message, ReviewDecision, ReviewKind, SessionInfo,
-    SlashCommand, ToolReview, ToolReviewRequest, TrustChoice, UsageSummary,
+    SlashCommand, ToolReview, ToolReviewRequest, UsageSummary,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tokio::sync::oneshot;
@@ -94,19 +93,6 @@ pub struct ProviderInfo {
     pub editable: bool,
 }
 
-/// 装配完成后的项目信任结论（只读，供状态行与诊断）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TrustReport {
-    /// 是否加载项目资源。
-    pub trusted: bool,
-    /// 决定来源的短名（`TrustSource::label`）。
-    pub source: String,
-    /// 不信任时被跳过的资源数。
-    pub skipped: usize,
-    /// 存储读写问题（若有）。
-    pub notice: Option<String>,
-}
-
 /// 内核发给 UI 的事件。
 #[derive(Debug)]
 pub enum BridgeEvent {
@@ -145,15 +131,6 @@ pub enum BridgeEvent {
         /// 决定通道；UI 关闭窗口即 drop → 拒绝。
         respond: oneshot::Sender<ReviewDecision>,
     },
-    /// 项目信任询问；UI 决定后经 `respond` 回传（`None` = 界面关闭/取消）。
-    Trust {
-        /// 待决的项目资源与上下文。
-        request: TrustRequest,
-        /// 决定通道；窗口关闭即 drop → 按"不信任（本次）"。
-        respond: oneshot::Sender<Option<TrustChoice>>,
-    },
-    /// 项目信任结论（装配完成、`Ready` 之前发出；设计 12 §3.5）。
-    TrustReport(TrustReport),
     /// 供应商列表。
     Providers(Vec<ProviderInfo>),
     /// 某供应商密钥已保存。
@@ -195,9 +172,6 @@ pub fn spawn(options: KernelOptions, review: ReviewPrefs) -> Bridge {
     options.tool_review = Some(Arc::new(ReviewBroker {
         events: event_tx.clone(),
         prefs: prefs.clone(),
-    }));
-    options.trust_prompt = Some(Arc::new(TrustBroker {
-        events: event_tx.clone(),
     }));
 
     let thread_events = event_tx.clone();
@@ -275,28 +249,6 @@ impl ToolReview for ReviewBroker {
     }
 }
 
-/// UI 侧信任询问器：把请求交给界面并等待 `oneshot` 选择。
-struct TrustBroker {
-    events: UnboundedSender<BridgeEvent>,
-}
-
-impl ProjectTrustPrompt for TrustBroker {
-    fn ask<'a>(
-        &'a self,
-        request: TrustRequest,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<TrustChoice>> + Send + 'a>> {
-        let (respond, answer) = oneshot::channel();
-        let sent = self.events.send(BridgeEvent::Trust { request, respond });
-        Box::pin(async move {
-            if sent.is_err() {
-                return None;
-            }
-            // 通道断开 = 窗口已关闭；`None` 由内核按"不信任（本次）"处理。
-            answer.await.unwrap_or(None)
-        })
-    }
-}
-
 async fn run(
     options: KernelOptions,
     data_dir: Option<PathBuf>,
@@ -313,14 +265,6 @@ async fn run(
     };
 
     forward_events(&kernel, event_tx.clone());
-
-    let trust = kernel.project_trust();
-    let _ = event_tx.send(BridgeEvent::TrustReport(TrustReport {
-        trusted: trust.trusted,
-        source: trust.source.label().to_string(),
-        skipped: trust.skipped.len(),
-        notice: trust.notice.clone(),
-    }));
 
     let sessions = kernel.list_sessions();
     let _ = event_tx.send(BridgeEvent::Ready {
@@ -492,7 +436,3 @@ async fn run_once(
 fn send_sessions(kernel: &Kernel, event_tx: &UnboundedSender<BridgeEvent>) {
     let _ = event_tx.send(BridgeEvent::Sessions(kernel.list_sessions()));
 }
-
-#[cfg(test)]
-#[path = "bridge_tests.rs"]
-mod tests;

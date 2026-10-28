@@ -34,7 +34,6 @@ pub fn summarize(
         data_dir: Some(data_dir.to_path_buf()),
         explicit,
         include_project_pi: true,
-        include_project: true,
     })
     .extensions
     .into_iter()

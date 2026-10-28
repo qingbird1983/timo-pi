@@ -1,6 +1,6 @@
 # 设计 00：Phase 3.5 总览与跨模块决策
 
-- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批；P1 详设 04~07 于同日补定稿；D6 标尺详设 08 于同日定稿；P2 详设 09~11 于 10-27、12 于 10-28 定稿）
+- 状态：定稿（2026-10-27，与 P0 详设 01~03 同批；P1 详设 04~07 于同日补定稿；D6 标尺详设 08 于同日定稿；P2 详设 09~11 于 10-27 定稿；12（项目信任）已撤回，见 ADR-0015）
 - 关联：roadmap/phase-3.5；ADR-0011/0013；research/06；design/phase-1/02~05
 - 行为蓝本：pi 1.4.0（本地只读，不复制；铁律 7）
 
@@ -32,9 +32,8 @@
 | `apps/timo-cli/src/json_mode.rs` | `-p` / `--mode json` 无头输出 | P1 | 06 |
 | `timo-ext`（宿主 fs API + `execParallel`）+ `examples/extensions/subagent` | D6 标尺：子代理扩展、无头子进程、用量回报 | D6 | 08 |
 | `timo-tools/src/nested.rs` + `timo-agent/src/run/nested.rs` + `timo-kernel/src/codemode/` | 嵌套工具执行接缝、codemode 沙箱与脚本工具面 | P2 | 11 |
-| `timo-kernel/src/trust/{mod,gate,store}.rs` + `timo-config`（全局层） | 项目信任判定、门控面开关、`trust.json` 存储 | P2 | 12 |
 
-后续批次（P2）：`prompt_templates`、`provider-composer`、`nested-tool-calls`、`trust` 四题详设均已定稿（09/10/11/12）；实现按各详设的批次推进。
+后续批次（P2）：`prompt_templates`、`provider-composer`、`nested-tool-calls` 三题详设定稿并实现；`trust` 一题撤回（ADR-0015），项目资源不做信任门控。
 
 ## 4. 批次与提交序列
 
@@ -44,7 +43,7 @@
 4. 用量聚合（单测：分桶键、成本、缺失字段、工具/摘要桶）。
 5. CLI 与桌面接线（命令菜单列出技能；状态区显示用量；D1 的桌面半场可验）。
 6. P1 详设 04~07 定稿 → 实现（压缩、缓存统计与预热、无头模式、会话分区与导出）。
-7. P2 详设定稿 → 实现（模板、路由、codemode、信任；09/10/11/12 均已定稿）。
+7. P2 详设定稿 → 实现（模板、路由、codemode；09/10/11 已定稿；信任门控撤回，ADR-0015）。
 8. 验收 D1~D7 → `report.md` → 看板/CHANGELOG → tag `phase-3.5.end`。
 
 > 每批门禁四连不变（fmt / clippy / workspace tests / check-size）；新增提示输出用快照式断言（固定输入 → 逐字期望），不只 `contains`。
@@ -61,7 +60,7 @@
 | K6 | 技能正文不进提示；`/skill:name` 把正文展开进**用户消息**，参数追加在后 | 与 pi 一致；未知技能原样透传，不报错 |
 | K7 | 命令注册面在内核：内建名 + 模板 + 技能 + 扩展命令合并，扩展仍带 `plugin_<id>_` 前缀 | 单一来源，CLI 与桌面消费同一清单；P0 只要求内建命令的**语义**，不要求 `share/bug/import/llama` 实现（D32） |
 | K8 | 用量从会话消息推导（assistant 消息的 `usage`；工具结果的 `usage` 进 `Tools/summaries` 桶），按 `provider/model` 分桶；`usage`/摘要 entry 在 P1 落地后再接入 | 与 pi 的 `usage-totals` 对齐；不新增落盘格式；P0 不改写会话 |
-| K9 | 设置键沿用本项目既有的 snake_case 约定（`default_tools` 等）；pi 的多词键转 snake_case（`enable_skill_commands`、`default_project_trust`），单词键同名（`skills`、`prompts`、`compaction`） | 与现有 settings.json 一致，避免两套命名；对照关系写进 01 |
+| K9 | 设置键沿用本项目既有的 snake_case 约定（`default_tools` 等）；pi 的多词键转 snake_case（`enable_skill_commands`），单词键同名（`skills`、`prompts`、`compaction`） | 与现有 settings.json 一致，避免两套命名；对照关系写进 01 |
 
 ## 6. 与 pi 的偏离登记（接续 Phase 2 的 D29）
 
@@ -72,7 +71,7 @@
 | D30 | 系统提示不落会话、不走"按节补丁" | b（自有会话格式，ADR-0007） | 装配与 `/reload` 时重建整段；内容等价，缓存等价；代价是改动后首轮缓存冷启动 |
 | D31 | 项目技能目录增加 `.timo/skills`，并保留 `.pi/skills`、`.agents/skills` | c（本项目配置目录） | 发现顺序：用户 → 项目 `.timo` → 项目 `.pi` → `.agents`（近到远）→ 显式路径 |
 | D32 | `share`/`bug`/`import`/`llama`/`scoped-models` 等命令不实现 | d（范围收敛） | 命令注册面如实标注"未实现"，不静默消失；语义对齐只覆盖可执行命令 |
-| D33 | 项目技能在 P0 无信任门控（pi 门控 `.pi/skills` 与项目 `.agents/skills`） | c（无信任管理器） | 与技术相关风险：技能是文本指令，与不受门控的上下文文件同级；本项目的审阅接缝是安全垫；**已由详设 12 关闭**（项目技能/模板/代理定义随信任门控收紧，实现待开工） |
+| D33 | 项目技能不做信任门控（pi 门控 `.pi/skills` 与项目 `.agents/skills`） | c（产品定位，ADR-0015） | 技能是文本指令，与不受门控的上下文文件同级；本项目不是 VS Code 式工作区模型，启动不弹"是否信任此项目"；安全垫是审阅接缝与 OS 隔离 |
 | D34 | 用量分桶暂不含工具结果的内嵌用量 | d（嵌套调用在 P2） | P0 统计 assistant 消息与工具结果自带的 `usage`（当前工具不产出，桶多为空）；P2 嵌套调用接线后补真实合并 |
 | D35 | 提示中的文档索引指向本仓库文档结构，而非 pi 安装路径 | a（自有文档） | 结构同 pi（主文档/附加文档/示例 + 主题索引），内容按本项目；运行时找不到文档目录则整节省略，不编造路径 |
 | D36 | 工作树嵌套去重留 P2 | d（范围收敛） | P0 只按真实路径去重（符号链接共享一份）；主仓与嵌套 worktree 各有一份 `AGENTS.md` 时可能重复注入，登记为已知偏差 |
@@ -113,7 +112,6 @@
 | #5 JSON Schema | 无变化 |
 | #6 富流事件 | 用量来自既有 `KernelEvent` 与 `AssistantStreamEvent`，不新增裸字符串流 |
 | #7 取消贯穿 | 技能/上下文加载是启动期同步 I/O，不参与取消；`/skill:` 展开在 run 前置阶段完成 |
-| 信任门控（装配期） | 不属于接缝/管线：`Kernel::new` 在加载项目资源前做一次判定；不进入工具循环，不改 `KernelEvent` 线格式（详设 12） |
 
 ## 8. 验收映射
 
@@ -136,7 +134,7 @@
 ## 10. 未决问题
 
 - **docs 整合评审**：需要先给候选清单（合并/归档/删除），删除面待确认后才动。
-- **项目技能信任**：P0 按 D33 无门控；P2 已由详设 12 定稿（项目设置/MCP/扩展/技能/模板/系统提示/子代理定义同受门控，上下文文件不门控），实现按 12 的批次推进。
+- **项目资源信任**：按 D33/ADR-0015 不做信任门控；启动不询问，项目设置/MCP/扩展/技能/模板/系统提示/子代理定义照常加载。
 - **命令注册面的模板接缝**：P0 先留接口，模板与技能共用"名称 → 展开"两步；P2 的实现不得改这两步的顺序。
 - **提示缓存冷启动**：提示结构升级会让每台机器首轮缓存失效一次，属预期影响，不设兼容层。
 - **缓存预热元数据**：`cache_ttl_seconds` 目前只给 Anthropic 内置目录（300 秒）；自定义模型需用户在 `models.json` 写；P1 实现时不猜默认值。

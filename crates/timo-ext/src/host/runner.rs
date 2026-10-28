@@ -330,16 +330,6 @@ pub(super) fn dispatch_all(
                 }
                 merged = current.clone();
             }
-            "project_trust" => {
-                // 第一个 yes/no 拥有决定；undecided/null 继续。
-                if matches!(
-                    result.get("trusted").and_then(JsonValue::as_str),
-                    Some("yes" | "no")
-                ) {
-                    merged = result;
-                    break;
-                }
-            }
             _ => {
                 if !result.is_null() {
                     merged = result;

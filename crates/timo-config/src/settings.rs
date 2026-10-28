@@ -62,19 +62,6 @@ pub enum CacheWarmingMode {
     Idle,
 }
 
-/// 没有保存决策时的项目信任缺省（phase-3.5/12 §5；只读全局层）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DefaultProjectTrust {
-    /// 一律信任（无交互界面时也不问）。
-    Always,
-    /// 一律拒绝。
-    Never,
-    /// 询问；无交互界面时按拒绝。
-    #[default]
-    Ask,
-}
-
 /// 自动上下文压缩设置（phase-3.5/04；默认值与 pi 一致）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -135,8 +122,6 @@ pub struct Settings {
     pub compaction: CompactionSettings,
     /// 缓存预热模式。
     pub cache_warming: CacheWarmingMode,
-    /// 没有保存决策时的项目信任缺省（只读全局层；phase-3.5/12）。
-    pub default_project_trust: DefaultProjectTrust,
 }
 
 impl Default for Settings {
@@ -159,7 +144,6 @@ impl Default for Settings {
             enable_prompt_templates: true,
             compaction: CompactionSettings::default(),
             cache_warming: CacheWarmingMode::Streaming,
-            default_project_trust: DefaultProjectTrust::default(),
         }
     }
 }
@@ -201,44 +185,16 @@ fn read_json(path: &Path) -> Result<Option<serde_json::Value>> {
         })
 }
 
-/// 只读全局设置（不合并项目层）；文件缺失返回全默认。
-///
-/// 信任判定用它取 `default_project_trust`：项目设置本身受门控，用被门控的值
-/// 决定是否门控会形成循环（phase-3.5/12 §3.2）。
-///
-/// # Errors
-/// 文件存在但非法时返回 [`ConfigError::Invalid`]。
-pub fn load_global_settings(global: &Path) -> Result<Settings> {
-    let mut merged = serde_json::Value::Object(serde_json::Map::new());
-    if let Some(v) = read_json(global)? {
-        merge_json(&mut merged, v);
-    }
-    serde_json::from_value(merged).map_err(|e| ConfigError::Invalid {
-        path: global.to_path_buf(),
-        reason: e.to_string(),
-    })
-}
-
 /// 加载设置：全局（`settings_path()`，可缺）+ 项目（`<cwd>/.timo/settings.json`，可缺），项目深合并胜出。
 ///
 /// # Errors
 /// 任一文件存在但非法时返回 [`ConfigError::Invalid`]。
 pub fn load_settings(global: &Path, project: &Path) -> Result<Settings> {
-    load_settings_with(global, Some(project))
-}
-
-/// 同 [`load_settings`]，项目层可选：项目未被信任时传 `None`，只读全局层（phase-3.5/12）。
-///
-/// # Errors
-/// 读到的文件存在但非法时返回 [`ConfigError::Invalid`]。
-pub fn load_settings_with(global: &Path, project: Option<&Path>) -> Result<Settings> {
     let mut merged = serde_json::Value::Object(serde_json::Map::new());
     if let Some(v) = read_json(global)? {
         merge_json(&mut merged, v);
     }
-    if let Some(project) = project
-        && let Some(v) = read_json(project)?
-    {
+    if let Some(v) = read_json(project)? {
         merge_json(&mut merged, v);
     }
     serde_json::from_value(merged).map_err(|e| ConfigError::Invalid {

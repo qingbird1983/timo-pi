@@ -78,21 +78,6 @@ review:
   accept: 接受
   reject: 拒绝
 
-trust:
-  title: 信任此项目？
-  intro: 该项目包含可执行或可注入的项目级资源；加载前需要你确认。
-  cwd: 工作目录
-  resources: 将加载的项目资源
-  accept: 信任
-  accept_parent: 信任父目录（%{path}）
-  accept_once: 仅本次信任
-  deny: 不信任
-  deny_once: 仅本次不信任
-  saved_trusted: 已保存的决定（信任）
-  saved_untrusted: 已保存的决定（不信任）
-  notice_untrusted: "项目未受信任（跳过 %{count} 项资源，来源：%{source}）"
-  notice_trusted: "项目已信任（来源：%{source}）"
-
 settings:
   title: 设置
   close: 返回

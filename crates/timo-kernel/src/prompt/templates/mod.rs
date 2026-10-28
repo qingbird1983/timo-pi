@@ -36,10 +36,9 @@ pub(crate) fn template_roots(
     cwd: &Path,
     extra: &[String],
     include_defaults: bool,
-    project: bool,
 ) -> Vec<PathBuf> {
     if include_defaults {
-        return resource_roots(data_dir, cwd, extra, "prompts", project);
+        return resource_roots(data_dir, cwd, extra, "prompts");
     }
     extra
         .iter()

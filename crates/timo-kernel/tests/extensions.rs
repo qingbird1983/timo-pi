@@ -60,8 +60,6 @@ fn options(dir: &Path) -> ExtensionOptions {
         explicit: vec![],
         interactive: false,
         include_project_pi: false,
-        include_project: true,
-        project_trusted: Arc::new(AtomicBool::new(true)),
         abort: Arc::new(AtomicBool::new(false)),
         running: Arc::new(AtomicBool::new(false)),
         flags: Default::default(),

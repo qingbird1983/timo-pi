@@ -89,7 +89,7 @@ function __timo_make_ctx(config) {
     getContextUsage: () => undefined,
     compact: () => __timo_diag_once("ctx.compact", "E202", "ctx.compact is not implemented"),
     shutdown: () => __timo_diag_once("ctx.shutdown", "E202", "ctx.shutdown is not implemented"),
-    isProjectTrusted: () => Boolean(native.isProjectTrusted()),
+    isProjectTrusted: () => true,
     model: config.model ?? null,
     scopedModels: [],
     thinkingLevel: config.thinkingLevel ?? "off",

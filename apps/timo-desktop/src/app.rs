@@ -14,7 +14,7 @@ use gpui_kit::*;
 use timo_kernel::{KernelOptions, SessionInfo, SlashCommand, UsageSummary};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo, TrustReport};
+use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo};
 use crate::features::chat::ChatState;
 use crate::features::palette::{
     AcceptReviewAction, CloseOverlayAction, NewSessionAction, OpenSettingsAction,
@@ -22,7 +22,6 @@ use crate::features::palette::{
 };
 use crate::features::review::ReviewState;
 use crate::features::settings_view::SettingsTab;
-use crate::features::trust::TrustState;
 use crate::settings::{DesktopSettings, ThemePref};
 use crate::theme;
 
@@ -55,8 +54,6 @@ pub struct DesktopApp {
     pub(crate) font_scale: f32,
     pub(crate) settings_reset: bool,
     pub(crate) review: ReviewState,
-    pub(crate) trust: TrustState,
-    pub(crate) trust_report: Option<TrustReport>,
     pub(crate) palette: Entity<CommandState>,
     pub(crate) palette_open: bool,
     pub(crate) settings_open: bool,
@@ -210,8 +207,6 @@ impl DesktopApp {
             font_scale: settings.font_scale,
             settings_reset,
             review: ReviewState::new(window, cx),
-            trust: TrustState::new(cx),
-            trust_report: None,
             palette: cx.new(|cx| CommandState::new(window, cx)),
             palette_open: false,
             settings_open: false,
@@ -355,17 +350,6 @@ impl Render for DesktopApp {
         if !self.review.queue.is_empty() && !self.review.open {
             cx.defer_in(window, |this, window, cx| {
                 this.open_next_review(window, cx);
-            });
-        }
-        if self.trust.pending.is_none() && self.trust.open {
-            self.trust.open = false;
-            if window.has_active_sheet(cx) {
-                cx.defer_in(window, |_, window, cx| window.close_sheet(cx));
-            }
-        }
-        if self.trust.pending.is_some() && !self.trust.open {
-            cx.defer_in(window, |this, window, cx| {
-                this.open_trust_sheet(window, cx);
             });
         }
         let center = {

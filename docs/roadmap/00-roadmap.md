@@ -26,7 +26,7 @@ graph LR
 | Phase 1 | 无界面的最小可用内核：2 种协议 + 循环 + 工具 + 会话 + MCP | 6~10 周 | ✅ 完成（2026-10-26，tag `phase-1.end`） |
 | Phase 2 | pi 编排类扩展可装载生效（A 轨） | 3~6 周 | ✅ 完成（2026-10-26，tag `phase-2.end`；报告 `docs/design/phase-2/report.md`） |
 | Phase 3 | gpui-kit 桌面壳日常可用 + NSH 嵌入 PoC | 4~8 周 | ✅ 完成（2026-10-27，tag `phase-3.end`；报告 `docs/design/phase-3/report.md`） |
-| [Phase 3.5](phase-3.5-kernel-depth.md) | 内核深化：补齐 pi 灵魂件（项目上下文/提示词工程/skills/compaction/缓存/无头模式），交互逻辑对齐 | 3~6 周 | 🔄 P0+P1 完成（D1/D2/D3/D4/D5/D7 通过）；**D6 subagent 标尺完成**（详设 08 + 四批落地，2026-10-27）；**P2 进行中：prompt 模板（09）与 provider composer/虚拟模型（10，批 A~B3）已落地；codemode（11）批 A~C 全部落地并真机验收；信任门控（12）批 A/B/C 落地（内核+CLI+扩展事件+子代理透传+桌面提示框+CLI 矩阵；T9 桌面实机待人工）**（报告 `docs/design/phase-3.5/report.md`） |
+| [Phase 3.5](phase-3.5-kernel-depth.md) | 内核深化：补齐 pi 灵魂件（项目上下文/提示词工程/skills/compaction/缓存/无头模式），交互逻辑对齐 | 3~6 周 | 🔄 P0+P1 完成（D1/D2/D3/D4/D5/D7 通过）；**D6 subagent 标尺完成**（详设 08 + 四批落地，2026-10-27）；**P2 完成**：prompt 模板（09）与 provider composer/虚拟模型（10）已落地；codemode（11）批 A~C 全部落地并真机验收；第四题（项目信任门控）已撤回（ADR-0015）（报告 `docs/design/phase-3.5/report.md`） |
 | [审查收债](audit-debt.md) | 清偿 2026-10-27 审查发现：A 组 1 项数据缺陷 + B 组 9 项代码缺口 + C 组 2 项文档滞后 + D 组 9 项复杂度清理（约 330 行 + 1 依赖） | 4~6 天 | 待启动（**前置：Phase 3.5 收口**） |
 | Phase 4 | GUI 原生插件系统闭环（B 轨） | 4~8 周 | 未开始 |
 

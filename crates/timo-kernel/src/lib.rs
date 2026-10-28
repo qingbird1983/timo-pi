@@ -16,7 +16,6 @@ mod kernel;
 mod prompt;
 mod resolve;
 mod session_route;
-pub mod trust;
 mod usage;
 mod warmer;
 
@@ -52,7 +51,6 @@ pub use timo_ai::{
 pub use timo_config::ThinkingLevel;
 pub use timo_session::SessionInfo;
 pub use timo_tools::{ReviewDecision, ReviewKind, ToolOutput, ToolReview, ToolReviewRequest};
-pub use trust::{ProjectResource, ProjectTrust, TrustChoice, TrustScopeChoice, TrustSource};
 pub use usage::{UsageBucket, UsageSummary, UsageTotals};
 pub use warmer::WarmingState;
 

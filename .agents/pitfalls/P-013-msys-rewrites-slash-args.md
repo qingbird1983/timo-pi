@@ -26,4 +26,4 @@ MSYS_NO_PATHCONV=1 ./target/debug/timo.exe -p "/hello"
 
 ## 归属
 
-phase-3.5/12 批 A 真机验收（2026-10-28）；无代码改动。
+phase-3.5 P2 真机验收（2026-10-28）；无代码改动。

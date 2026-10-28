@@ -1,11 +1,10 @@
-//! 首次使用前的装配：MCP 枚举、扩展加载、提示与 agent（设计 06 / 08 / 12）。
+//! 首次使用前的装配：MCP 枚举、扩展加载、提示与 agent（设计 06 / 08）。
 
 use std::sync::Arc;
 
 use timo_agent::{AgentHandle, KernelEvent, LoopConfig, ToolExecutionMode};
 
 use super::Kernel;
-use super::trust_api;
 use crate::extensions::{self, ExtensionOptions};
 use crate::prompt;
 
@@ -28,22 +27,17 @@ impl Kernel {
             }
         }
         if self.ext.is_none() && self.extensions_enabled {
-            let runtime = extensions::load_extensions_with(
-                ExtensionOptions {
-                    data_dir: self.data_dir.clone(),
-                    work_dir: self.work_dir.clone(),
-                    explicit: self.extension_paths.clone(),
-                    interactive: self.extensions_interactive,
-                    include_project_pi: true,
-                    include_project: self.project_trust.trusted,
-                    abort: Arc::clone(&self.ext_abort),
-                    running: Arc::clone(&self.ext_running),
-                    flags: self.ext_flags.clone(),
-                    models: self.extension_models(),
-                    project_trusted: Arc::clone(&self.ext_project_trust),
-                },
-                self.pre_trust_ext.take(),
-            )
+            let runtime = extensions::load_extensions(ExtensionOptions {
+                data_dir: self.data_dir.clone(),
+                work_dir: self.work_dir.clone(),
+                explicit: self.extension_paths.clone(),
+                interactive: self.extensions_interactive,
+                include_project_pi: true,
+                abort: Arc::clone(&self.ext_abort),
+                running: Arc::clone(&self.ext_running),
+                flags: self.ext_flags.clone(),
+                models: self.extension_models(),
+            })
             .await;
             if let Some(host) = &runtime.host {
                 for meta in host.tools() {
@@ -71,11 +65,6 @@ impl Kernel {
                     None => (None, None),
                 };
             let (system_prompt, skills, mut warnings) = self.build_prompt();
-            warnings.extend(trust_api::warnings(
-                &self.project_trust,
-                &self.data_dir,
-                &self.work_dir,
-            ));
             for stray in &stray {
                 warnings.push(prompt::ResourceWarning {
                     kind: prompt::WarningKind::UnknownTool,

@@ -56,25 +56,20 @@ pub(crate) fn discover_context_files(
 }
 
 /// 自定义提示词：项目 `<cwd>/.timo/SYSTEM.md` 优先，其次全局 `<data_dir>/SYSTEM.md`。
-/// 项目未受信任时跳过项目文件（phase-3.5/12）。
 #[must_use]
-pub(crate) fn custom_prompt(data_dir: &Path, cwd: &Path, trusted: bool) -> Option<String> {
-    let project = trusted
-        .then(|| read_prompt_file(&cwd.join(".timo").join("SYSTEM.md")))
-        .flatten();
-    project.or_else(|| read_prompt_file(&data_dir.join("SYSTEM.md")))
+pub(crate) fn custom_prompt(data_dir: &Path, cwd: &Path) -> Option<String> {
+    read_prompt_file(&cwd.join(".timo").join("SYSTEM.md"))
+        .or_else(|| read_prompt_file(&data_dir.join("SYSTEM.md")))
 }
 
 /// 追加系统提示：全局在前、项目在后，以空行连接；都缺失时为 None。
-/// 项目未受信任时只保留全局文件（phase-3.5/12）。
 #[must_use]
-pub(crate) fn append_system_prompt(data_dir: &Path, cwd: &Path, trusted: bool) -> Option<String> {
+pub(crate) fn append_system_prompt(data_dir: &Path, cwd: &Path) -> Option<String> {
     let mut parts = Vec::new();
-    let mut paths = vec![data_dir.join("APPEND_SYSTEM.md")];
-    if trusted {
-        paths.push(cwd.join(".timo").join("APPEND_SYSTEM.md"));
-    }
-    for path in paths {
+    for path in [
+        data_dir.join("APPEND_SYSTEM.md"),
+        cwd.join(".timo").join("APPEND_SYSTEM.md"),
+    ] {
         if let Some(content) = read_prompt_file(&path) {
             parts.push(content.trim().to_string());
         }
@@ -198,18 +193,13 @@ mod tests {
         write(&data.join("SYSTEM.md"), "global prompt");
         write(&work.join(".timo/SYSTEM.md"), "project prompt");
         assert_eq!(
-            custom_prompt(&data, &work, true).as_deref(),
+            custom_prompt(&data, &work).as_deref(),
             Some("project prompt")
-        );
-        // 项目未受信任：跳过项目文件，回退全局（设计 12）。
-        assert_eq!(
-            custom_prompt(&data, &work, false).as_deref(),
-            Some("global prompt")
         );
 
         std::fs::remove_file(work.join(".timo/SYSTEM.md")).expect("remove");
         assert_eq!(
-            custom_prompt(&data, &work, true).as_deref(),
+            custom_prompt(&data, &work).as_deref(),
             Some("global prompt")
         );
     }
@@ -222,12 +212,8 @@ mod tests {
         write(&data.join("APPEND_SYSTEM.md"), "one");
         write(&work.join(".timo/APPEND_SYSTEM.md"), "two");
         assert_eq!(
-            append_system_prompt(&data, &work, true).as_deref(),
+            append_system_prompt(&data, &work).as_deref(),
             Some("one\n\ntwo")
-        );
-        assert_eq!(
-            append_system_prompt(&data, &work, false).as_deref(),
-            Some("one")
         );
     }
 
@@ -236,8 +222,8 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let data = temp.path().join("data");
         let work = temp.path().join("w");
-        assert_eq!(custom_prompt(&data, &work, true), None);
-        assert_eq!(append_system_prompt(&data, &work, true), None);
+        assert_eq!(custom_prompt(&data, &work), None);
+        assert_eq!(append_system_prompt(&data, &work), None);
         let (files, warnings) = discover_context_files(&work, &data);
         assert!(files.is_empty() && warnings.is_empty());
     }

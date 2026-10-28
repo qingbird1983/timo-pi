@@ -8,7 +8,7 @@
 
 - 技能（SKILL.md）：发现、校验、提示注入、`/skill:name` 展开、诊断告警。
 - 命令注册面：内建命令清单 + 技能命令 + 扩展命令合并为一个只读清单，CLI 与桌面共用。
-- 不做：模板展开（P2）、技能脚本执行、技能的权限模型（信任门控见详设 12，D33）。
+- 不做：模板展开（P2）、技能脚本执行、技能的权限模型（信任门控一题已撤回，ADR-0015）。
 
 ## 2. 技能数据模型
 
@@ -136,8 +136,7 @@ pub struct SlashCommand {
 | `/model`、`/thinking`、`/settings`、`/login`、`/logout` | Planned(后续) | 运行期切换模型需重建内核（Phase 3 已知限制） |
 | `/tree`、`/fork`、`/clone` | Unsupported | GUI 轨 backlog |
 | `/export` | Planned(P1) | 会话导出 |
-| `/trust` | Planned(P2) | 保存项目信任决定（详设 12；保存后下次启动生效） |
-| `/import`、`/share`、`/bug`、`/llama`、`/scoped-models`、`/copy`、`/name`、`/changelog`、`/hotkeys` | Unsupported | D32 |
+| `/import`、`/share`、`/bug`、`/llama`、`/scoped-models`、`/copy`、`/name`、`/changelog`、`/hotkeys`、`/trust` | Unsupported | D32；`/trust` 随信任门控一题撤回（ADR-0015） |
 
 `Unsupported` 与 `Planned` 的差异：前者本阶段范围外，后者有明确批次。CLI 对两者都打印一行说明，**不静默当普通提示发给模型**。
 
@@ -193,4 +192,4 @@ impl Kernel {
 - 预计：`skills.rs` ≈ 260 行、`commands.rs` ≈ 200 行、frontmatter 解析并入 `skills.rs`；均低于 500 行。
 - 依赖：`ignore` 从工作区既有依赖引入 `timo-kernel`（`Cargo.lock` 无新增条目，standards/04 准入表不新增）。
 - 风险 1：`ignore` crate 的跟随符号链接在极端目录结构下可能变慢；遍历有天然上限（技能目录通常很小），不另设深度上限。
-- 风险 2：项目技能无信任门控（D33）；P2 的信任管理器接入时必须先改本节再改代码。**已于 2026-10-28 由详设 12 回调**：项目 `.timo/skills`、`.pi/skills` 与祖先 `.agents/skills` 随项目信任门控加载；不信任时这些根不加入发现列表，`/skill:<项目技能>` 按未知技能原样透传，并在资源告警中列出被跳过的目录。
+- 风险 2：项目技能不做信任门控（D33/ADR-0015）；若未来产品形态变化需要门控，必须先改本节再改代码。

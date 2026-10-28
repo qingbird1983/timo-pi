@@ -10,4 +10,3 @@ pub(crate) mod review;
 pub(crate) mod settings_credentials;
 pub(crate) mod settings_view;
 mod sidebar;
-pub(crate) mod trust;

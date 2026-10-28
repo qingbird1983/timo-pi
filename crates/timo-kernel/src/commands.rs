@@ -177,7 +177,12 @@ const BUILTIN: [(&str, &str, Option<&str>, CommandStatus); 25] = [
         None,
         CommandStatus::Unsupported,
     ),
-    ("trust", "Save project trust", None, CommandStatus::Ready),
+    (
+        "trust",
+        "Save project trust",
+        None,
+        CommandStatus::Unsupported,
+    ),
 ];
 
 /// 内建命令（固定表序）。

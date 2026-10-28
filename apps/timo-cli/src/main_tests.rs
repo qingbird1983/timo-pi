@@ -16,35 +16,6 @@ fn common(args: &[&str]) -> Common {
 }
 
 #[test]
-fn trust_flags_map_to_override_and_conflict() {
-    assert_eq!(
-        build_options(&common(&["--approve"]), None, Some(false))
-            .expect("options")
-            .trust_override,
-        Some(true)
-    );
-    assert_eq!(
-        build_options(&common(&["--no-approve"]), None, Some(false))
-            .expect("options")
-            .trust_override,
-        Some(false)
-    );
-    assert_eq!(
-        build_options(&common(&[]), None, None)
-            .expect("options")
-            .trust_override,
-        None
-    );
-
-    let cmd =
-        <Common as clap::Args>::augment_args(clap::Command::new("timo").disable_help_flag(true));
-    assert!(
-        cmd.try_get_matches_from(["timo", "--approve", "--no-approve"])
-            .is_err()
-    );
-}
-
-#[test]
 fn tool_allowlist_and_prompt_flags_reach_kernel_options() {
     let options = build_options(
         &common(&[
@@ -54,7 +25,6 @@ fn tool_allowlist_and_prompt_flags_reach_kernel_options() {
             "--append-system-prompt",
             "flag rule",
         ]),
-        None,
         None,
     )
     .expect("options");
@@ -73,15 +43,15 @@ fn at_prefix_reads_the_file_into_the_prompt_appendix() {
     let path = dir.join("rule.md");
     std::fs::write(&path, "rule from file").expect("write");
     let flag = format!("@{}", path.display());
-    let options = build_options(&common(&["--append-system-prompt", &flag]), None, None)
-        .expect("readable file");
+    let options =
+        build_options(&common(&["--append-system-prompt", &flag]), None).expect("readable file");
     assert_eq!(options.append_system_prompt, ["rule from file".to_string()]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// 走生产入口拿用法错误文本（`KernelOptions` 不含 Debug，不能 unwrap_err）。
 fn usage_error(common: &Common) -> String {
-    match build_options(common, None, None) {
+    match build_options(common, None) {
         Ok(_) => panic!("expected a usage error"),
         Err(error) => error,
     }
@@ -102,8 +72,8 @@ fn empty_tool_list_and_unreadable_append_file_are_usage_errors() {
 
 #[test]
 fn a_bare_model_flag_leaves_the_provider_empty() {
-    let options = build_options(&common(&["--model", "deepseek-chat"]), None, None)
-        .expect("bare --model is legal");
+    let options =
+        build_options(&common(&["--model", "deepseek-chat"]), None).expect("bare --model is legal");
     assert_eq!(
         options
             .model_override
@@ -128,7 +98,6 @@ fn template_flags_reach_kernel_options() {
             "--no-prompt-templates",
         ]),
         None,
-        None,
     )
     .expect("options");
     assert_eq!(
@@ -138,7 +107,7 @@ fn template_flags_reach_kernel_options() {
     assert!(options.no_prompt_templates);
     // 空白项被丢掉，不会把 cwd 本身当成模板目录去扫。
     assert_eq!(
-        build_options(&common(&["--prompt-template", "   "]), None, None)
+        build_options(&common(&["--prompt-template", "   "]), None)
             .expect("options")
             .prompt_template_paths,
         Vec::<String>::new()
