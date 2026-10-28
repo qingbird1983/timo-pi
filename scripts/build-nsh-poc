@@ -2,6 +2,8 @@
 # 生成 NSH PoC 的开发签名密钥与两个签名包（设计 03 §5）。
 #
 # 只调用官方 `nsh` CLI：keygen → certify → publish → verify。
+# 前提：`cargo install nsh-cli --version 0.3.0 --locked`（产出 ~/.cargo/bin/nsh），
+# 或 `NSH=/path/to/nsh bash scripts/build-nsh-poc`；版本必须与锁定的 nsh-platform-gpui 0.3.0 对齐。
 # 产物写入用户数据目录（默认 <数据目录>/timo-pi/nsh-poc），不入仓库；
 # 私钥留在该目录的 keys/ 下，不打印、不提交。
 set -euo pipefail
