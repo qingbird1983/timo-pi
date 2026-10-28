@@ -11,6 +11,7 @@ mod diag;
 mod discovery;
 mod error;
 mod fs_scope;
+mod gui_manifest;
 mod host;
 mod manifest;
 #[cfg(feature = "pack")]
@@ -27,6 +28,10 @@ pub use discovery::{
 };
 pub use error::ExtError;
 pub use fs_scope::dir_scope;
+pub use gui_manifest::{
+    GUI_MANIFEST_SCHEMA, GuiManifest, GuiManifestError, HOST_API_VERSION, PermissionTier,
+    PluginKind, SLOT_KINDS, SlotDecl, is_valid_nsh_id,
+};
 pub use host::{
     BasicServices, DirItem, ExecOutput, ExecRequest, ExtensionHost, FetchOutput, Grants,
     HostServices, LoadedExtension, ToolCallResult, ToolMeta, VirtualModelMeta,

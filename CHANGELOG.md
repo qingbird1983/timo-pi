@@ -6,6 +6,17 @@
 
 ---
 
+## [0.1.104] - 2026-10-28
+
+### Phase 4 P0 第一批：B 轨清单 + 内核统一插件清单
+
+- `timo-ext` 新增 schema 2 清单 `GuiManifest`：kind/version/nsh_id/api/tier/slots/queries/actions/tools；校验顺序为字段（E720）→ 挡位上限（E722）→ API 版本（E721），`gui` 缺 `slots`/`api`/`nsh_id` 或包不以 `.nshpkg` 结尾一律拒绝；A 轨 schema 1 不变。
+- `timo-kernel::plugins`：统一型号与清单——A/B 两轨目录扫描、`plugins.json` 启停状态、挡位推断（exec/net → trusted，写删 → workspace，否则 read-only）、挡位收紧、撤销授权、卸载；本地 A 轨安装按所选挡位裁剪授权后落盘。
+- B 轨签名包安装与运行留 P1（当前返回 E710）；项目级扩展与 A 轨运行期装载语义未改。
+- 新增 25 个测试（清单 12 / 内核 9 / 挡位 4）。
+
+---
+
 ## [0.1.103] - 2026-10-28
 
 ### Phase 4 设计定稿，进入 P0 实现

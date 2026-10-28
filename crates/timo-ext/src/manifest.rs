@@ -190,7 +190,7 @@ pub fn is_valid_id(id: &str) -> bool {
         .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
 }
 
-fn is_safe_relative(value: &str) -> bool {
+pub(crate) fn is_safe_relative(value: &str) -> bool {
     if value.is_empty() {
         return false;
     }
@@ -201,7 +201,7 @@ fn is_safe_relative(value: &str) -> bool {
             .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
 }
 
-fn is_sha256_ref(value: &str) -> bool {
+pub(crate) fn is_sha256_ref(value: &str) -> bool {
     let Some(hex) = value.strip_prefix("sha256:") else {
         return false;
     };

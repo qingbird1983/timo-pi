@@ -13,6 +13,7 @@ mod commands;
 mod error;
 mod extensions;
 mod kernel;
+pub mod plugins;
 mod prompt;
 mod resolve;
 mod session_route;
