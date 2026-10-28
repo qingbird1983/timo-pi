@@ -6,7 +6,7 @@
 
 ## 1. 目标与边界
 
-一个左栏入口管理 A 轨兼容扩展与 B 轨界面插件：列出、安装、启用/禁用、更新、卸载、权限挡位、诊断。管理器只做「清单 + 生命周期 + 授权」，不负责插件运行时代码；A 轨仍由 `ExtensionHost` 执行，B 轨由 NSH `AppView` 执行。
+左栏「插件」页管理已安装的 A 轨兼容扩展与 B 轨界面插件：列出、启用/禁用、更新、卸载、权限挡位、诊断；发现与安装入口在「插件市场」（08）。管理器只做「清单 + 生命周期 + 授权」，不负责插件运行时代码；A 轨仍由 `ExtensionHost` 执行，B 轨由 NSH `AppView` 执行。
 
 不做：插件市场、评分/评论、跨插件通信、按插件定制工作区布局。
 
@@ -14,20 +14,23 @@
 
 ```rust
 pub enum PluginKind { Orchestration, Gui }        // A 轨 / B 轨
+pub enum PluginOrigin { BuiltInConfig, Experimental, Installed }
 pub enum PermissionTier { ReadOnly, Workspace, Trusted }
 pub enum PluginState { Enabled, Disabled, Error, UpdateAvailable }
 
 pub struct PluginEntry {
     pub id: String,              // 命名空间 id，如 session-search / subagent
     pub kind: PluginKind,
+    pub origin: PluginOrigin,    // 内置配置 / 实验性开关 / 已安装插件
     pub name: String,
     pub version: String,
     pub enabled: bool,
     pub tier: PermissionTier,    // 实际授予档位（旧 A 轨按声明推断）
     pub declared: Declared,      // 清单声明的能力/slot/api
     pub state: PluginState,
-    pub source: PluginSource,    // Installed / LocalFile / Url
+    pub source: PluginSource,    // BuiltIn / LocalFile / Url / Market
     pub source_hash: String,     // A 轨源码指纹 / B 轨包 sha256
+    pub configurable: bool,      // 有配置页（内置插件）
     pub diagnostics: Vec<PluginDiagnostic>,
 }
 ```
@@ -66,19 +69,26 @@ pub fn uninstall_plugin(data_dir: &Path, id: &str, work_dir: &Path) -> Result<()
 ```
 
 - `install_plugin` 负责：识别包类型（A 轨源码目录 / B 轨 `.nshpkg`）→ 校验 → 计算挡位上限 → 落盘 → 写授权 → 返回摘要。
+- 市场卡片安装先按 08 下载到临时文件，再调用同一个 `install_plugin`；不新增第二个安装器。
 - `set_tier` 只允许收紧；放宽必须重新走安装向导的能力确认（防止静默提权）。
 - 运行期加载由现有装配链负责：A 轨 `load_extensions`；B 轨在桌面 `plugins` 页初始化时按启用列表创建 AppView。
 - 所有操作返回 `PluginError`（E7xx），桌面只做展示与重试。
 
-## 5. 页面信息架构
+## 5. 页面信息架构（「插件」页）
 
-- 入口：侧栏底部「插件」（固定存在；puzzle 图标）。实验页 `nsh-poc` 在 P1 并入后删除。
-- 列表列：图标、名称 + id/版本、轨道徽标（A 轨 / B 轨）、挡位徽标（只读/读写/执行）、健康/诊断、启停开关。
-- 筛选：全部 / A 轨兼容 / B 轨界面 / 有诊断；搜索按名称与 id。
-- 详情：挡位明细、界面槽位（B 轨）、API 版本、来源与哈希、最近诊断、按钮组（检查更新 / 调整挡位 / 撤销授权 / 卸载 / 打开目录）。
-- 空态：说明两轨区别 + 安装按钮 + 「从本地包安装」提示。
+- 入口：侧栏「插件」（固定存在；puzzle 图标）。实验页 `nsh-poc` 在 P1 并入后删除。
+- 顶部：标题「插件」+ 副标题「安装、启用和配置插件」；右侧刷新按钮与「添加插件」下拉（从文件安装 / 从链接安装 / 打开插件目录）。
+- 页签：**已安装 / 插件市场 / 发现**；后两个跳到市场页（08 §3），已安装为默认。
+- 「已安装」分三组，行式列表（图标 + 名称/徽标 + 描述 + 右侧控件）：
+  1. **内置插件配置**：内核功能入口，无开关，点击进入对应设置（子智能体、网页搜索、Agent 循环、终端限制等）；清单由内核静态提供，`origin=BuiltInConfig`。
+  2. **实验性插件**：产品功能开关（`origin=Experimental`），右侧开关写 `settings.json`；带「实验性」徽标；不加载外部代码。
+  3. **已安装插件**：A/B 两轨第三方插件（`origin=Installed`）；右侧开关为启停；点击进入详情。
+- 行内徽标：轨道（A 轨 / B 轨）、挡位（只读/读写/执行）、实验性、更新可用、有诊断。
+- 详情抽屉/页：挡位明细、界面槽位（B 轨）、API 版本、来源与哈希、最近诊断、按钮组（检查更新 / 调整挡位 / 撤销授权 / 卸载 / 打开目录）。
+- 空态：说明两轨区别 + 「添加插件」+ 「去插件市场」。
 - 诊断：错误码 + 一句原因 + 时间；可复制；不默认展示堆栈与绝对路径。
 - 卸载确认：说明会删除目录与授权；B 轨正在显示时先停 AppView。
+- 内置配置与实验性开关**不写插件目录、不产生授权记录**；它们的清单由内核提供，卸载/禁用语义不适用。
 
 ## 6. 安装向导状态机
 
@@ -101,6 +111,8 @@ pub fn uninstall_plugin(data_dir: &Path, id: &str, work_dir: &Path) -> Result<()
 | 操作 | 语义 | 失败处理 |
 |---|---|---|
 | 禁用 | A 轨不再加载、B 轨停掉 AppView；保留文件与授权 | 开关回到原状态并提示 |
+| 实验性开关 | 写 `settings.json`，下一轮请求/界面刷新生效 | 回滚开关并提示 |
+| 内置配置 | 跳转对应设置页；保存后重建相关组件 | 保留原设置 |
 | 启用 | 重新走该轨加载；失败标记 `Error` 并展示诊断 | 保持禁用 |
 | 更新 | 同 id 新包校验通过后替换；B 轨要求 build 递增 | 旧包与旧 AppView 保留 |
 | 调整挡位 | 只允许收紧；收紧即时生效（重新加载） | 保留原挡位 |
@@ -129,5 +141,6 @@ pub fn uninstall_plugin(data_dir: &Path, id: &str, work_dir: &Path) -> Result<()
 - 安装未签名/篡改包：向导停在第二步，文件不落盘，无授权记录。
 - 撤销授权后 1 秒内插件停止响应，列表显示未授权。
 - 卸载后目录、状态、授权三处均无残留；宿主线程与 AppView 已释放。
-- 关闭并重启应用后，启停状态与挡位恢复。
+- 关闭并重启应用后，启停状态、挡位与实验性开关恢复。
+- 三组同页显示：内置配置无开关、实验性有开关、第三方插件有开关与详情；「添加插件」下拉三项都可达。
 - 旧 A 轨扩展（无状态文件、无 tier）显示为启用、按声明推断挡位，行为不变。

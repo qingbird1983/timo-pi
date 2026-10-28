@@ -40,7 +40,7 @@ docs/
 | research/06-pi-interaction-logic.md | 定稿 | pi 交互逻辑/数据流向/提示词工程调查（Phase 3.5 R1 产出：提示词合同、数据流图、17 条交互对照） |
 | research/07-ui-references.md | **草稿** | 桌面壳 UI 参考清单（三类产品图链+设计语言笔记；视觉精修批次前置素材，随时增补） |
 | research/08-zcode-desktop-study.md | **草稿** | ZCode 桌面端交互逻辑与数据流源码调查（Apache-2.0 同类实现，330 篇设计文档库；分三批执行） |
-| adr/ADR-0001 ~ 0015 | 定稿 | 15 项重大决策（见各文件；0013 = 内核深化阶段立项，0014 = docs 文档总数软上限 60→120，0015 = 不做项目信任门控） |
+| adr/ADR-0001 ~ 0016 | 定稿 | 16 项重大决策（见各文件；0013 = 内核深化阶段立项，0014 = docs 文档总数软上限 60→120，0015 = 不做项目信任门控，0016 = 插件市场形态与分发边界） |
 | architecture/01-overview.md | 定稿 | 总体架构与分层原则 |
 | architecture/02-kernel.md | 定稿 | 内核模块划分与关键设计 |
 | architecture/03-critical-seams.md | 定稿 | MVP 必须预留的接缝清单（防返工核心） |
@@ -90,8 +90,10 @@ docs/
 | design/phase-4/05-runtime-isolation.md | 草稿（待评审） | AppView 实例模型、健康检查、看门狗、卸载与残留处理 |
 | design/phase-4/06-devkit.md | 草稿（待评审） | devkit 命令、脚手架、打包一致性、分发与测试 |
 | design/phase-4/07-self-proof-plugin.md | 草稿（待评审） | 自证插件「会话搜索」：交互、清单、内核查询与验收 |
+| design/phase-4/08-marketplace.md | 草稿（待评审） | 插件市场：索引协议、分类与页签、缓存/离线、收藏/屏蔽、卡片安装 |
 | design/phase-4/prototype.html | 草稿（方向稿） | 插件管理器粗粒度原型：列表、详情、安装向导与挡位选择 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
+| adr/ADR-0016-plugin-marketplace.md | 定稿 | 插件市场形态与分发边界：静态索引 + 签名包，不做交易/评分后端 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/audit-debt.md | 定稿（2026-10-28 已完成） | 审查收债：代码—文档一致性与复杂度清偿台账（A 1 项 + B 9 项 + C 10 项 + D 9 项；全部清零，419 tests 全绿） |
 | roadmap/phase-0 ~ phase-4 | phase-3.5 完成（tag `phase-3.5.end`）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |
