@@ -1,6 +1,6 @@
 # 设计 06：devkit 与分发
 
-- 状态：草稿（2026-10-28）
+- 状态：定稿（2026-10-28）
 - 关联：roadmap/phase-4；ADR-0004；design/phase-4/02、04、07
 - 原则：**不自研签名与打包器**。devkit 只做脚手架、校验与调用官方 `nsh` CLI（Phase 3 PoC 已验证 `keygen/certify/publish/verify`）。
 

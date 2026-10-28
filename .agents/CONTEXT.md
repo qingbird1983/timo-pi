@@ -7,7 +7,8 @@
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - **Phase 3.5 ✅**（tag `phase-3.5.end`，2026-10-28）：报告 `docs/design/phase-3.5/report.md`。
 - **审查收债 ✅**（2026-10-28）：A1 数据缺陷、B1~B9 代码缺口、C1~C10 文档回填、D1~D9 复杂度清理全部完成；台账 `docs/roadmap/audit-debt.md`。
-- 下一关：**Phase 4（GUI 插件系统）设计进行中**（2026-10-28：00 总览 + 插件管理器原型为草稿，待评审）；`docs/roadmap/phase-4-gui-plugins.md` 要求设计定稿后才写码。
+- 下一关：**Phase 4（GUI 插件系统）**——设计 00~08 已于 2026-10-28 定稿，进入 **P0 实现**（统一清单、市场索引、桌面市场/已安装页）。
+- 三个设计默认值：市场索引地址默认留空（首次配置，不伪造官方地址）；评论只外链；实验性组 v1 为空（只登记真实功能）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；桌面壳已知限制见 `docs/roadmap/phase-3-desktop-shell.md` §6。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
 
@@ -17,7 +18,7 @@
 - **复杂度清理**：删除未接线执行模式/队列模式、零调用 API、未消费配置等约 330 行与 1 个无关依赖；`timo sessions` 时间格式化复用 `time`（下沉 `timo-session::format_utc_minutes`），`fs_scope` 通配换 `globset`（先证 `**` 吞 0 段/`*`/`?` 等价，`[]`/`{}` 转义为字面量防授权面扩大）。
 - **验证**：workspace **419 tests** 全绿；fmt/clippy `-D warnings`/check-size 通过；`clean-build` 从 22.1GiB 清到 14.0GiB（释放 8.1GiB）。行为测试做了变异验证：B5 隔离、`globset` 两层语义、A1 修复均确认「恢复前红/恢复后绿」；内核取消分支的破坏性变异被工具分类器拦截，改由宿主层变异 + 内核测试双覆盖。
 - 每批独立提交：A1、B1、D3~D7、D1/D2+B6/B7/B8、D8/D9+C10、B2~B5+C9（最新提交见 git log）。
-- **Phase 4 详设草稿（01~08）**：统一管理器、manifest/签名包、slot/动作、宿主 API v1、运行时隔离、devkit、自证插件、插件市场；全部为草稿，待评审后定稿再写码。市场卡片排版按所有者要求定为**错落式瀑布流**（08 §3.1，原型按可用宽度实时重排，最多三列）。
+- **Phase 4 设计已定稿**：统一管理器、manifest/签名包、slot/动作、宿主 API v1、运行时隔离、devkit、自证插件、插件市场；市场卡片为**错落式瀑布流**（08 §3.1，按可用宽度 3/2/1、最多三列）。
 - **市场形态与分发边界**见 [ADR-0016](../docs/adr/ADR-0016-plugin-marketplace.md)：静态索引只提供元数据，安装仍以签名包为准；屏蔽 ≠ 卸载。
 
 ## 下一步（按优先级）

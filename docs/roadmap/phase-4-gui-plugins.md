@@ -1,6 +1,6 @@
 # Phase 4：GUI 原生插件系统（B 轨）
 
-- 状态：设计进行中（2026-10-28，市场形态见 ADR-0016；依赖 Phase 2 + Phase 3 验收通过）
+- 状态：设计已定稿（2026-10-28，市场形态见 ADR-0016），P0 实现中；依赖 Phase 2 + Phase 3 验收通过
 - 参考估时：4~8 周
 - 关联：ADR-0004/0016；architecture/04 §3/§4
 
@@ -11,7 +11,7 @@
 ## 2. 范围
 
 ### 做
-- manifest schema v1：能力声明（fs/net/exec）、slot 声明、权限级别、命名空间 id
+- manifest schema 2（B 轨；A 轨保持 schema 1）：能力声明（fs/net/exec）、slot 声明、权限级别、命名空间 id
 - B 轨运行时：QuickJS + NSH 栈；slot 白名单（toolCard/panel/composerTrigger/entryExtra/theme 起步）；渲染动作白名单词汇表；越界即拒
 - 权限 GUI：能力声明的可视化授权界面（替代 Phase 2 的 CLI 简版）；授权持久化与撤销
 - 签名与分发：ed25519 签名包校验、装载、热更；devkit CLI（check/pack/sign）

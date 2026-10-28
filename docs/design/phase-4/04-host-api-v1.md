@@ -1,6 +1,6 @@
 # 设计 04：TSX 宿主 API v1
 
-- 状态：草稿（2026-10-28）
+- 状态：定稿（2026-10-28）
 - 关联：roadmap/phase-4；ADR-0004；design/phase-4/02、03、05
 - 通道事实：NSH `nsh/host`（`host.params` / `host.on` / `host.call` / `host.post`），Phase 3 PoC 已验证 `AppView` 可嵌入
 

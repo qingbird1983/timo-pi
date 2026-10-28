@@ -1,6 +1,6 @@
 # 设计 02：清单、签名包与信任
 
-- 状态：草稿（2026-10-28）
+- 状态：定稿（2026-10-28）
 - 关联：roadmap/phase-4；ADR-0004；architecture/04；design/phase-3/03；design/phase-4/00、01
 - 依赖事实：NSH 0.3 `verify_package` / `accept_package` / `Bundle`（Phase 3 PoC 已实测）
 

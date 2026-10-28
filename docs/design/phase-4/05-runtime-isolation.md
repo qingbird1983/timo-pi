@@ -1,6 +1,6 @@
 # 设计 05：B 轨运行时与隔离
 
-- 状态：草稿（2026-10-28）
+- 状态：定稿（2026-10-28）
 - 关联：roadmap/phase-4；ADR-0004；design/phase-3/03 §4/§9；design/phase-4/01、02、04
 - 事实：`AppView::stop()` 会中断 JS；`on_app_error` 回调可捕获应用级错误（Phase 3 PoC 已用）
 
