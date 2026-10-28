@@ -6,6 +6,16 @@
 
 ---
 
+## [0.1.95] - 2026-10-28
+
+### 收尾：Phase 3.5 完成（tag `phase-3.5.end`）
+
+- 门禁：fmt / clippy `-D warnings` / workspace 413 tests / check-size 全绿；远端 CI 为绿。
+- 体量：`clean-build` 从 24.3GiB 清到 14.0GiB（incremental 0.0 / deps 12.8），释放 10.3GiB。
+- 文档：报告补阶段收尾；看板、docs 索引、CONTEXT 改为完成态；新增交接 H-011 与踩坑 P-015（codemode 慢 runner 的中断原因被收尾错误覆盖）。
+
+---
+
 ## [0.1.94] - 2026-10-28
 
 ### 移除：P2 第四题（项目信任门控）整体撤回

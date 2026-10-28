@@ -1,8 +1,8 @@
-# Phase 3.5 阶段进度报告（P0 / P1 / D6 / P2 完成）
+# Phase 3.5 阶段进度报告（全部完成，tag `phase-3.5.end`）
 
-- 日期：2026-10-27
+- 日期：2026-10-27（初稿）；2026-10-28（收尾）
 - 本阶段目标（一句话）：把 pi 的"灵魂件"——分节系统提示、项目上下文、技能、统一命令面、用量统计、compaction、缓存、无头模式——装进内核，并让 CLI 与桌面共用同一份能力。
-- 状态：**P0、P1、D6、P2 完成；第四题（项目信任门控）已整体撤回（ADR-0015）**
+- 状态：**P0、P1、D6、P2 全部完成；第四题（项目信任门控）已整体撤回（ADR-0015）；阶段收尾完成**
 
 ## 完成了什么
 
@@ -181,10 +181,10 @@
 ## 体量核对（standards/08）
 
 - docs/：当前 82 篇（软上限 120，ADR-0014）。阶段设计稿与详设属硬流程交付物；整合评审仍待办（删除面需所有者确认）。
-- .agents/：文件 55（不含 vendored 技能为 21，上限 40）；`CONTEXT.md` 74 行（上限 150）。
+- .agents/：文件 55（不含 vendored 技能为 21，上限 40）；`CONTEXT.md` 54 行（上限 150）。handoff 保留最近 5 份（H-007~H-011）。
 - 代码：最大文件 496 行（`timo-agent/tests/routing.rs`），无超 500 行文件（批 B 拆出 `shim/runtime_dispatch.js`，批 C 拆出 `app_events.rs`）；最大 crate `timo-desktop` 5,658 行（含测试；上限 15,000 触发评审）。
 - 依赖：无新增第三方 crate；`codemode` 使用 workspace 既有的 `rquickjs`、`tempfile`。
-- 构建产物：本批前 25.2 GiB（incremental 3.0 / deps 21.0），`clean-build` 后 14.0 GiB（incremental 3.0 / deps 9.8）；批 B 收口 20.7 GiB（incremental 3.2 / deps 16.1），批 C 收口 23.6 GiB（incremental 4.2 / deps 18.1）；信任门控撤回后当前 24.3 GiB（incremental 4.6 / deps 18.4，软限内、incremental 触 WARN）；阶段收尾再跑。
+- 构建产物：本批前 25.2 GiB（incremental 3.0 / deps 21.0），`clean-build` 后 14.0 GiB（incremental 3.0 / deps 9.8）；批 B 收口 20.7 GiB（incremental 3.2 / deps 16.1），批 C 收口 23.6 GiB（incremental 4.2 / deps 18.1）；信任门控撤回后 24.3 GiB（incremental 4.6 / deps 18.4）；阶段收尾 `clean-build` 后 **14.0 GiB（incremental 0.0 / deps 12.8），释放 10.3 GiB**。
 
 ## 已知问题与风险
 
@@ -194,15 +194,25 @@
 - **每轮 usage 行只显示最后一次请求**（Phase 1 既有行为）：一轮里发生工具调用时，`[usage]` 是最后一条 assistant 消息的读数；整轮/会话合计以 `/session` 为准。本阶段未改这一语义。
 - **费用依赖费率配置**：`models.json` 未写 `cost` 时费用恒为 0；不重新计价是设计选择，需在配置里给费率。
 - **缓存统计只在 CLI `/session` 呈现**，桌面暂无 cache 行；桌面状态栏的费用已含缓存计价，不新增面板（设计 05 §3.3）。
-- `target/` 无 sccache 时不做全清；当前 24.3GiB（incremental 4.6），阶段收尾需跑 `clean-build`。
+- `target/` 无 sccache 时不做全清；收尾 `clean-build` 后 14.0GiB（incremental 0.0 / deps 12.8）。
 - **DeepSeek 思考模式 + 工具调用的 `reasoning_content` 回放**（B2 真机发现）：从非思考模型切到 `deepseek-flash` 时，含工具调用的 assistant 历史被拒（400，要求回传 `reasoning_content`）；同一历史改投 `deepseek-reasoner` 正常。我们的 openai 适配器未把思考内容写回请求；属供应商兼容项，未在本批修，随 provider composer/codemode 的思考链处理一起定。
 - **无头 stderr 混入技能告警噪音**：`--no-session -p` 一次运行会打出项目 `.agents/skills/` 里 8 条 frontmatter 告警（README 与 ponytail 等非技能文件被扫）。资源告警本身是要出口的，但子代理场景里父进程会把 stderr 原文贴进结果，噪音挤掉有效信息。处置方向（未定）：`-p`/`--mode json` 下只出口与本次请求相关的告警，或把非技能 md 排除出扫描面——随资源治理一起定。
 
+## 阶段收尾（2026-10-28）
+
+- 门禁：fmt / clippy `-D warnings` / workspace **413 tests** / check-size OK（收尾前 target 24.3GiB）。
+- `clean-build`：before 24.3GiB（incremental 4.6 / deps 18.4）→ after **14.0GiB（incremental 0.0 / deps 12.8）**，释放 10.3GiB。
+- 收尾提交与 tag：`phase-3.5.end`；远端 CI 为绿。
+- 交接：`.agents/CONTEXT.md` 重写为完成态；交接归档 H-011；codemode 慢 runner 竞态沉淀为 P-015。
+
 ## 下一步
 
-1. 桌面视觉精修（并行线）：research/07 → 设计稿 → 批次实现；与内核零冲突。
-2. 阶段收尾：D1~D7 与 P2 各题验收 → 本报告补全 → `clean-build` → tag `phase-3.5.end`。
+1. **审查收债**（前置已满足）：按 [audit-debt.md](../../roadmap/audit-debt.md) 清偿 2026-10-27 三路审查发现，**A1 会话半行拼接最先**（[P-012](../../../.agents/pitfalls/P-012-session-half-line-append.md)）。
+2. **Phase 4（GUI 插件系统）**：按 [phase-4-gui-plugins.md](../../roadmap/phase-4-gui-plugins.md) 启动；B 轨 slot 扩展。
+3. **桌面壳视觉精修**：按 roadmap 约定在 Phase 3.5 与 Phase 4 均收口后启动。
 
 ## 文档更新清单
 
-- `docs/design/phase-3.5/report.md`（本页）：P0 + P1 验收与读数。
+- `docs/design/phase-3.5/report.md`（本页）：P0 + P1 + D6 + P2 验收与读数、阶段收尾。
+- `docs/adr/ADR-0015-no-project-trust.md`：不做项目信任门控。
+- roadmap / docs 索引 / CHANGELOG / `.agents/CONTEXT.md` 同步为完成态。
