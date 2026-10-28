@@ -107,6 +107,16 @@ mod tests {
 
     #[test]
     fn native_bash_path_is_used_when_available() {
+        if !cfg!(windows) {
+            // 只有 Windows 才需要绕开 System32 的 WSL 启动器；其它平台按程序名走
+            // 各自的 PATH（这里把 `resolve_shell` 的平台分支写死成断言，避免像
+            // WSL 那样在 PATH 里看到 /mnt/c 的 bash.exe 时误判成生产缺陷）。
+            assert_eq!(
+                resolve_shell(ShellKind::Bash),
+                (ShellKind::Bash, PathBuf::from("bash"))
+            );
+            return;
+        }
         let Some(path) = native_bash() else {
             return;
         };

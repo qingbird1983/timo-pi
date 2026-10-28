@@ -180,10 +180,31 @@ pub fn list_sessions(dir: &Path) -> Vec<SessionInfo> {
             paths.push(path);
         }
     }
-    let mut out: Vec<SessionInfo> = paths.iter().filter_map(|p| scan_session(p)).collect();
+    let mut best: std::collections::BTreeMap<String, SessionInfo> =
+        std::collections::BTreeMap::new();
+    for info in paths.iter().filter_map(|p| scan_session(p)) {
+        match best.get(&info.id) {
+            // 同一 id 同时出现在分区目录与旧的平铺位置时，只保留一份。
+            // 优先分区副本（现行布局），其次修改时间新的；两者都与 readdir 顺序无关。
+            Some(current) if prefer(current, &info, dir) => {}
+            _ => {
+                best.insert(info.id.clone(), info);
+            }
+        }
+    }
+    let mut out: Vec<SessionInfo> = best.into_values().collect();
     out.sort_by_key(|s| std::cmp::Reverse(s.modified_ms));
-    out.dedup_by(|a, b| a.id == b.id);
     out
+}
+
+/// 已有副本 `kept` 是否比候选 `other` 更该保留。
+fn prefer(kept: &SessionInfo, other: &SessionInfo, dir: &Path) -> bool {
+    let nested = |info: &SessionInfo| info.path.parent().is_some_and(|parent| parent != dir);
+    match (nested(kept), nested(other)) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => kept.modified_ms >= other.modified_ms,
+    }
 }
 
 /// 把 leaf 链（header → 当前叶）序列化为 JSONL；entry 原样输出（phase-3.5/07）。
@@ -439,6 +460,43 @@ mod tests {
         let infos = list_sessions(&dir);
         assert_eq!(infos.len(), 1);
         assert!(infos[0].path.starts_with(&partition));
+    }
+
+    /// 分区副本比平铺副本更旧时仍要保留分区副本：证明优先级来自布局而不是
+    /// mtime（`std::fs::copy` 在 Windows 保 mtime、Linux 不保，只靠 mtime 会随平台翻脸）。
+    #[test]
+    fn the_partition_copy_wins_even_when_it_is_older() {
+        let (dir, idgen) = setup("list-partition-older");
+        let partition = dir.join("--D--demo--");
+        let mut w = SessionWriter::create(
+            &partition,
+            "D:/demo",
+            None,
+            Arc::new(FixedClock::new(1)),
+            idgen,
+        )
+        .unwrap();
+        w.append_raw(
+            kinds::MESSAGE,
+            serde_json::to_value(user_text("partition prompt", 5)).unwrap(),
+        )
+        .unwrap();
+        let path = w.path().to_path_buf();
+        drop(w);
+        let flat = dir.join(path.file_name().unwrap());
+        std::fs::copy(&path, &flat).unwrap();
+        let long_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 60);
+        let handle = std::fs::File::options().write(true).open(&path).unwrap();
+        handle.set_modified(long_ago).unwrap();
+        drop(handle);
+
+        let infos = list_sessions(&dir);
+        assert_eq!(infos.len(), 1);
+        assert!(
+            infos[0].path.starts_with(&partition),
+            "expected the partition copy, got {}",
+            infos[0].path.display()
+        );
     }
 
     #[test]
