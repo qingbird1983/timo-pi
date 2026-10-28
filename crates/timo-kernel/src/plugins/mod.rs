@@ -6,6 +6,8 @@
 mod state;
 mod tier;
 
+pub mod market;
+
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 

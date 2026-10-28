@@ -341,7 +341,8 @@ pub fn is_valid_nsh_id(value: &str) -> bool {
 }
 
 /// 语义化版本（`MAJOR.MINOR.PATCH`，可选 `-pre` 后缀）。
-fn is_semver(value: &str) -> bool {
+#[must_use]
+pub fn is_semver(value: &str) -> bool {
     let core = value.split_once('-').map_or(value, |(core, _)| core);
     let mut parts = core.split('.');
     (0..3).all(|_| {

@@ -7,7 +7,7 @@
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`，报告 `docs/design/phase-3/report.md`）。
 - **Phase 3.5 ✅**（tag `phase-3.5.end`，2026-10-28）：报告 `docs/design/phase-3.5/report.md`。
 - **审查收债 ✅**（2026-10-28）：A1 数据缺陷、B1~B9 代码缺口、C1~C10 文档回填、D1~D9 复杂度清理全部完成；台账 `docs/roadmap/audit-debt.md`。
-- 下一关：**Phase 4（GUI 插件系统）**——设计 00~08 已于 2026-10-28 定稿，**P0 实现中**：第一批（schema 2 清单 + 内核统一插件清单）已完成，下一步市场索引与桌面两页。
+- 下一关：**Phase 4（GUI 插件系统）**——设计 00~08 已于 2026-10-28 定稿，**P0 实现中**：schema 2 清单、内核统一插件清单、市场索引/缓存/状态已完成；下一步桌面市场页与已安装页。
 - 三个设计默认值：市场索引地址默认留空（首次配置，不伪造官方地址）；评论只外链；实验性组 v1 为空（只登记真实功能）。
 - 看板：`docs/roadmap/00-roadmap.md` §1；桌面壳已知限制见 `docs/roadmap/phase-3-desktop-shell.md` §6。
 - 远端：`github.com/qingbird1983/timo-pi`（私有）。
