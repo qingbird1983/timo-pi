@@ -10,8 +10,27 @@ fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/mcp")
 }
 
+/// 解释器名按平台取：Ubuntu 只有 `python3`，Windows 发行版常只有 `python`。
+/// 两者都没有时返回 `None`，让测试跳过而不是假红。
+fn python_command() -> Option<String> {
+    for candidate in ["python3", "python"] {
+        if std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+            .is_ok_and(|out| out.status.success())
+        {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
 #[tokio::test]
 async fn stdio_echo_server_roundtrip() {
+    let Some(python) = python_command() else {
+        eprintln!("skip: 本机没有 python3/python 解释器");
+        return;
+    };
     let dir = std::env::temp_dir().join(format!("timo-mcp-echo-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -19,7 +38,7 @@ async fn stdio_echo_server_roundtrip() {
     let script = fixtures().join("echo_server.py");
     let json = serde_json::json!({
         "servers": {
-            "echo": {"command": "python", "args": [script.display().to_string()]}
+            "echo": {"command": python, "args": [script.display().to_string()]}
         }
     });
     std::fs::write(&config, serde_json::to_string(&json).unwrap()).unwrap();
