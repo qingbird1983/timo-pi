@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use timo_config::KEYCHAIN_SERVICE;
+use timo_kernel::config::KEYCHAIN_SERVICE;
 use timo_kernel::{
     Kernel, KernelEvent, KernelOptions, Message, ReviewDecision, ReviewKind, SessionInfo,
     SlashCommand, ToolReview, ToolReviewRequest, UsageSummary,
@@ -342,7 +342,7 @@ async fn run(
             BridgeCommand::RemoveProviderKey { provider } => {
                 let provider_name = provider.clone();
                 let removed = tokio::task::spawn_blocking(move || {
-                    timo_config::keychain_delete(KEYCHAIN_SERVICE, &provider_name)
+                    timo_kernel::config::keychain_delete(KEYCHAIN_SERVICE, &provider_name)
                 })
                 .await;
                 match removed {

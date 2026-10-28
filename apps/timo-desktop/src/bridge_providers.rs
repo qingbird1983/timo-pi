@@ -2,14 +2,14 @@
 
 use std::path::{Path, PathBuf};
 
-use timo_config::{CredentialSource, KEYCHAIN_SERVICE, ValueRef};
+use timo_kernel::config::{CredentialSource, KEYCHAIN_SERVICE, ValueRef};
 
 use super::{CredentialInfo, ProviderInfo};
 
 pub(super) fn models_path(data_dir: Option<&Path>) -> Option<PathBuf> {
     match data_dir {
         Some(dir) => Some(dir.join("models.json")),
-        None => timo_config::models_path().ok(),
+        None => timo_kernel::config::models_path().ok(),
     }
 }
 
@@ -18,13 +18,13 @@ pub(super) fn provider_infos(data_dir: Option<&Path>, current_model: &str) -> Ve
     let Some(path) = models_path(data_dir) else {
         return list;
     };
-    if let Ok(custom) = timo_config::load_custom_providers(&path) {
+    if let Ok(custom) = timo_kernel::config::load_custom_providers(&path) {
         for provider in custom {
             let credential = match &provider.api_key {
                 Some(value) => match value {
                     // 引用保留但条目已被移除时显示“未配置”，避免误导。
                     ValueRef::Keychain { service, account }
-                        if timo_config::keychain_get(service, account).is_err() =>
+                        if timo_kernel::config::keychain_get(service, account).is_err() =>
                     {
                         CredentialInfo::None
                     }
@@ -82,21 +82,27 @@ pub(super) async fn save_provider_key(
     let provider_owned = provider.to_string();
     let secret_owned = secret.to_string();
     tokio::task::spawn_blocking(move || {
-        let old = timo_config::keychain_get(KEYCHAIN_SERVICE, &provider_owned).ok();
-        timo_config::keychain_set(KEYCHAIN_SERVICE, &provider_owned, &secret_owned)
+        let old = timo_kernel::config::keychain_get(KEYCHAIN_SERVICE, &provider_owned).ok();
+        timo_kernel::config::keychain_set(KEYCHAIN_SERVICE, &provider_owned, &secret_owned)
             .map_err(|error| error.to_string())?;
         let value = ValueRef::Keychain {
             service: KEYCHAIN_SERVICE.to_string(),
             account: provider_owned.clone(),
         };
-        if let Err(error) = timo_config::set_provider_api_key(&path, &provider_owned, &value) {
+        if let Err(error) =
+            timo_kernel::config::set_provider_api_key(&path, &provider_owned, &value)
+        {
             // 回滚钥匙串，避免留下与配置不一致的新密钥。
             match old {
                 Some(previous) => {
-                    let _ = timo_config::keychain_set(KEYCHAIN_SERVICE, &provider_owned, &previous);
+                    let _ = timo_kernel::config::keychain_set(
+                        KEYCHAIN_SERVICE,
+                        &provider_owned,
+                        &previous,
+                    );
                 }
                 None => {
-                    let _ = timo_config::keychain_delete(KEYCHAIN_SERVICE, &provider_owned);
+                    let _ = timo_kernel::config::keychain_delete(KEYCHAIN_SERVICE, &provider_owned);
                 }
             }
             return Err(error.to_string());

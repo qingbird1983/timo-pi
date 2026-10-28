@@ -16,7 +16,6 @@ nsh-poc = ["dep:nsh-platform-gpui"]
 
 [dependencies]
 timo-kernel = { workspace = true }
-timo-config = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }

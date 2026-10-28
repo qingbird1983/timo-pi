@@ -143,7 +143,7 @@ impl DesktopSettings {
 /// 设置文件路径（`<数据目录>/desktop.json`）。
 #[must_use]
 pub fn path() -> Option<PathBuf> {
-    timo_config::agent_dir()
+    timo_kernel::data_dir()
         .ok()
         .map(|dir| dir.join("desktop.json"))
 }

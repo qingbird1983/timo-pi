@@ -349,7 +349,7 @@ impl NshPreview {
 
 /// 数据目录下的 PoC 根（`<agent_dir>/nsh-poc`）。
 pub(crate) fn poc_dir() -> Option<PathBuf> {
-    timo_config::agent_dir().ok().map(|dir| dir.join("nsh-poc"))
+    timo_kernel::data_dir().ok().map(|dir| dir.join("nsh-poc"))
 }
 
 fn open_trust(dir: &Path) -> Result<TrustStore, String> {

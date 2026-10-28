@@ -38,7 +38,7 @@
 
 | # | 问题 | 证据 | 验收标准 |
 |---|---|---|---|
-| B1 | 桌面壳直接依赖 `timo-config`，绕过门面（违反 architecture/01 §2 原则 2） | `apps/timo-desktop/Cargo.toml:19`；调用点 13 处（`bridge.rs`、`bridge_providers.rs`、`settings.rs`、`features/nsh_poc/mod.rs`） | 门面补齐凭证/路径 API；`apps/timo-desktop` 的 `[dependencies]` 不再出现 `timo-config`；或按 ADR 正式豁免并回填 architecture/01 §2 |
+| B1 ✅ | 桌面壳直接依赖 `timo-config`，绕过门面（违反 architecture/01 §2 原则 2） | `apps/timo-desktop/Cargo.toml:19`；调用点 13 处（`bridge.rs`、`bridge_providers.rs`、`settings.rs`、`features/nsh_poc/mod.rs`） | 门面补齐凭证/路径 API；`apps/timo-desktop` 的 `[dependencies]` 不再出现 `timo-config`；或按 ADR 正式豁免并回填 architecture/01 §2（2026-10-28 已修：新增 `timo_kernel::config`，路径改走 `data_dir()`） |
 | B2 | 命名空间前缀无校验；`builtin_` 前缀不存在 | `crates/timo-tools/src/registry.rs:36-38`（仅 `insert`）；内置工具裸名见 `tools/read.rs:36` 等 | 注册期校验前缀合法性，非法即拒并写诊断；或修订 architecture/02/04 措辞为「约定」而非「强制」 |
 | B3 | 「权限/信任检查」不是管线环节 | `crates/timo-agent/src/run/tools.rs:55-145`；`timo-tools/src/review.rs:3` 自述不参与权限 | 二选一：管线加入统一检查点；或修订 architecture/02 §4，明示审阅仅在写类工具内部触发 |
 | B4 | 取消未贯穿：MCP 工具执行不接 `ctx.cancel`；扩展工具用 `AtomicBool`；非 Windows 无进程组清理 | `crates/timo-mcp/src/convert.rs:158-174`；`crates/timo-kernel/src/extensions/events.rs:40-65`；`crates/timo-tools/src/tools/shell.rs:278-290` | MCP/扩展工具执行受 `ctx.cancel` 约束；非 Windows 子进程可整组终止；或以 ADR 说明接受该限制 |

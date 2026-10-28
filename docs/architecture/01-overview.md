@@ -52,7 +52,7 @@ graph TB
 ## 2. 分层原则（违者否决）
 
 1. **内核不依赖界面**：`crates/` 内禁止出现 gpui-kit/NSH 依赖；界面诉求经事件订阅或薄壳自行状态解决。
-2. **门面唯一**：薄壳只 import `timo-kernel` 门面，不穿透到内部 crate。（**2026-10-27 实测偏差**：`apps/timo-desktop` 当前直接依赖 `timo-config` 并在 `bridge.rs`/`bridge_providers.rs`/`settings.rs` 等处调用，属违规；清偿项见 `docs/roadmap/audit-debt.md` B1。）
+2. **门面唯一**：薄壳只 import `timo-kernel` 门面，不穿透到内部 crate。（**2026-10-28 已清偿**：`apps/timo-desktop` 不再直接依赖 `timo-config`；凭证、钥匙串与供应商路径统一经 `timo_kernel::config` 与 `timo_kernel::data_dir()`，见 `docs/roadmap/audit-debt.md` B1。）
 3. **事件总线是状态外泄唯一通道**：GUI、CLI 日志、扩展宿主都是订阅者（architecture/02 §3）。
 4. **会话格式唯一所有者是 timo-session**：其他模块只见 entry 抽象，不碰磁盘布局。
 5. **schema 通货是 JSON Schema**：工具参数、MCP、扩展（TypeBox）三方统一（architecture/03 接缝 #5）。

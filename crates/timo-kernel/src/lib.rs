@@ -40,6 +40,16 @@ pub use timo_ext::{
 pub fn data_dir() -> Result<PathBuf> {
     Ok(timo_config::agent_dir()?)
 }
+
+/// 薄壳需要的配置面（凭证引用、钥匙串、供应商文件）。
+///
+/// 只暴露壳层实际消费的项；薄壳仍只依赖 `timo-kernel`（architecture/01 §2）。
+pub mod config {
+    pub use timo_config::{
+        CredentialSource, KEYCHAIN_SERVICE, ValueRef, keychain_delete, keychain_get, keychain_set,
+        load_custom_providers, models_path, set_provider_api_key,
+    };
+}
 // 门面消费用重导出（architecture/01 原则 2：薄壳只依赖本 crate）。
 pub use resolve::ResolvedModel;
 use std::path::PathBuf;
