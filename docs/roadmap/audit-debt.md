@@ -61,7 +61,7 @@
 | C7 | architecture/05 §2 | 布局已按 cwd 分区（phase-3.5/07 D45/D46） | ✅ 2026-10-27 已修订 |
 | C8 | architecture/05 §4 | `usage` 实为 cache_warm 记账，非「轮次记账快照」 | ✅ 2026-10-27 已修订 |
 | C9 | design/phase-1/00 §2 | `timo-session`/`timo-tools` 记为「无内部依赖」，实为 `{ai,config}` / `{ai}` | 待收债（历史阶段文档：加修订注记，不重写原表） |
-| C10 | standards/04 附录 A | `time` 依赖已引入但未登记 | 待收债（补准入行） |
+| C10 ✅ | standards/04 附录 A | `time` 依赖已引入但未登记 | 已补 `time` 准入行，并同步补登同缺口 `globset`、`unicode-normalization`（2026-10-28） |
 
 ### D 组 —— 复杂度与过度工程（2026-10-27 全仓审计，10 条发现去重后 9 项）
 
@@ -76,8 +76,8 @@
 | D5 ✅ | `timo-tools` 小项：`read.rs` 复制 `str_param`、`sha2` 依赖零引用（`ToolOutput::error_text` 已被 nested 使用、`ToolRegistry::all()` 已被 codemode 使用，保留） | `tools/read.rs` vs `tools/write.rs`；`Cargo.toml:21` | 已删复制函数与依赖；`read` 改用 `crate::tools::write::str_param`（2026-10-28） |
 | D6 ✅ | `Kernel` 五个零生产消费者的查询 API：`usage_totals`、`usage_breakdown`、`mcp_servers`、`retry_settings`、`extension_report_json` | `timo-kernel/src/kernel/{usage_api,ext_api}.rs`、`kernel.rs` | 已删除冗余查询，只留 `usage_summary` 与 `extension_report`；设计 03 已同步（2026-10-28） |
 | D7 ✅ | `Reader::Indirect` 死枚举变体：生产只返回 `Read` / `Bash`，仅测试构造 | `timo-kernel/src/prompt/skills/mod.rs` | 已删变体、match 臂与测试断言，不留无主 `#[allow(dead_code)]`（2026-10-28） |
-| D8 | `timo sessions` 手写 29 行 Hinnant 公历换算，而 `time` 0.3 已在 `timo-session` 做同样换算 | `apps/timo-cli/src/sessions_cmd.rs:46-75`；对照 `timo-session/src/entry.rs:102-122`、`timo-session/Cargo.toml:15` | 复用 `time`（或由内核门面重导出格式化），删 `format_ms` + `civil_from_days`；CLI 不新增重复日期库 |
-| D9 | `fs_scope` 手写 36 行 glob 引擎（`**`/`*`/`?`），工作区已有 `ignore`/globset 可用而本 crate 未依赖 | `timo-ext/src/fs_scope.rs:111-146`，唯一调用点 `fs_scope.rs:106` | 先证明与 globset 语义等价（`**` 吞 0..n 段、单段 `*`、`?`、E403 边界），再替换手写匹配；`fs_scope.rs:185-192` 的权限测试全部保留 |
+| D8 ✅ | `timo sessions` 手写 29 行 Hinnant 公历换算，而 `time` 0.3 已在 `timo-session` 做同样换算 | 原 `apps/timo-cli/src/sessions_cmd.rs:46-75` | 已删 `format_ms` + `civil_from_days`；格式化下沉 `timo-session::format_utc_minutes` 并经内核门面重导出，CLI 零日期依赖（2026-10-28） |
+| D9 ✅ | `fs_scope` 手写 36 行 glob 引擎（`**`/`*`/`?`），工作区已有 `ignore`/globset 可用而本 crate 未依赖 | 原 `timo-ext/src/fs_scope.rs:125-160` | 已换 `globset`（`literal_separator` + `backslash_escape`）；对照测试锁定 `**` 吞 0 段、单段 `*`、`?` 与尾 `/**` 命中目录本身；`[]`/`{}` 转义为字面量防授权面扩大；权限/E403 测试全保留（2026-10-28） |
 
 ## 4. 排序与前置
 

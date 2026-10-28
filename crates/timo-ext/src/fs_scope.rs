@@ -117,46 +117,41 @@ fn allowed(scope: &str, target: &str) -> bool {
         return true;
     }
     if scope.contains(['*', '?']) {
-        return match_pattern(scope, target);
+        return glob_match(scope, target);
     }
     false
 }
 
-fn match_pattern(pattern: &str, target: &str) -> bool {
-    let pat: Vec<&str> = pattern.split('/').filter(|s| !s.is_empty()).collect();
-    let tar: Vec<&str> = target.split('/').filter(|s| !s.is_empty()).collect();
-    segments(&pat, &tar)
-}
-
-fn segments(pattern: &[&str], target: &[&str]) -> bool {
-    match (pattern.first(), target.first()) {
-        (None, None) => true,
-        (None, Some(_)) => false,
-        // `**` 吃掉 0..n 段
-        (Some(head), _) if *head == "**" => {
-            (0..=target.len()).any(|skip| segments(&pattern[1..], &target[skip..]))
-        }
-        (Some(head), Some(tail)) => {
-            one_segment(head, tail) && segments(&pattern[1..], &target[1..])
-        }
-        (Some(_), None) => false,
+/// 通配符匹配（`globset`；`literal_separator` 让 `*`/`?` 不跨段）。
+///
+/// `globset` 视尾部 `/**` 为至少一段，这里先试「`**` 吞 0 段」：
+/// 去掉尾部 `/**` 后仍能匹配，即命中原目录本身。
+fn glob_match(pattern: &str, target: &str) -> bool {
+    if let Some(prefix) = pattern.strip_suffix("/**")
+        && glob_match(prefix, target)
+    {
+        return true;
     }
+    let literal = escape_glob_metachars(pattern);
+    globset::GlobBuilder::new(&literal)
+        .literal_separator(true)
+        // Windows 上 `\` 默认是分隔符；这里只有转义用途（pattern 已归一化为 `/`）。
+        .backslash_escape(true)
+        .build()
+        .is_ok_and(|glob| glob.compile_matcher().is_match(target))
 }
 
-fn one_segment(pattern: &str, text: &str) -> bool {
-    let pattern: Vec<char> = pattern.chars().collect();
-    let text: Vec<char> = text.chars().collect();
-    walk(&pattern, &text)
-}
-
-fn walk(pattern: &[char], text: &[char]) -> bool {
-    match pattern.first() {
-        None => text.is_empty(),
-        Some('*') => (0..=text.len()).any(|skip| walk(&pattern[1..], &text[skip..])),
-        Some('?') if !text.is_empty() => walk(&pattern[1..], &text[1..]),
-        Some(head) if text.first() == Some(head) => walk(&pattern[1..], &text[1..]),
-        _ => false,
+/// 只保留 `*`/`?`/`**` 三类通配：其余 globset 元字符（字符类、交替）按字面量转义，
+/// 避免 scope 意外扩大授权面。
+fn escape_glob_metachars(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len());
+    for ch in pattern.chars() {
+        if matches!(ch, '[' | ']' | '{' | '}' | '\\') {
+            out.push('\\');
+        }
+        out.push(ch);
     }
+    out
 }
 
 /// 截断到 [`READ_CAP_BYTES`]，并追加可读标记。
@@ -222,6 +217,35 @@ mod tests {
         assert!(!allowed("/work/proj/*/b.md", "/work/proj/a/c/b.md"));
         assert!(allowed("/work/proj/?.md", "/work/proj/x.md"));
         assert!(!allowed("/work/proj/?.md", "/work/proj/xy.md"));
+    }
+
+    #[test]
+    fn wildcards_follow_segment_semantics() {
+        let cases = [
+            ("**", "/work/proj/docs/a.md", true),
+            ("/work/proj/**", "/work/proj", true),
+            ("/work/proj/**", "/work/proj/docs/a.md", true),
+            ("/work/proj/**/b.md", "/work/proj/b.md", true),
+            ("/work/proj/**/b.md", "/work/proj/a/b.md", true),
+            ("/work/proj/*/b.md", "/work/proj/a/b.md", true),
+            ("/work/proj/*/b.md", "/work/proj/a/c/b.md", false),
+            ("/work/proj/?.md", "/work/proj/x.md", true),
+            ("/work/proj/?.md", "/work/proj/xy.md", false),
+            ("/work/**/x/**", "/work/x", true),
+            ("/work/**/x/**", "/work/a/b/x/c", true),
+            ("/work/a*b/c", "/work/axxb/c", true),
+            // 字符类/交替不是本作用域的语法：按字面量匹配，不扩大授权面。
+            ("/work/[a]/x", "/work/[a]/x", true),
+            ("/work/[a]/x", "/work/a/x", false),
+            ("/work/{a,b}", "/work/a", false),
+        ];
+        for (pattern, target, expected) in cases {
+            assert_eq!(
+                glob_match(pattern, target),
+                expected,
+                "{pattern} vs {target}"
+            );
+        }
     }
 
     #[test]

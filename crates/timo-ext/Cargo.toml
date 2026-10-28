@@ -18,6 +18,7 @@ tempfile = { workspace = true }
 rquickjs = { workspace = true }
 reqwest = { workspace = true }
 async-trait = { workspace = true }
+globset = { workspace = true }
 timo-ai = { workspace = true }
 timo-agent = { workspace = true }
 timo-config = { workspace = true }

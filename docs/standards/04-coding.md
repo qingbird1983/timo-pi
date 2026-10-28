@@ -81,6 +81,9 @@
 | keyring | 3.6.x | 系统钥匙串读写 | standards/06 §3 Phase 3 起统一 | hwchen/keyring-rs | 手写三平台 API：成本与风险高，弃 |
 | similar | 2.x | unified diff 生成 | gpui-kit `Diff` 的输入 | mitsuhiko | 手写 diff：算法正确性成本高，弃 |
 | rust-i18n | 4.x | 中英界面文案 | GUI 全量可切（所有者要求） | longbridge | 手写文案表：无法覆盖组件内建文案，弃 |
+| time | 0.3.x | RFC3339 解析与时间格式化 | 会话 entry 时间戳、列表展示（timo-session） | time-rs（活跃） | chrono：默认带时区库且体积大，弃 |
+| globset | 0.4.x | 路径通配匹配 | `fs.read` 作用域匹配（timo-ext），替换手写 glob 引擎 | BurntSushi | 手写匹配器：边界易错且即第二套体系，弃 |
+| unicode-normalization | 0.1.x | Unicode 规范化 | edit 工具相似度比较前统一编码 | unicode-rs | 手写规范化表：不可维护，弃 |
 
 - 每 crate 直接依赖数 ≤ 15（standards/08 §4 软上限达标；workspace 共享依赖去重后不重复计入）。
 - 新增行格式照抄本表；升级在同一行更新版本线并在 CHANGELOG 记一笔。

@@ -59,7 +59,7 @@ pub use timo_ai::{
     UserMessage,
 };
 pub use timo_config::ThinkingLevel;
-pub use timo_session::SessionInfo;
+pub use timo_session::{SessionInfo, format_utc_minutes};
 pub use timo_tools::{ReviewDecision, ReviewKind, ToolOutput, ToolReview, ToolReviewRequest};
 pub use usage::{UsageBucket, UsageSummary, UsageTotals};
 pub use warmer::WarmingState;

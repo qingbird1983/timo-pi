@@ -49,6 +49,7 @@ async-trait = "0.1"
 jsonschema = "0.60"
 regex = "1"
 ignore = "0.4"
+globset = "0.4"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 ulid = "3"
 dirs = "7"
