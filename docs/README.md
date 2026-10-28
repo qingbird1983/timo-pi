@@ -83,6 +83,13 @@ docs/
 | design/phase-3.5/11-codemode.md | 定稿 | P2 第三题：脚本沙箱、嵌套工具调用接缝、输出截断与资源限制（D72~D79） |
 | design/phase-3.5/report.md | 定稿（Phase 3.5 完成，tag `phase-3.5.end`） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板/provider/codemode 实现，含真机读数、体量核对与阶段收尾 |
 | design/phase-4/00-overview.md | 草稿（待评审） | Phase 4 总览：两轨统一插件管理器、权限挡位、模块布局与批次 |
+| design/phase-4/01-plugin-manager.md | 草稿（待评审） | 统一管理器：模型、目录与状态、内核 API、页面、安装状态机、挡位映射 |
+| design/phase-4/02-manifest-and-trust.md | 草稿（待评审） | 清单 schema 2、NSH 签名包、信任根、热更/回退与错误码 |
+| design/phase-4/03-slots-and-actions.md | 草稿（待评审） | slot 白名单、主题 token 消毒、动作词汇表与越界诊断 |
+| design/phase-4/04-host-api-v1.md | 草稿（待评审） | TSX 宿主 API v1：查询、动作、存储、事件、错误与版本契约 |
+| design/phase-4/05-runtime-isolation.md | 草稿（待评审） | AppView 实例模型、健康检查、看门狗、卸载与残留处理 |
+| design/phase-4/06-devkit.md | 草稿（待评审） | devkit 命令、脚手架、打包一致性、分发与测试 |
+| design/phase-4/07-self-proof-plugin.md | 草稿（待评审） | 自证插件「会话搜索」：交互、清单、内核查询与验收 |
 | design/phase-4/prototype.html | 草稿（方向稿） | 插件管理器粗粒度原型：列表、详情、安装向导与挡位选择 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |

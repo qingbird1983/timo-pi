@@ -17,6 +17,7 @@
 - **复杂度清理**：删除未接线执行模式/队列模式、零调用 API、未消费配置等约 330 行与 1 个无关依赖；`timo sessions` 时间格式化复用 `time`（下沉 `timo-session::format_utc_minutes`），`fs_scope` 通配换 `globset`（先证 `**` 吞 0 段/`*`/`?` 等价，`[]`/`{}` 转义为字面量防授权面扩大）。
 - **验证**：workspace **419 tests** 全绿；fmt/clippy `-D warnings`/check-size 通过；`clean-build` 从 22.1GiB 清到 14.0GiB（释放 8.1GiB）。行为测试做了变异验证：B5 隔离、`globset` 两层语义、A1 修复均确认「恢复前红/恢复后绿」；内核取消分支的破坏性变异被工具分类器拦截，改由宿主层变异 + 内核测试双覆盖。
 - 每批独立提交：A1、B1、D3~D7、D1/D2+B6/B7/B8、D8/D9+C10、B2~B5+C9（最新提交见 git log）。
+- **Phase 4 详设草稿（01~07）**：统一管理器、manifest/签名包、slot/动作、宿主 API v1、运行时隔离、devkit、自证插件；全部为草稿，待评审后定稿再写码。
 
 ## 下一步（按优先级）
 
