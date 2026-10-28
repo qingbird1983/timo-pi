@@ -177,7 +177,15 @@ fn parent_choice_clears_child_entry() {
     assert!(store.nearest(&work).unwrap().unwrap().decision);
     assert_eq!(
         store.nearest(&work).unwrap().unwrap().path,
-        work.parent().unwrap()
+        canonical(work.parent().unwrap())
     );
     let _ = fs::remove_dir_all(&data);
+}
+
+/// 与 store 的键口径一致：canonical 后剥掉 Windows verbatim 前缀。
+/// CI 的临时目录带 8.3 短名（`RUNNER~1`），直接比未规范化的路径会假红。
+fn canonical(path: &Path) -> PathBuf {
+    let canonical = fs::canonicalize(path).unwrap();
+    let text = canonical.to_string_lossy().into_owned();
+    PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text).to_string())
 }
