@@ -59,7 +59,7 @@
 - **UI 测试禁用 `use gpui_kit::*`**（P-007）；子模块普通 `#[test]` 不要被 glob 带进 `test` 宏（P-010）。
 - **真机冒烟配置**：临时目录放 `desktop.json` + `models.json`（顶层 `{"providers": {...}}`，`base_url` 下划线命名），`api_key` 用 `$DEEPSEEK_API_KEY`，启动时 `TIMO_AGENT_DIR` 指过去；不写个人路径入库。
 - **门禁四连**：fmt / clippy / `CARGO_INCREMENTAL=0 cargo test --workspace` / `check-size`；NSH 改动另跑 `--features nsh-poc`；全量测试慢，用 `CARGO_BUILD_JOBS=1`。
-- **门禁**：workspace **453 tests** 全绿（P0 新增 34：schema 2 校验 12、内核清单 9、挡位 4、市场 8、桌面 UI 1）；桌面 `--features nsh-poc` clippy/test 通过；`target/` 22.7GiB（incremental 4.4 / deps 16.9，仅容量告警，按容量治理待收尾清扫）。
+- **门禁**：workspace **453 tests** 全绿（P0 新增 34：schema 2 校验 12、内核清单 9、挡位 4、市场 8、桌面 UI 1）；桌面 `--features nsh-poc` 测试 27 全绿；`target/` 收口清到 14.0GiB（incremental 0.0 / deps 12.5）。
 - **构建缓存按容量治理**：`target/` 15GiB 软 / 25GiB 硬；incremental >4GiB 先删；阶段收尾跑 `scripts/clean-build`；无 sccache 不全清。
 - **写中文文件后扫隐形字符**：`grep -nP '[\x{3040}-\x{30ff}\x{200b}-\x{200f}\x{feff}]'`。
 - **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对。
