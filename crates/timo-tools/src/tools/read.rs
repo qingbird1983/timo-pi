@@ -137,25 +137,20 @@ async fn read_image(
     mime: &'static str,
     ctx: &ToolCallCtx,
 ) -> Result<ToolOutput> {
-    let auto_resize = true; // settings.images.auto_resize 由内核注入 Phase 1 简化；默认开
-    let (data, note) = if auto_resize {
-        match resize(bytes.clone()) {
-            Some(resized) => {
-                let note = if resized.len() < bytes.len() {
-                    format!(
-                        "[Image resized from {}KB to {}KB]",
-                        bytes.len() / 1024,
-                        resized.len() / 1024
-                    )
-                } else {
-                    format!("[Image file: {mime}]")
-                };
-                (resized, note)
-            }
-            None => (bytes, format!("[Image file: {mime}]")),
+    let (data, note) = match resize(bytes.clone()) {
+        Some(resized) => {
+            let note = if resized.len() < bytes.len() {
+                format!(
+                    "[Image resized from {}KB to {}KB]",
+                    bytes.len() / 1024,
+                    resized.len() / 1024
+                )
+            } else {
+                format!("[Image file: {mime}]")
+            };
+            (resized, note)
         }
-    } else {
-        (bytes, format!("[Image file: {mime}]"))
+        None => (bytes, format!("[Image file: {mime}]")),
     };
     let _ = ctx.updates;
     Ok(ToolOutput {

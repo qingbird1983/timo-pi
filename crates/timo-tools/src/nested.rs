@@ -117,8 +117,6 @@ pub struct NestedCallSummary {
 pub trait NestedToolHost: Send + Sync {
     /// 可调工具的元数据快照（调用方自行过滤，例如去掉自己）。
     fn catalog(&self) -> Vec<CallableTool>;
-    /// 本批工具调用是否整体串行（`tool_execution = sequential`）。
-    fn is_sequential(&self) -> bool;
     /// 执行一次嵌套调用；失败以 `is_error` 结果返回，不抛错。
     fn execute(&self, call: NestedCall)
     -> Pin<Box<dyn Future<Output = NestedOutcome> + Send + '_>>;

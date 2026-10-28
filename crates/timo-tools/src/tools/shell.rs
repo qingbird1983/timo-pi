@@ -1,7 +1,7 @@
 //! `bash` / `powershell` 工具（设计 03 §3；pi bash.ts / powershell.ts 同构）。
 //!
 //! 同一执行机：无默认超时（上限 2^31−1 ms）、尾截断、全量输出落临时文件、
-//! 超时/取消杀进程树。Windows 优先：未配置 `shell_path` 时探测 bash→PowerShell。
+//! 超时/取消杀进程树。Windows 优先：探测 bash→PowerShell（settings `shell_path` 已删除）。
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

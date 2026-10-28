@@ -25,8 +25,7 @@ pub use hooks::{
 };
 pub use queue::PendingMessageQueue;
 pub use run::{
-    LoopConfig, ModelDispatch, RunChannels, RunOutcome, SessionSink, ToolExecutionMode,
-    WarmRequest, run_agent_loop,
+    LoopConfig, ModelDispatch, RunChannels, RunOutcome, SessionSink, WarmRequest, run_agent_loop,
 };
 
 /// 结果别名：本 crate 一律以 [`AgentError`] 报错。

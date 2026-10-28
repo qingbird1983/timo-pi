@@ -29,16 +29,6 @@ pub trait ModelDispatch: Send + Sync {
     fn auth(&self, model: &timo_ai::Model) -> std::sync::Arc<timo_ai::AuthResolver>;
 }
 
-/// 工具批执行模式（pi toolExecution）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ToolExecutionMode {
-    /// 并发执行（IO 并发），结果按原始顺序回填（默认）。
-    #[default]
-    Parallel,
-    /// 逐个执行、可被取消打断。
-    Sequential,
-}
-
 /// 一次 run 的循环配置（装配期定死；Phase 2 钩子参数在此扩充）。
 pub struct LoopConfig {
     /// 本 run 使用的模型。
@@ -51,8 +41,6 @@ pub struct LoopConfig {
     pub thinking_level: timo_config::ThinkingLevel,
     /// 认证解析器（每次请求重解析，pi getApiKey 同构）。
     pub auth: std::sync::Arc<timo_ai::AuthResolver>,
-    /// 工具批模式。
-    pub tool_execution: ToolExecutionMode,
     /// assistant 轮次重试设置（timo-config settings.retry）。
     pub retry: timo_config::RetrySettings,
     /// 工作目录（工具 cwd）。

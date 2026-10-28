@@ -1,7 +1,7 @@
 //! 嵌套工具执行宿主（设计 phase-3.5/11 §4.1）：复用同一条管线，不发总线事件。
 //!
 //! 记录按父调用 id 分桶；`take` 由循环在顶层调用收尾时取走并把用量并回结果。
-//! 顺序规则：整批串行或目标工具 `Sequential` 时，嵌套调用经宿主内一把队列串行化。
+//! 顺序规则：目标工具 `Sequential` 时，嵌套调用经宿主内一把队列串行化。
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -19,7 +19,7 @@ use timo_tools::{
 };
 use tokio_util::sync::CancellationToken;
 
-use super::{LoopConfig, ToolExecutionMode};
+use super::LoopConfig;
 use crate::hooks::LoopHooks;
 
 /// 一次顶层调用的记录桶。
@@ -50,7 +50,6 @@ pub(super) struct AgentNestedHost {
     run_cancel: CancellationToken,
     cwd: Arc<Path>,
     review: Option<Arc<dyn ToolReview>>,
-    loop_sequential: bool,
     queue: tokio::sync::Mutex<()>,
     state: Mutex<HashMap<String, Parent>>,
 }
@@ -64,7 +63,6 @@ impl AgentNestedHost {
             run_cancel: cancel.clone(),
             cwd: Arc::clone(&config.cwd),
             review: config.review.clone(),
-            loop_sequential: config.tool_execution == ToolExecutionMode::Sequential,
             queue: tokio::sync::Mutex::new(()),
             state: Mutex::new(HashMap::new()),
         }
@@ -91,11 +89,10 @@ impl AgentNestedHost {
                     Content::ToolCall { arguments, .. } => arguments.clone(),
                     _ => Value::Null,
                 };
-                let sequential = self.loop_sequential
-                    || self
-                        .tools
-                        .get(&call.name)
-                        .is_some_and(|tool| tool.execution_mode == ExecutionMode::Sequential);
+                let sequential = self
+                    .tools
+                    .get(&call.name)
+                    .is_some_and(|tool| tool.execution_mode == ExecutionMode::Sequential);
                 let guard = if sequential {
                     Some(self.queue.lock().await)
                 } else {
@@ -227,10 +224,6 @@ impl NestedToolHost for AgentNestedHost {
                 exposure: tool.exposure,
             })
             .collect()
-    }
-
-    fn is_sequential(&self) -> bool {
-        self.loop_sequential
     }
 
     fn execute(

@@ -31,12 +31,10 @@
 | `default_model` | string \| null | 默认模型 id（配合 default_provider） |
 | `default_thinking_level` | enum，默认 `"medium"` | off/minimal/low/medium/high/xhigh/max |
 | `default_tools` | array，默认 `["read","bash","edit","write"]` | 内置工具激活集；`+name`/`-name` 修饰（合并语义，pi 同构） |
-| `session_dir` | string \| null | 会话目录覆盖 |
-| `shell_path` | string \| null | bash/powershell 外壳路径（Windows 缺省探测 bash→PowerShell） |
-| `shell_command_prefix` | string \| null | 命令前置行 |
 | `retry` | `{enabled:true, max_retries:3, base_delay_ms:2000, max_retry_delay_ms:60000}` | assistant 轮次重试（设计 01 §8） |
-| `images` | `{auto_resize:true}` | read 工具图像缩放开关 |
 | `max_tokens` / `temperature` | u64 / f64 \| null | 请求覆盖（None→协议默认） |
+
+> **2026-10-28 修订**：`session_dir`、`shell_path`、`shell_command_prefix`、`images.auto_resize` 均无消费者，已随审查收债 B7/D2 删除；未知字段按 §2 规则忽略，旧配置不会报错。
 
 - `$schema` 字段允许；未知字段**忽略不报错**（向前兼容，pi additionalProperties 同构）。
 - 解析失败（非法 JSON/类型错）→ `ConfigError::Invalid{path, reason}`，CLI 明示文件路径——**配置错误不静默降级**。

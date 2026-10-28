@@ -124,7 +124,7 @@ pub trait NestedToolHost: Send + Sync {
 - `catalog()` 返回**除 `Hidden` 外的全部工具**（含 `codemode` 自身）；调用方自行去掉自己，宿主不写死任何工具名。
 - `timo-agent/src/run/nested.rs` 实现宿主：持注册表快照、钩子、父取消令牌、cwd、审阅器与"是否整批串行"。`execute` 复用 `run_one` 中抽出的管线段（before 钩子 → 审阅/校验/执行 → after 钩子），但**不发总线事件**、不产生 `Message`。
 - 失败语义：注册表错误 / 审阅拒绝 / 钩子阻止一律变成 `is_error=true` 的 `ToolOutput`（结果文本由 `format::failure_output` / `format::script_value` 生成），由脚本侧转成 `throw`；钩子阻止文案保持 `blocked by extension: <reason>`。
-- 顺序：`is_sequential()` 或目标工具 `execution_mode == Sequential` 时持有宿主内的一把 `tokio::sync::Mutex<()>` 再执行；并发由脚本泵侧调度（多个 `execute` future 同时进行），宿主不再另起任务。
+- 顺序：目标工具 `execution_mode == Sequential` 时持有宿主内的一把 `tokio::sync::Mutex<()>` 再执行；并发由脚本泵侧调度（多个 `execute` future 同时进行），宿主不再另起任务。批量级 `is_sequential()` 已随审查收债 D1 删除（无消费者）。
 - 记录：按 `parent_id` 建一份 `NestedCallRecorder`（256/8 KiB/32 KiB/500 字符四条限），`take` 由 agent 在顶层调用结束后取走并把 `usage` 并进该次 `ToolOutput.usage`；`snapshot` 供 codemode 失败时写清单。
 - 取消：父令牌取消 → 宿主给所有子调用派生子令牌并取消；`execute` 入口先查父令牌。
 

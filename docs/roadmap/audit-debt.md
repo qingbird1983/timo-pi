@@ -44,8 +44,8 @@
 | B4 | 取消未贯穿：MCP 工具执行不接 `ctx.cancel`；扩展工具用 `AtomicBool`；非 Windows 无进程组清理 | `crates/timo-mcp/src/convert.rs:158-174`；`crates/timo-kernel/src/extensions/events.rs:40-65`；`crates/timo-tools/src/tools/shell.rs:278-290` | MCP/扩展工具执行受 `ctx.cancel` 约束；非 Windows 子进程可整组终止；或以 ADR 说明接受该限制 |
 | B5 | 扩展钩子错误隔离不达设计：单个 handler 出错即中断同事件后续 handler | `crates/timo-ext/src/host/runner.rs:228-241`；设计要求 `docs/design/phase-2/04-hook-semantics.md` §8 | 单 handler 失败仅记诊断并继续下一个 |
 | B6 ✅ | 进度回调空管道：`ToolCallUpdate` 无任何生产者 | 全仓无向 `ToolCallCtx.updates` 发送的实现 | codemode 已在 P2 批 C 产出嵌套调用进度（`→ tools.x` / `← x ok`），接口保留（2026-10-28 核实） |
-| B7 | `settings.session_dir` 字段无消费者 | `crates/timo-config/src/settings.rs:100` 定义；`crates/timo-kernel/src/kernel.rs:131` 只用 `options.session_dir` | 接线或删除字段（二选一，不留死字段；standards/08 §4 死代码零容忍） |
-| B8 | ULID 生成器为「每写入器一个」，非文档承诺的「进程内单调」 | `crates/timo-session/src/writer.rs:16-18`；`kernel.rs:346`、`kernel/sessions.rs:86` 各自 `new` | 改为进程级单例，或修订 architecture/05 §6 措辞 |
+| B7 ✅ | `settings.session_dir` 字段无消费者 | `crates/timo-config/src/settings.rs`；`crates/timo-kernel/src/kernel.rs` 只用 `options.session_dir` | 已删字段；目录覆盖只走 `TIMO_AGENT_DIR` / CLI `--session-dir`，docs 与 architecture/05 同步（2026-10-28） |
+| B8 ✅ | ULID 生成器为「每写入器一个」，非文档承诺的「进程内单调」 | `crates/timo-session/src/writer.rs`；`kernel/sessions.rs` 各自 `new` | 新增 `IdGen::shared()` 进程级单例，内核两处写入器改用它（2026-10-28） |
 | B9 | 事件总线错误事件覆盖窄：供应商/认证/流错误不发 `Error` | 仅 `run/mod.rs:296`、`kernel.rs:270`、`kernel/prompt_api.rs:53` 三处 | 与 architecture/02 §5「一切错误进事件总线」对齐，或修订该措辞 |
 
 ### C 组 —— 文档回填
@@ -69,8 +69,8 @@
 
 | # | 问题 | 证据 | 验收标准 |
 |---|---|---|---|
-| D1 | 两个未接线的执行模式：`ToolExecutionMode::Sequential`（生产恒 `Parallel`，无配置读取）、`QueueMode::All`（生产只用 `new()`） | `timo-agent/src/run/mod.rs:19-26,41`、`run/tools.rs:14-36`、`timo-kernel/src/kernel.rs:331`；`timo-agent/src/queue.rs:8-14,32-37,53-56`（`with_mode` 仅 `queue.rs:106` 测试） | 二选一：接线（pi `toolExecution` / `steeringMode` 配置）或删枚举、分支与字段；删前先改 `design/phase-1/02-timo-agent.md` §85 |
-| D2 | 三处未消费配置：`images.auto_resize`（消费端写死 `true`）、`shell_path`、`shell_command_prefix`（零读取；`session_dir` 见 B7） | `timo-config/src/settings.rs:38-50,101-104,108,131-132`；`timo-tools/src/tools/read.rs:148`（唯一赋值点，else 不可达） | 删字段与恒真分支（缺键由 `#[serde(default)]` 兼容）或接线；先确认 pi settings 同名键的对齐义务并回填文档 |
+| D1 ✅ | 两个未接线的执行模式：`ToolExecutionMode::Sequential`、`QueueMode::All`，以及无消费者的 `NestedToolHost::is_sequential()` | `timo-agent/src/run/{mod,tools,nested}.rs`、`queue.rs`；`timo-tools/src/nested.rs` | 已删枚举、字段、分支与 trait 方法；设计 02 标注批量级 Sequential / steeringMode 留 backlog（2026-10-28） |
+| D2 ✅ | 三处未消费配置：`images.auto_resize`、`shell_path`、`shell_command_prefix` | `timo-config/src/settings.rs`；`timo-tools/src/tools/read.rs` | 已删字段与恒真分支；设计 03/05 回填修订说明，旧配置键按未知字段忽略（2026-10-28） |
 | D3 ✅ | `timo-ai` 零调用 API：`AuthMethod` 及 `resolve`、`catalog_load_error`、`AssistantMessage::tool_calls`（`Catalog::all` 已被 codemode/扩展目录消费，保留） | `timo-ai/src/auth.rs`、`catalog.rs`、`types.rs` | 已删除；只留 `AuthResolver`；OAuth 占位随枚举删除，Phase 5 需要时按新 ADR 加回（2026-10-28） |
 | D4 ✅ | 宿主内部零消费面：`BasicServices::with_model`、`ExtensionHost::diagnostics()`、`ExtensionRuntime.loaded`、`DiagnosticEntry::with_detail` | `timo-ext/src/host/services.rs`、`host.rs`、`diag.rs`；`timo-kernel/src/extensions/mod.rs` | 已删除；诊断统一走 `diagnostics_for`；`HostServices` 契约与 `pi.*` no-op 诊断不动（2026-10-28） |
 | D5 ✅ | `timo-tools` 小项：`read.rs` 复制 `str_param`、`sha2` 依赖零引用（`ToolOutput::error_text` 已被 nested 使用、`ToolRegistry::all()` 已被 codemode 使用，保留） | `tools/read.rs` vs `tools/write.rs`；`Cargo.toml:21` | 已删复制函数与依赖；`read` 改用 `crate::tools::write::str_param`（2026-10-28） |

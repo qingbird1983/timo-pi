@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use timo_agent::{AgentHandle, KernelEvent, LoopConfig, ToolExecutionMode};
+use timo_agent::{AgentHandle, KernelEvent, LoopConfig};
 use timo_ai::{
     AssistantMessage, AssistantStreamEvent, Content, Message, ProviderApi, StopReason,
     StreamOptions, Tool, api_for,
@@ -188,7 +188,6 @@ fn handle_with_review(
             provider_ref: None,
             env_names: vec![],
         }),
-        tool_execution: ToolExecutionMode::Parallel,
         retry: RetrySettings::default(),
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "test".into(),

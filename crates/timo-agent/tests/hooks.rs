@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use timo_agent::{
     AgentHandle, BeforeAgentStart, BeforeToolCall, LoopConfig, LoopHooks, RouteChoice,
-    RouteRequest, ToolExecutionMode, ToolOutcome, ToolOutputPatch,
+    RouteRequest, ToolOutcome, ToolOutputPatch,
 };
 use timo_ai::{
     AssistantMessage, AssistantStreamEvent, Content, Context, Message, ProviderApi, StopReason,
@@ -195,7 +195,6 @@ fn handle(
             provider_ref: None,
             env_names: vec![],
         }),
-        tool_execution: ToolExecutionMode::Parallel,
         retry: RetrySettings::default(),
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "base".into(),

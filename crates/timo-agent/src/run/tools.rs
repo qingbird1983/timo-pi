@@ -5,7 +5,7 @@ use std::sync::Arc;
 use timo_ai::{Content, Message, ToolResultMessage};
 use timo_tools::NestedToolHost as _;
 
-use super::{Ctx, ToolExecutionMode};
+use super::Ctx;
 use crate::events::KernelEvent;
 use crate::hooks::ToolOutcome;
 use crate::tool_calls::{error_result_message, tool_args, tool_id, tool_name};
@@ -13,27 +13,7 @@ use crate::tool_calls::{error_result_message, tool_args, tool_id, tool_name};
 impl<'a> Ctx<'a> {
     /// 工具批执行（设计 02 §5）；返回（结果消息, 是否全部 terminate）。
     pub(super) async fn execute_tools(&self, calls: &[Content]) -> (Vec<Message>, bool) {
-        match self.config.tool_execution {
-            ToolExecutionMode::Sequential => self.execute_tools_sequential(calls).await,
-            ToolExecutionMode::Parallel => self.execute_tools_parallel(calls).await,
-        }
-    }
-
-    async fn execute_tools_sequential(&self, calls: &[Content]) -> (Vec<Message>, bool) {
-        let mut out = vec![];
-        let mut all_term = true;
-        for call in calls {
-            if self.cancel.is_cancelled() {
-                out.push(self.fail_tool_call(call, "Operation aborted").await);
-                all_term = false;
-                continue;
-            }
-            let (m, term) = self.run_one(call).await;
-            all_term &= term;
-            out.push(m);
-        }
-        let non_empty = !out.is_empty();
-        (out, all_term && non_empty)
+        self.execute_tools_parallel(calls).await
     }
 
     async fn execute_tools_parallel(&self, calls: &[Content]) -> (Vec<Message>, bool) {

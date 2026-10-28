@@ -8,8 +8,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use timo_agent::{
-    AgentHandle, BeforeToolCall, LoopConfig, LoopHooks, ToolExecutionMode, ToolOutcome,
-    ToolOutputPatch,
+    AgentHandle, BeforeToolCall, LoopConfig, LoopHooks, ToolOutcome, ToolOutputPatch,
 };
 use timo_ai::{
     AssistantMessage, AssistantStreamEvent, Content, ProviderApi, StopReason, StreamOptions,
@@ -175,7 +174,6 @@ pub(crate) fn handle(
     tools: ToolRegistry,
     hooks: Option<Arc<dyn LoopHooks>>,
     review: Option<Arc<dyn timo_tools::ToolReview>>,
-    tool_execution: ToolExecutionMode,
 ) -> AgentHandle {
     AgentHandle::new(LoopConfig {
         model: base_model(),
@@ -187,7 +185,6 @@ pub(crate) fn handle(
             provider_ref: None,
             env_names: vec![],
         }),
-        tool_execution,
         retry: RetrySettings::default(),
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "test".into(),

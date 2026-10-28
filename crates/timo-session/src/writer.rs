@@ -2,7 +2,7 @@
 
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use serde_json::Value;
 use timo_config::Clock;
@@ -22,6 +22,13 @@ impl IdGen {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// 进程级共享生成器（同进程内跨写入器单调；architecture/05 §6）。
+    #[must_use]
+    pub fn shared() -> Arc<Self> {
+        static SHARED: OnceLock<Arc<IdGen>> = OnceLock::new();
+        Arc::clone(SHARED.get_or_init(|| Arc::new(Self::new())))
     }
 
     /// 产出下一个单调 ULID。

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use timo_agent::{AgentHandle, KernelEvent, LoopConfig, ToolExecutionMode};
+use timo_agent::{AgentHandle, KernelEvent, LoopConfig};
 
 use super::Kernel;
 use crate::extensions::{self, ExtensionOptions};
@@ -81,7 +81,6 @@ impl Kernel {
                     tools: Arc::new(self.registry.clone()),
                     thinking_level: self.resolved.thinking,
                     auth: Arc::clone(&self.resolved.auth),
-                    tool_execution: ToolExecutionMode::Parallel,
                     retry: self.retry.clone(),
                     cwd: Arc::from(self.work_dir.as_path()),
                     system_prompt: system_prompt.clone(),

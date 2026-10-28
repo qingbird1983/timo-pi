@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use serde_json::{Value, json};
 use timo_agent::{
     AgentHandle, LoopConfig, LoopHooks, ModelDispatch, RouteChoice, RouteReason, RouteRequest,
-    ToolExecutionMode,
 };
 use timo_ai::{
     ApiKind, AssistantMessage, AssistantStreamEvent, AuthResolver, Content, Context, Message,
@@ -228,7 +227,6 @@ fn handle(
             provider_ref: None,
             env_names: vec![],
         }),
-        tool_execution: ToolExecutionMode::Parallel,
         retry,
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "base".into(),
@@ -470,7 +468,6 @@ async fn an_unrouted_virtual_selection_is_rejected_without_network() {
         tools: registry(),
         thinking_level: ThinkingLevel::Off,
         auth: Arc::new(AuthResolver::default()),
-        tool_execution: ToolExecutionMode::Parallel,
         retry: RetrySettings::default(),
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "base".into(),

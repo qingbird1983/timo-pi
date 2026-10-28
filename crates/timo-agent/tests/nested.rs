@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use common::*;
 use serde_json::json;
-use timo_agent::{AgentHandle, ToolExecutionMode};
+use timo_agent::AgentHandle;
 use timo_ai::{Content, Message};
 use timo_tools::{Exposure, ToolDefinition, ToolOutput, ToolRegistry};
 use tokio_util::sync::CancellationToken;
@@ -62,7 +62,6 @@ async fn nested_calls_run_through_hooks_review_and_report_scope() {
         tools,
         Some(hooks.clone()),
         Some(Arc::new(AllowingReview)),
-        ToolExecutionMode::Parallel,
     );
     let (text, is_error) = run_one_tool(agent).await;
     assert!(!is_error);
@@ -107,7 +106,6 @@ async fn blocked_nested_call_reports_the_extension_reason() {
         tools,
         Some(hooks),
         None,
-        ToolExecutionMode::Parallel,
     );
     let (text, is_error) = run_one_tool(agent).await;
     assert!(is_error, "被阻止的嵌套调用必须标记失败");
@@ -128,7 +126,6 @@ async fn nested_ids_are_scoped_to_the_parent_call() {
         tools,
         None,
         None,
-        ToolExecutionMode::Parallel,
     );
     let (text, _) = run_one_tool(agent).await;
     assert!(text.contains("id=call_7/1 "), "{text}");
@@ -176,7 +173,6 @@ async fn canceled_nested_call_ends_without_running_the_tool() {
         tools,
         None,
         None,
-        ToolExecutionMode::Parallel,
     );
     let (text, _) = run_one_tool(agent).await;
     assert_eq!(text, "Operation aborted|Cancelled");
@@ -236,7 +232,6 @@ async fn catalog_skips_hidden_tools_and_carries_metadata() {
         tools,
         None,
         None,
-        ToolExecutionMode::Parallel,
     );
     let (text, _) = run_one_tool(agent).await;
     assert!(!text.contains("hidden_tool"), "Hidden 不得进目录:\n{text}");

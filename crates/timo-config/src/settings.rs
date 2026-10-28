@@ -35,20 +35,6 @@ impl Default for RetrySettings {
     }
 }
 
-/// read 工具图像设置。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ImageSettings {
-    /// 自动缩放大图（设计 03 §3 read）。
-    pub auto_resize: bool,
-}
-
-impl Default for ImageSettings {
-    fn default() -> Self {
-        Self { auto_resize: true }
-    }
-}
-
 /// 缓存预热模式（phase-3.5/05 §2；缺省 `streaming`）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -96,16 +82,8 @@ pub struct Settings {
     pub default_thinking_level: Option<ThinkingLevel>,
     /// 内置工具激活集（支持 `+name`/`-name` 修饰）。
     pub default_tools: Vec<String>,
-    /// 会话目录覆盖。
-    pub session_dir: Option<String>,
-    /// shell 可执行路径（Windows 缺省探测 bash→PowerShell）。
-    pub shell_path: Option<String>,
-    /// 命令前置行。
-    pub shell_command_prefix: Option<String>,
     /// 重试设置。
     pub retry: RetrySettings,
-    /// 图像设置。
-    pub images: ImageSettings,
     /// 请求 max_tokens 覆盖。
     pub max_tokens: Option<u64>,
     /// 请求 temperature 覆盖。
@@ -131,11 +109,7 @@ impl Default for Settings {
             default_model: None,
             default_thinking_level: None,
             default_tools: Vec::new(),
-            session_dir: None,
-            shell_path: None,
-            shell_command_prefix: None,
             retry: RetrySettings::default(),
-            images: ImageSettings::default(),
             max_tokens: None,
             temperature: None,
             skills: Vec::new(),
@@ -256,7 +230,6 @@ mod tests {
     fn defaults_match_pi() {
         let s = Settings::default();
         assert!(s.retry.enabled && s.retry.max_retries == 3 && s.retry.base_delay_ms == 2000);
-        assert!(s.images.auto_resize);
         assert!(s.enable_skill_commands);
         assert!(s.skills.is_empty());
     }

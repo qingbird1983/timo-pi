@@ -11,7 +11,7 @@
 ```
 
 - **删除草案中的 `<id>.meta.json` 与 `index.json`**：会话元信息并入首条 `session.header` entry；列表 = 扫描目录内 `.jsonl` 文件头（单文件读取上限 1MB，防超大文件拖慢）。单一权威 = entry 流本身，无第二份可失步状态（防膨胀 + 防不一致，ponytail）。
-- 数据目录：`dirs::data_dir()/timo-pi`（Windows `%APPDATA%\timo-pi`；详见设计 05 §1）；`TIMO_AGENT_DIR` / settings `session_dir` 可覆盖。目录名即会话 id（ULID，见 §3）。
+- 数据目录：`dirs::data_dir()/timo-pi`（Windows `%APPDATA%\timo-pi`；详见设计 05 §1）；`TIMO_AGENT_DIR` / CLI `--session-dir` 可覆盖（settings `session_dir` 无消费者，已于 2026-10-28 删除）。目录名即会话 id（ULID，见 §3）。
 
 ## 2. Entry 信封（每行一个 JSON 对象）
 

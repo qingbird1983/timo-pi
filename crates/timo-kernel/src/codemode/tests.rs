@@ -44,10 +44,6 @@ impl NestedToolHost for FakeHost {
         self.tools.clone()
     }
 
-    fn is_sequential(&self) -> bool {
-        false
-    }
-
     fn execute(
         &self,
         call: NestedCall,

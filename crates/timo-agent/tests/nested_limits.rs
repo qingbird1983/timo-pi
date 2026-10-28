@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use common::*;
 use serde_json::json;
-use timo_agent::ToolExecutionMode;
 use timo_ai::{Content, Message};
 use timo_tools::{ExecutionMode, Exposure, ToolOutput, ToolRegistry};
 
@@ -49,7 +48,6 @@ async fn sequential_tools_serialize_and_parallel_tools_overlap() {
             tools,
             None,
             None,
-            ToolExecutionMode::Parallel,
         );
         agent.run("go".into(), vec![], None).await.unwrap();
         peak.load(Ordering::SeqCst)
@@ -99,7 +97,6 @@ async fn nested_usage_is_merged_into_the_parent_result() {
         tools,
         None,
         None,
-        ToolExecutionMode::Parallel,
     );
     let out = agent.run("go".into(), vec![], None).await.unwrap();
     let usage = match &out[2] {
@@ -207,7 +204,6 @@ async fn nested_record_obeys_every_limit() {
             tools.clone(),
             None,
             None,
-            ToolExecutionMode::Parallel,
         );
         let out = agent.run("go".into(), vec![], None).await.unwrap();
         let text = match &out[2] {

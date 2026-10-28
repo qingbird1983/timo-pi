@@ -7,9 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use timo_agent::{
-    AgentHandle, LoopConfig, LoopHooks, RouteChoice, RouteReason, RouteRequest, ToolExecutionMode,
-};
+use timo_agent::{AgentHandle, LoopConfig, LoopHooks, RouteChoice, RouteReason, RouteRequest};
 use timo_ai::{
     AssistantMessage, AssistantStreamEvent, AuthResolver, Content, Context, Message, Model,
     ProviderApi, StopReason, StreamOptions,
@@ -137,7 +135,6 @@ fn handle(
             provider_ref: None,
             env_names: vec![],
         }),
-        tool_execution: ToolExecutionMode::Parallel,
         retry: RetrySettings::default(),
         cwd: Arc::from(std::path::Path::new(".")),
         system_prompt: "base".into(),

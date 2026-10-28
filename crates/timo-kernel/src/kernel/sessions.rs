@@ -84,7 +84,7 @@ impl Kernel {
         let mut writer = SessionWriter::open(
             &path,
             Arc::clone(&self.clock),
-            Arc::new(timo_session::IdGen::new()),
+            timo_session::IdGen::shared(),
         )?;
         let selection_changed = self.restore_selection(&entries);
         self.restore_route_state(&entries);
@@ -177,7 +177,7 @@ impl Kernel {
                 self.resolved.model.provider, self.resolved.model.id
             )),
             Arc::clone(&self.clock),
-            Arc::new(timo_session::IdGen::new()),
+            timo_session::IdGen::shared(),
         )?;
         // 虚拟选择必须落一条 `model.change`：响应只记物理模型，恢复时靠它认回选择。
         if self.resolved.model.is_virtual() {

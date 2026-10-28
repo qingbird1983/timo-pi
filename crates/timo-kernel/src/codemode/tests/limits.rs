@@ -78,13 +78,13 @@ async fn timeout_lets_nested_calls_clean_up_before_returning() {
     let host = host();
     let output = run(
         &host,
-        "// @options: {\"timeout_ms\": 200}\nawait tools.cancellable({});",
+        "// @options: {\"timeout_ms\": 2000}\nawait tools.cancellable({});",
         Limits::default(),
     )
     .await;
     assert!(output.is_error, "{}", text(&output));
     assert!(
-        text(&output).contains("Script timed out: execution timed out after 200 ms"),
+        text(&output).contains("Script timed out: execution timed out after 2000 ms"),
         "{}",
         text(&output)
     );

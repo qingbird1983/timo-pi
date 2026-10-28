@@ -45,7 +45,7 @@ pub struct ToolOutput { content: Vec<Content>, details: Value, structured_conten
 ### read
 - 参数：`{path: string, offset?: u64(1 起始行), limit?: u64(最大行数)}`。
 - 文本：utf-8 读入按 `\n` 分；`offset` 越界→错误 `Offset N is beyond end of file (M lines total)`；头截断（2000 行/50KB）；超长单行（>50KB）→不返回内容，给 sed 提示文案。
-- 图像（jpg/png/gif/webp/bmp 按魔数嗅探）：base64 ImageContent + 说明文本；默认自动缩放（image crate；上限 2000×2000、jpeg 质量 85——pi 默认 profile），关闭经 settings `images.auto_resize=false`。
+- 图像（jpg/png/gif/webp/bmp 按魔数嗅探）：base64 ImageContent + 说明文本；始终自动缩放（image crate；上限 2000×2000、jpeg 质量 85——pi 默认 profile）；settings `images.auto_resize` 无消费者，已于 2026-10-28 删除。
 - 错误：`Could not read file: X`（含 OS 错误码）。
 
 ### write
@@ -63,7 +63,7 @@ pub struct ToolOutput { content: Vec<Content>, details: Value, structured_conten
 
 ### bash
 - 参数：`{command: string, timeout?: u64 秒（缺省=上限值，上限 2^31−1 ms）}`。
-- 执行：经配置 shell（`settings.shell_path`；Windows 未配置时探测 bash→PowerShell 顺序）；进程组杀树（超时/取消）。
+- 执行：按 PATH 探测 shell（settings `shell_path` 无消费者，已于 2026-10-28 删除；Windows 探测 bash→PowerShell 顺序）；进程组杀树（超时/取消）。
 - 输出：**尾截断**（最后 2000 行/50KB，允许半行）；空输出→`(no output)`；截断→`[Showing lines A-B of T. Full output: <tempfile>]`（临时文件前缀 `timo-bash`）。
 - 退出码非 0→is_error + `\n\nCommand exited with code N`；超时→错误含已捕获输出 + `Command timed out after N seconds`；取消→`Command aborted`。
 - 子进程环境：默认注入 `TIMO_SESSION_ID/TIMO_PROVIDER/TIMO_MODEL`（对齐 pi PI_*，命名随项目）；透传父环境。

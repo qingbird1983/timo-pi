@@ -19,7 +19,7 @@
 <数据目录>/sessions/<session-id>.jsonl                     旧平铺（只读兼容，D46）
 ```
 
-- 数据目录：Windows `%APPDATA%\timo-pi` / macOS `~/Library/Application Support/timo-pi` / Linux `$XDG_DATA_HOME/timo-pi`；`TIMO_AGENT_DIR`（及 CLI `--session-dir`）可覆盖。settings 中的 `session_dir` 字段当前**无消费者**，清偿项见 `docs/roadmap/audit-debt.md` B7。
+- 数据目录：Windows `%APPDATA%\timo-pi` / macOS `~/Library/Application Support/timo-pi` / Linux `$XDG_DATA_HOME/timo-pi`；`TIMO_AGENT_DIR`（及 CLI `--session-dir`）可覆盖。settings 中的 `session_dir` 字段无消费者，已于 2026-10-28 删除（审查收债 B7），覆盖只走环境变量与 CLI 参数。
 - **2026-10-27 修订（布局按实现校正）**：Phase 3.5 D45/D46 起，新会话写入 `sessions/--<encoded-cwd>--/` 项目分区，旧平铺文件只读兼容、不迁移；列表与恢复跨分区（详见 `docs/design/phase-3.5/07-session-storage.md`）。
 - 草案中的 `<id>.meta.json` 与 `index.json` **删除**：元信息并入首条 `session.header`；会话列表 = 扫描 `.jsonl` 文件头（单文件读取上限 1MB）。单一权威 = entry 流本身。
 

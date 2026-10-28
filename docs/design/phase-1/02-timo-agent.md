@@ -67,7 +67,7 @@ pub struct LoopConfig {
    e. 提取 ToolCall 块：无 → `has_more_tool_calls=false`；有 → `stop_reason=Length` 时**全部不执行**、逐个生成错误 tool_result（"output token limit"）；否则走 §5 执行管线；结果逐条入上下文 + `MessageAdded`。
    f. emit `TurnFinished`；`finish_turn`（占位）决策 end→硬退 / continue→至多一轮纯上下文续跑。
    g. 轮询 steering → 有则回内层；否则轮询 follow_up → 有则回内层；再否则若 explicit_continuation 则再跑一轮；都无 → 退出，emit `AgentFinished{messages=本次 run 全部新消息}`。
-4. **steering/followUp 队列**：`one-at-a-time` 默认（drain 取 1 条）；`all` 取全部。steering = 工具执行完后、下轮请求前注入；follow_up = 即将自然停止时注入。Agent 句柄提供 `steer()/follow_up()/clear_queues()`。
+4. **steering/followUp 队列**：one-at-a-time（drain 取 1 条）。pi 的 `all` 模式当前无壳层入口，随 `steeringMode` 配置留 backlog（2026-10-28 删除空模式枚举）。steering = 工具执行完后、下轮请求前注入；follow_up = 即将自然停止时注入。Agent 句柄提供 `steer()/follow_up()/clear_queues()`。
 
 ## 5. 工具执行管线（对齐 pi executeToolCalls）
 
@@ -82,7 +82,7 @@ ToolCall → 查注册表（未找到→错误 result "Tool {name} not found"）
 → ToolCallFinished → ToolResultMessage
 ```
 
-- 模式：Sequential（配置指定或任一被调工具 `execution_mode=Sequential`）逐个执行、可被取消打断；Parallel 默认——**预检串行**（逐个校验/发 Started），执行并发（tokio JoinSet），结果按 assistant 中的原始顺序回填。
+- 模式：本阶段批量执行恒为 Parallel（pi 默认）——**预检串行**（逐个校验/发 Started），执行并发（tokio JoinSet），结果按 assistant 中的原始顺序回填。批量级 Sequential / `toolExecution` 配置当前无壳层入口，留 backlog（2026-10-28 删除未接线的枚举与分支）；嵌套调用内部仍按目标工具 `execution_mode=Sequential` 串行。
 - `terminate` 语义：本批全部工具结果 `terminate=true` → `has_more_tool_calls=false`（早停）。
 - 取消检查点（AbortSignal 对应物）：Parallel 预检每个调用前、每个 thunk 启动前、after 钩子后；Sequential 每个调用之间；工具执行体内（token 传入 execute 与子进程/HTTP）。
 
