@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use crate::app::DesktopApp;
-use crate::bridge::{BridgeEvent, MarketSnapshot};
+use crate::bridge::{BridgeCommand, BridgeEvent, MarketSnapshot};
 use gpui_kit::test::TestWindowExt as _;
 use gpui_kit::{AppContext as _, Bounds, TestAppContext, WindowBounds, WindowOptions, px, size};
 use timo_kernel::plugins::market::{MarketState, parse_index};
@@ -79,7 +79,7 @@ fn market_and_installed_entries_render_their_actions(cx: &mut TestAppContext) {
     crate::i18n::init();
 
     let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
-    let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (command_tx, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
     let (handle, app) = cx.update(|cx| {
         gpui_kit::open_window(
             WindowOptions {
@@ -123,7 +123,9 @@ fn market_and_installed_entries_render_their_actions(cx: &mut TestAppContext) {
             assert!(window.find(id).visible(), "missing {id}");
         }
         let install = window.find("market-install-usage-board");
-        assert_eq!(install.disabled(), Some(true));
+        assert_ne!(install.disabled(), Some(true));
+        window.click("market-install-usage-board", cx);
+        window.render_frame(cx);
 
         window.click("market-tab-Advanced", cx);
         window.render_frame(cx);
@@ -158,6 +160,14 @@ fn market_and_installed_entries_render_their_actions(cx: &mut TestAppContext) {
         );
     })
     .unwrap();
+
+    let mut install_sent = false;
+    while let Ok(command) = command_rx.try_recv() {
+        if matches!(command, BridgeCommand::InstallMarketPlugin { .. }) {
+            install_sent = true;
+        }
+    }
+    assert!(install_sent, "market install must reach the bridge");
 
     let _ = app;
 }

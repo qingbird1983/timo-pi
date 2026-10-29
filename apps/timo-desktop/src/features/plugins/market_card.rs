@@ -28,12 +28,26 @@ impl DesktopApp {
                 .on_click(cx.listener(|this, _, _, cx| this.open_installed(cx)))
                 .into_any_element()
         } else {
+            let installing = self.market_installing.as_deref() == Some(plugin.id.as_str());
             Button::new(format!("market-install-{}", plugin.id))
                 .primary()
                 .xsmall()
-                .label(t!("market.install").to_string())
-                .tooltip(t!("market.install_p1").to_string())
-                .disabled(true)
+                .label(if installing {
+                    t!("market.installing").to_string()
+                } else {
+                    t!("market.install").to_string()
+                })
+                .disabled(installing)
+                .on_click(cx.listener({
+                    let id = plugin.id.clone();
+                    move |this, _, _, cx| {
+                        this.market_installing = Some(id.clone());
+                        let _ = this
+                            .commands
+                            .send(BridgeCommand::InstallMarketPlugin { id: id.clone() });
+                        cx.notify();
+                    }
+                }))
                 .into_any_element()
         };
         let mut shots = Vec::new();

@@ -63,7 +63,9 @@ impl DesktopApp {
 
     /// 取消安装：丢掉候选，不落任何文件（设计 01 §6「取消任意一步 → 不留文件」）。
     pub(crate) fn cancel_install(&mut self, cx: &mut Context<Self>) {
-        self.pending_install = None;
+        if let Some(candidate) = self.pending_install.take() {
+            candidate.discard();
+        }
         cx.notify();
     }
 
@@ -75,6 +77,7 @@ impl DesktopApp {
         let outcome = timo_kernel::data_dir()
             .map_err(|error| error.to_string())
             .and_then(|data_dir| candidate.commit(&data_dir, tier));
+        candidate.discard();
         match outcome {
             Ok(id) => {
                 self.plugins_error = None;
