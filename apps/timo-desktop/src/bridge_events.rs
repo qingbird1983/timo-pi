@@ -1,5 +1,7 @@
 //! 桥接事件与市场快照（从 `bridge.rs` 拆出，守住单文件行数预算）。
 
+use std::path::PathBuf;
+
 use timo_kernel::plugins::PluginEntry;
 use timo_kernel::plugins::market::{MarketIndex, MarketState};
 use timo_kernel::{
@@ -79,6 +81,20 @@ pub enum BridgeEvent {
     Market(MarketSnapshot),
     /// 市场操作失败。
     MarketError(String),
+    /// 市场包已下载到暂存目录（等待验签与挡位确认）。
+    MarketDownloaded {
+        /// 插件 id。
+        id: String,
+        /// 暂存目录（含 manifest 与 `.nshpkg`）。
+        dir: PathBuf,
+    },
+    /// 市场包下载失败。
+    MarketDownloadFailed {
+        /// 插件 id。
+        id: String,
+        /// 失败原因（E753/E713 或网络错误）。
+        message: String,
+    },
     /// 打开会话失败。
     OpenFailed(String),
     /// 删除会话失败。

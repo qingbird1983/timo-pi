@@ -190,6 +190,9 @@ plugins:
   tier_locked: The manifest only asks for the %{tier} tier
   cancel: Cancel
   installed: "Installed: %{id}"
+  notify: "[%{plugin} · %{level}] %{message}"
+  auto_disabled: "%{plugin} kept crashing and was disabled"
+  runtime_failed: "Plugin runtime unavailable: %{message}"
   no_manifest: No readable schema-2 manifest.json in that directory
   no_bundle: "The signed package named by the manifest is missing: %{file}"
   verify_failed: "Signature check failed: %{error}"
@@ -242,8 +245,8 @@ market:
   offline: The online index is unavailable; showing the local cache.
   warnings: "%{n} index warnings (invalid entries were skipped)."
   install: Install
+  installing: Downloading…
   open: Open
-  install_p1: Installation opens once signed packages land in P1.
   favorite: Favorite
   favorited: Favorited
   block: Block

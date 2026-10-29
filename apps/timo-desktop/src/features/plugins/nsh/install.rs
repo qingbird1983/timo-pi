@@ -21,6 +21,8 @@ pub(crate) struct InstallCandidate {
     pub(crate) bytes: Vec<u8>,
     /// NSH 验签回执。
     pub(crate) receipt: PackageReceipt,
+    /// 待装目录是宿主下载的暂存区（取消/完成后整目录删除）。
+    pub(crate) cleanup: bool,
 }
 
 impl InstallCandidate {
@@ -28,6 +30,13 @@ impl InstallCandidate {
     #[must_use]
     pub(crate) fn max_tier(&self) -> PermissionTier {
         self.manifest.tier
+    }
+
+    /// 丢弃下载的暂存目录；用户自己选的目录不动。
+    pub(crate) fn discard(&self) {
+        if self.cleanup {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
     }
 
     /// 确认挡位后交给内核落盘。
@@ -82,6 +91,7 @@ pub(crate) fn verify_dir(data_dir: &Path, dir: &Path) -> Result<InstallCandidate
             sha256: loaded.receipt.sha256.clone(),
         },
         bytes,
+        cleanup: false,
     })
 }
 

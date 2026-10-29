@@ -1,10 +1,16 @@
-//! NSH 嵌入 PoC 的隔离层（设计 03 §3~§4）。
+//! 桌面里的 NSH 隔离层（设计 03 §3~§4、04、05）。
 //!
 //! 只有这个模块 `use nsh_platform_gpui`；对外只暴露普通 Rust 数据与错误文本。
-//! 默认构建不编译：整个模块由 `nsh-poc` feature 门控。
+//! NSH 是桌面常驻依赖（P1-b 起），不再有 feature 门控。
 
+pub(crate) mod host_api;
+mod host_worker;
 pub(crate) mod install;
 mod page;
+pub(crate) mod runtime;
+mod runtime_app;
+pub(crate) mod runtime_theme;
+mod runtime_watch;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

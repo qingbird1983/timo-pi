@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 timo-kernel = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -26,6 +27,8 @@ rust-i18n = "=4.2.4"
 nsh-platform-gpui = { version = "=0.3.0", default-features = false, features = [
     "js",
 ] }
+# `HostChannel` 只在 nsh-engine 根导出；与平台层同一 0.3.0 家族（版本锁定见 CONTEXT）。
+nsh-engine = { version = "=0.3.0", default-features = false, features = ["js"] }
 
 [dev-dependencies]
 gpui-kit = { version = "=0.8.0", features = ["gpui-fast", "test-support"] }

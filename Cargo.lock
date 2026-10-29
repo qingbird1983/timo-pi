@@ -10436,6 +10436,7 @@ dependencies = [
  "gpui-fast",
  "gpui-fast-platform",
  "gpui-kit",
+ "nsh-engine",
  "nsh-platform-gpui",
  "rust-i18n",
  "serde",
@@ -10444,6 +10445,7 @@ dependencies = [
  "tempfile",
  "timo-kernel",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

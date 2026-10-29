@@ -138,6 +138,45 @@ pub(super) fn toggle_blocked(kernel: &Kernel, event_tx: &UnboundedSender<BridgeE
     }
 }
 
+/// 下载市场包到暂存目录；验签、挡位确认与落盘仍由桌面层负责（设计 08 §4）。
+pub(super) async fn install_market(
+    kernel: &Kernel,
+    event_tx: &UnboundedSender<BridgeEvent>,
+    id: &str,
+) {
+    let data_dir = kernel.data_dir();
+    let plugin = market::load_cached(data_dir)
+        .ok()
+        .flatten()
+        .and_then(|load| {
+            load.index
+                .plugins
+                .into_iter()
+                .find(|plugin| plugin.id == id)
+        });
+    let Some(plugin) = plugin else {
+        let _ = event_tx.send(BridgeEvent::MarketDownloadFailed {
+            id: id.to_string(),
+            message: format!("plugin `{id}` is not in the market index"),
+        });
+        return;
+    };
+    match market::download(data_dir, &plugin).await {
+        Ok(dir) => {
+            let _ = event_tx.send(BridgeEvent::MarketDownloaded {
+                id: id.to_string(),
+                dir,
+            });
+        }
+        Err(error) => {
+            let _ = event_tx.send(BridgeEvent::MarketDownloadFailed {
+                id: id.to_string(),
+                message: error.to_string(),
+            });
+        }
+    }
+}
+
 fn market_snapshot(
     kernel: &Kernel,
     index: Option<MarketIndex>,

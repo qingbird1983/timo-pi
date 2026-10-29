@@ -14,14 +14,15 @@ use gpui_kit::*;
 use timo_kernel::plugins::PluginEntry;
 use timo_kernel::plugins::market::{MarketIndex, MarketSort, MarketState};
 use timo_kernel::{KernelOptions, SessionInfo, SlashCommand, UsageSummary};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
-use crate::bridge::{BridgeCommand, BridgeEvent, ProviderInfo};
+use crate::bridge::{Bridge, BridgeCommand, BridgeEvent, PluginRequest, ProviderInfo};
 use crate::features::chat::ChatState;
 use crate::features::palette::{
     AcceptReviewAction, CloseOverlayAction, NewSessionAction, OpenSettingsAction,
     RejectReviewAction, StopAction, TogglePalette,
 };
+use crate::features::plugins::nsh::runtime::PluginRuntime;
 use crate::features::plugins::{MarketTabView, PluginsView};
 use crate::features::review::ReviewState;
 use crate::features::settings_view::SettingsTab;
@@ -38,6 +39,8 @@ pub const SIDEBAR_WIDTH: Pixels = px(248.);
 pub struct DesktopApp {
     pub(crate) dark: bool,
     pub(crate) commands: UnboundedSender<BridgeCommand>,
+    /// 插件宿主 API 的内核侧请求通道（`runTool`/`models.list`）。
+    pub(crate) plugin_requests: UnboundedSender<PluginRequest>,
     pub(crate) chat: Entity<ChatState>,
     pub(crate) scroller: Entity<MessageScrollerState>,
     pub(crate) input: Entity<TextareaState>,
@@ -83,11 +86,18 @@ pub struct DesktopApp {
     pub(crate) market_sort: MarketSort,
     pub(crate) market_search_input: Entity<InputState>,
     pub(crate) market_url_input: Entity<InputState>,
+    /// 正在下载的市场插件 id（按钮禁用与进度文案）。
+    pub(crate) market_installing: Option<String>,
     /// 本地安装向导的待确认候选（验签通过后才有值）。
     pub(crate) pending_install: Option<crate::features::plugins::nsh::install::InstallCandidate>,
     pub(crate) nsh_page: bool,
     pub(crate) nsh_preview: Option<crate::features::plugins::nsh::NshPreview>,
-    _subscriptions: Vec<Subscription>,
+    /// B 轨 slot 运行期（P1-c）；测试注入桥接时不启动。
+    pub(crate) plugin_runtime: Option<PluginRuntime>,
+    /// 等渲染帧再写进输入框的插件提示词（`set_value` 需要窗口）。
+    pub(crate) runtime_prompt: Option<String>,
+    pub(crate) _runtime_ticks: Task<()>,
+    pub(crate) _subscriptions: Vec<Subscription>,
     _events: Task<()>,
 }
 
@@ -98,15 +108,9 @@ impl DesktopApp {
         crate::i18n::set(&settings.locale);
         theme::apply(settings.theme, settings.font_scale, Some(window), cx);
         let bridge = crate::bridge::spawn(KernelOptions::default(), settings.review);
-        Self::build(
-            bridge.commands,
-            bridge.events,
-            settings,
-            reset,
-            true,
-            window,
-            cx,
-        )
+        let mut app = Self::build(bridge, settings, reset, true, window, cx);
+        app.start_plugin_runtime(cx);
+        app
     }
 
     /// 用给定桥接两端创建视图（测试可注入假内核；不读写真实桌设）。
@@ -116,9 +120,13 @@ impl DesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let (plugin, _plugin_rx) = unbounded_channel();
         Self::build(
-            commands,
-            events,
+            Bridge {
+                commands,
+                plugin,
+                events,
+            },
             DesktopSettings::default(),
             false,
             false,
@@ -128,14 +136,18 @@ impl DesktopApp {
     }
 
     fn build(
-        commands: UnboundedSender<BridgeCommand>,
-        events: UnboundedReceiver<BridgeEvent>,
+        bridge: Bridge,
         settings: DesktopSettings,
         settings_reset: bool,
         persist_settings: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let Bridge {
+            commands,
+            plugin: plugin_requests,
+            events,
+        } = bridge;
         let input = cx.new(|cx| {
             TextareaState::new(window, cx).placeholder(t!("chat.placeholder").to_string())
         });
@@ -222,6 +234,7 @@ impl DesktopApp {
         Self {
             dark: theme::is_dark(cx),
             commands,
+            plugin_requests,
             chat: cx.new(|_| ChatState::default()),
             scroller: cx.new(|cx| MessageScrollerState::new(0, cx)),
             input,
@@ -267,9 +280,13 @@ impl DesktopApp {
             market_sort: MarketSort::Recommended,
             market_search_input,
             market_url_input,
+            market_installing: None,
             pending_install: None,
             nsh_page: false,
             nsh_preview: None,
+            plugin_runtime: None,
+            runtime_prompt: None,
+            _runtime_ticks: Task::ready(()),
             _subscriptions: subscriptions,
             _events: task,
         }
@@ -379,6 +396,14 @@ impl DesktopApp {
 impl Render for DesktopApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.remember_window(window);
+        if self.runtime_prompt.is_some()
+            || self
+                .plugin_runtime
+                .as_ref()
+                .is_some_and(|runtime| runtime.is_dirty())
+        {
+            cx.defer_in(window, |this, window, cx| this.runtime_frame(window, cx));
+        }
         if self.review.queue.is_empty() && self.review.open {
             self.review.open = false;
             if window.has_active_sheet(cx) {

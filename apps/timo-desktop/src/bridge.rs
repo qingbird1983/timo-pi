@@ -6,7 +6,6 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use timo_kernel::config::KEYCHAIN_SERVICE;
 use timo_kernel::plugins::PermissionTier;
 use timo_kernel::{
     Kernel, KernelOptions, ReviewDecision, ReviewKind, ToolReview, ToolReviewRequest,
@@ -16,9 +15,12 @@ use tokio::sync::oneshot;
 
 use crate::settings::ReviewPrefs;
 
+#[path = "bridge_dispatch.rs"]
+mod dispatch;
+#[path = "bridge_plugin_api.rs"]
+mod plugin_api;
 #[path = "bridge_providers.rs"]
 mod providers;
-use providers::{models_path, provider_infos, save_provider_key};
 
 #[path = "bridge_events.rs"]
 mod bridge_events;
@@ -26,6 +28,7 @@ mod bridge_events;
 mod bridge_plugins;
 #[allow(unused_imports)] // 测试与外部只通过门面取类型
 pub use bridge_events::{BridgeEvent, MarketSnapshot};
+pub use plugin_api::{PluginRequest, ToolCall};
 
 /// UI 发给内核的命令。
 #[derive(Debug, Clone)]
@@ -108,6 +111,11 @@ pub enum BridgeCommand {
         /// 插件 id。
         id: String,
     },
+    /// 从市场下载到暂存目录（验签与挡位确认仍在桌面层完成）。
+    InstallMarketPlugin {
+        /// 插件 id。
+        id: String,
+    },
 }
 
 /// 供应商凭证来源（不含值；设计 02 §5）。
@@ -145,10 +153,12 @@ pub struct ProviderInfo {
     pub editable: bool,
 }
 
-/// 桥接两端：命令发送端 + 事件接收端。
+/// 桥接两端：命令发送端 + 插件请求端 + 事件接收端。
 pub struct Bridge {
     /// 发送命令。
     pub commands: UnboundedSender<BridgeCommand>,
+    /// 插件宿主 API 的内核侧请求（`runTool`/`models.list`）。
+    pub plugin: UnboundedSender<PluginRequest>,
     /// 接收事件。
     pub events: UnboundedReceiver<BridgeEvent>,
 }
@@ -156,6 +166,7 @@ pub struct Bridge {
 /// 启动专用内核线程；装配失败也会发 [`BridgeEvent::Fatal`]。
 pub fn spawn(options: KernelOptions, review: ReviewPrefs) -> Bridge {
     let (command_tx, command_rx) = unbounded_channel();
+    let (plugin_tx, plugin_rx) = unbounded_channel();
     let (event_tx, event_rx) = unbounded_channel();
     let prefs = Arc::new(Mutex::new(review));
     let data_dir = options.data_dir.clone();
@@ -179,6 +190,7 @@ pub fn spawn(options: KernelOptions, review: ReviewPrefs) -> Bridge {
                     data_dir,
                     prefs,
                     command_rx,
+                    plugin_rx,
                     thread_events.clone(),
                 )),
                 Err(error) => {
@@ -195,6 +207,7 @@ pub fn spawn(options: KernelOptions, review: ReviewPrefs) -> Bridge {
     }
     Bridge {
         commands: command_tx,
+        plugin: plugin_tx,
         events: event_rx,
     }
 }
@@ -246,6 +259,7 @@ async fn run(
     data_dir: Option<PathBuf>,
     prefs: Arc<Mutex<ReviewPrefs>>,
     mut commands: UnboundedReceiver<BridgeCommand>,
+    mut requests: UnboundedReceiver<PluginRequest>,
     event_tx: UnboundedSender<BridgeEvent>,
 ) {
     let mut kernel = match Kernel::new(options).await {
@@ -268,114 +282,24 @@ async fn run(
     let _ = event_tx.send(BridgeEvent::Commands(kernel.slash_commands()));
     let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
 
-    while let Some(command) = commands.recv().await {
-        match command {
-            BridgeCommand::RefreshSessions => send_sessions(&kernel, &event_tx),
-            BridgeCommand::NewSession => {
-                kernel.new_session();
-                let _ = event_tx.send(BridgeEvent::Opened {
-                    id: None,
-                    history: vec![],
-                });
-                let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
-            }
-            BridgeCommand::OpenSession(id) => match kernel.resume(&id).await {
-                Ok(()) => {
-                    let history = kernel.history().unwrap_or_default().to_vec();
-                    let _ = event_tx.send(BridgeEvent::Opened {
-                        id: Some(id),
-                        history,
-                    });
-                    let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
+    let mut requests_open = true;
+    loop {
+        tokio::select! {
+            command = commands.recv() => match command {
+                Some(BridgeCommand::Run(prompt)) => {
+                    run_once(&mut kernel, prompt, &mut commands, &event_tx).await;
                 }
-                Err(error) => {
-                    let _ = event_tx.send(BridgeEvent::OpenFailed(error.to_string()));
+                Some(command) => {
+                    dispatch::dispatch(command, &mut kernel, data_dir.as_deref(), &prefs, &event_tx)
+                        .await;
                 }
+                None => break,
             },
-            BridgeCommand::DeleteSession(id) => match kernel.delete_session(&id) {
-                Ok(()) => {
-                    let _ = event_tx.send(BridgeEvent::Deleted(id));
-                    send_sessions(&kernel, &event_tx);
-                    let _ = event_tx.send(BridgeEvent::Usage(kernel.usage_summary()));
-                }
-                Err(error) => {
-                    let _ = event_tx.send(BridgeEvent::DeleteFailed(error.to_string()));
-                }
+            // 插件请求在 run 期间排队；被放弃的调用由 `serve` 跳过副作用。
+            request = requests.recv(), if requests_open => match request {
+                Some(request) => plugin_api::serve(&mut kernel, request).await,
+                None => requests_open = false,
             },
-            BridgeCommand::Run(prompt) => {
-                run_once(&mut kernel, prompt, &mut commands, &event_tx).await;
-            }
-            BridgeCommand::Cancel => {}
-            BridgeCommand::SetReviewPrefs { files, commands } => {
-                if let Ok(mut prefs) = prefs.lock() {
-                    prefs.files = files;
-                    prefs.commands = commands;
-                }
-            }
-            BridgeCommand::ListProviders => {
-                let model = kernel.model_label();
-                let list = provider_infos(data_dir.as_deref(), &model);
-                let _ = event_tx.send(BridgeEvent::Providers(list));
-            }
-            BridgeCommand::SaveProviderKey { provider, secret } => {
-                let path = models_path(data_dir.as_deref());
-                match save_provider_key(path, &provider, &secret).await {
-                    Ok(()) => {
-                        let _ = event_tx.send(BridgeEvent::ProviderSaved(provider));
-                        let model = kernel.model_label();
-                        let list = provider_infos(data_dir.as_deref(), &model);
-                        let _ = event_tx.send(BridgeEvent::Providers(list));
-                    }
-                    Err(error) => {
-                        let _ = event_tx.send(BridgeEvent::ProviderError(error));
-                    }
-                }
-            }
-            BridgeCommand::RemoveProviderKey { provider } => {
-                let provider_name = provider.clone();
-                let removed = tokio::task::spawn_blocking(move || {
-                    timo_kernel::config::keychain_delete(KEYCHAIN_SERVICE, &provider_name)
-                })
-                .await;
-                match removed {
-                    Ok(Ok(())) => {
-                        let _ = event_tx.send(BridgeEvent::ProviderRemoved(provider));
-                        let model = kernel.model_label();
-                        let list = provider_infos(data_dir.as_deref(), &model);
-                        let _ = event_tx.send(BridgeEvent::Providers(list));
-                    }
-                    Ok(Err(error)) => {
-                        let _ = event_tx.send(BridgeEvent::ProviderError(error.to_string()));
-                    }
-                    Err(error) => {
-                        let _ = event_tx.send(BridgeEvent::ProviderError(error.to_string()));
-                    }
-                }
-            }
-            BridgeCommand::ListPlugins => bridge_plugins::list(&kernel, &event_tx),
-            BridgeCommand::SetPluginEnabled { id, enabled } => {
-                bridge_plugins::set_enabled(&kernel, &event_tx, &id, enabled);
-            }
-            BridgeCommand::SetPluginTier { id, tier } => {
-                bridge_plugins::set_tier(&kernel, &event_tx, &id, tier);
-            }
-            BridgeCommand::UninstallPlugin { id } => {
-                bridge_plugins::uninstall(&kernel, &event_tx, &id);
-            }
-            BridgeCommand::RevokePlugin { id } => {
-                bridge_plugins::revoke(&kernel, &event_tx, &id);
-            }
-            BridgeCommand::LoadMarket => bridge_plugins::load_market(&kernel, &event_tx, None),
-            BridgeCommand::RefreshMarket => bridge_plugins::refresh(&kernel, &event_tx).await,
-            BridgeCommand::SaveMarketIndex { url } => {
-                bridge_plugins::save_index(&kernel, &event_tx, url).await;
-            }
-            BridgeCommand::ToggleMarketFavorite { id } => {
-                bridge_plugins::toggle_favorite(&kernel, &event_tx, &id);
-            }
-            BridgeCommand::ToggleMarketBlocked { id } => {
-                bridge_plugins::toggle_blocked(&kernel, &event_tx, &id);
-            }
         }
     }
 }

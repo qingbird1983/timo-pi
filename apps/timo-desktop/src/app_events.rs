@@ -13,10 +13,10 @@ impl DesktopApp {
                 self.ready = true;
                 self.fatal = None;
                 self.model = Some(model);
-                self.sessions = sessions;
+                self.sync_sessions(sessions);
             }
             BridgeEvent::Sessions(sessions) => {
-                self.sessions = sessions;
+                self.sync_sessions(sessions);
             }
             BridgeEvent::Commands(commands) => {
                 self.slash_commands = commands;
@@ -80,8 +80,11 @@ impl DesktopApp {
                 self.provider_feedback = None;
             }
             BridgeEvent::Plugins(entries) => {
-                self.plugins = entries;
                 self.plugins_error = None;
+                self.plugins = match self.plugin_runtime.as_mut() {
+                    Some(runtime) => runtime.set_entries(entries),
+                    None => entries,
+                };
             }
             BridgeEvent::PluginError(message) => {
                 self.plugins_error = Some(message);
@@ -95,6 +98,44 @@ impl DesktopApp {
                 self.market_error = None;
             }
             BridgeEvent::MarketError(message) => {
+                self.market_error = Some(message);
+            }
+            BridgeEvent::MarketDownloaded { id, dir } => {
+                if self.market_installing.as_deref() == Some(id.as_str()) {
+                    self.market_installing = None;
+                }
+                cx.spawn(async move |this, cx| {
+                    let outcome = timo_kernel::data_dir()
+                        .map_err(|error| error.to_string())
+                        .and_then(|data_dir| {
+                            crate::features::plugins::nsh::install::verify_dir(&data_dir, &dir).map(
+                                |mut candidate| {
+                                    candidate.cleanup = true;
+                                    candidate
+                                },
+                            )
+                        });
+                    let _ = this.update(cx, |this, cx| {
+                        match outcome {
+                            Ok(candidate) => {
+                                this.pending_install = Some(candidate);
+                                this.market_error = None;
+                            }
+                            Err(message) => {
+                                let _ = std::fs::remove_dir_all(&dir);
+                                this.pending_install = None;
+                                this.market_error = Some(message);
+                            }
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
+            BridgeEvent::MarketDownloadFailed { id, message } => {
+                if self.market_installing.as_deref() == Some(id.as_str()) {
+                    self.market_installing = None;
+                }
                 self.market_error = Some(message);
             }
             BridgeEvent::Fatal(message) => {
