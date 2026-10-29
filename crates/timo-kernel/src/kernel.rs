@@ -22,6 +22,7 @@ mod codemode_api;
 mod compaction_api;
 mod ext_api;
 mod options;
+mod plugin_api;
 mod prompt_api;
 mod ready;
 mod sessions;

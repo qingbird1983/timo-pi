@@ -33,4 +33,7 @@ pub enum KernelError {
     /// 扩展装载/打包错误（逐扩展诊断为主路径；此处为装配级失败）。
     #[error("extension: {0}")]
     Extension(String),
+    /// 插件代理的工具执行错误（`actions.runTool`）。
+    #[error("tool: {0}")]
+    Tool(#[from] timo_tools::ToolError),
 }

@@ -27,7 +27,7 @@ pub use discovery::{
     Discovered, DiscoveryIssue, DiscoveryOptions, DiscoveryOutcome, Scope, discover,
 };
 pub use error::ExtError;
-pub use fs_scope::dir_scope;
+pub use fs_scope::{check_read, dir_scope};
 pub use gui_manifest::{
     GUI_MANIFEST_SCHEMA, GuiManifest, GuiManifestError, HOST_API_VERSION, PermissionTier,
     PluginKind, SLOT_KINDS, SlotDecl, is_semver, is_valid_nsh_id,
