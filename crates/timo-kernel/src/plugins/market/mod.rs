@@ -2,6 +2,7 @@
 //!
 //! 索引只提供展示与下载来源；安装仍走签名包校验与挡位授权。
 
+mod download;
 mod fetch;
 mod store;
 
@@ -10,6 +11,7 @@ use timo_ext::{PluginKind, is_semver, is_valid_id};
 
 use super::PluginError;
 
+pub use download::{MAX_MANIFEST_BYTES, MAX_PACKAGE_BYTES, download};
 pub use fetch::{RefreshOutcome, refresh, validate_index_url};
 pub use store::{
     MarketMeta, MarketState, index_url, load_cached, load_state, market_dir, save_state,
