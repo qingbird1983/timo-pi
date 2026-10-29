@@ -65,4 +65,4 @@
 - **构建缓存按容量治理**：`target/` 15GiB 软 / 25GiB 硬；incremental >4GiB 先删；阶段收尾跑 `scripts/clean-build`；无 sccache 不全清。
 - **写中文文件后扫隐形字符**：`grep -nP '[\x{3040}-\x{30ff}\x{200b}-\x{200f}\x{feff}]'`。
 - **收尾四件事**：重写本卡、归档 handoff、沉淀 pitfalls/skills、体量核对。
-- 踩坑索引：P-001 流事件静默回归；P-002 编辑重复行；P-003 Windows bash 是 WSL；P-004 上游摘要当合同；P-005 模块格式与运行时不符；P-006 依赖解析成功 ≠ API 兼容；P-007 gpui-kit 测试 glob 导入；P-008 `impl IntoElement` 生命周期捕获；P-009 sheet 焦点陷阱；P-010 gpui glob 遮蔽 `#[test]`；P-011 kill 后孙进程握着管道；P-012 会话半行拼接；P-013 Git Bash 改写 `/命令` 参数；P-015 主动中断的原因必须覆盖收尾错误；P-016 错误隔离会改变派发返回值。
+- 踩坑索引：P-001 流事件静默回归；P-002 编辑重复行；P-003 Windows bash 是 WSL；P-004 上游摘要当合同；P-005 模块格式与运行时不符；P-006 依赖解析成功 ≠ API 兼容；P-007 gpui-kit 测试 glob 导入；P-008 `impl IntoElement` 生命周期捕获；P-009 sheet 焦点陷阱；P-010 gpui glob 遮蔽 `#[test]`；P-011 kill 后孙进程握着管道；P-012 会话半行拼接；P-013 Git Bash 改写 `/命令` 参数；P-015 主动中断的原因必须覆盖收尾错误；P-016 错误隔离会改变派发返回值；P-017 本机 WSL 验 Linux 的四个假信号与一个真缺陷（去重不能挂在 mtime/readdir 顺序上）。
