@@ -42,6 +42,10 @@
 | `runTool` | `name`、`args` | 见 01 §8 | 宿主代理执行；受 `tools` 声明与注册表约束 |
 | `openPanel` | `panelId` | ReadOnly | 打开插件自己的面板 |
 | `clipboardWrite` | `text` | ReadOnly | 写剪贴板，长度 ≤ 64KB |
+| `storage.set` | `key`、`value` | ReadOnly | 写插件私有存储；限额见 04 §4 |
+
+- `storage.get` 在查询面（04 §2），`storage.set` 在这里：读写分属两个白名单，插件要同时声明两项。
+- `theme.update` 不是 call，而是插件用 `host.post("theme.update", tokens)` 提交主题补丁；宿主按 §2 消毒后应用，越界键记 E743。
 
 - 动作必须在 manifest `actions` 中声明；`runTool` 还必须列在 `tools` 中。
 - 未声明 → E740；挡位不足 → E722；未知动作名 → E740；参数非法 → E741。

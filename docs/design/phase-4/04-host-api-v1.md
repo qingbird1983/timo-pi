@@ -51,12 +51,14 @@ await host.call("actions.runTool", {
 - 宿主代理执行：参数校验 → 权限（声明 ∩ 挡位 ∩ 注册表）→ 内核工具管线（取消/审计）→ 返回 `{content, isError}`。
 - 写类工具默认不逐次审阅；全局审阅开关开启时才弹确认（01 §8）。
 - 插件卸载/禁用时，进行中的 `runTool` 收到取消（E742），宿主侧不再等待。
+- **实现注记（2026-10-29，P1-c）**：内核请求在 agent run 期间排队；run 期间发起的 `models.list`/`runTool` 可能超过 3s/30s 时限而返回 E742。可重入的并发执行需要内核改造，留后续评估。
 
 ## 4. 存储
 
-- `storage.get` / `storage.set`：按插件 id 隔离的 KV，存 `<data_dir>/plugins/<id>/storage.json`。
+- `storage.get`（查询）与 `storage.set`（动作，03 §3）：按插件 id 隔离的 KV，存 `<data_dir>/plugins/<id>/storage.json`。
 - 键：`[a-zA-Z0-9._-]{1,64}`；值：JSON，单条 ≤ 64KB，总量 ≤ 1MB；超限 E744。
 - 不提供枚举/删除（v1 只读写）；卸载时随目录删除。
+- 主题补丁走 `host.post("theme.update", tokens)`，不是 call；规则见 03 §2。
 
 ## 5. 事件
 

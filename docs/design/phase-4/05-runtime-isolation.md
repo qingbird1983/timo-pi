@@ -22,7 +22,7 @@ NotLoaded → Loading → Running → Stopping → Stopped
 | 阶段 | 行为 |
 |---|---|
 | Loading | `Bundle::from_package` → `AppOptions`（host、theme、policy）→ `AppView::new` |
-| Running | 首帧 + 1s 内无 `on_app_error`；容器显示；看门狗启动 |
+| Running | 首帧（平台可观测时）+ 1s 内无 `on_app_error`；容器显示；看门狗启动 |
 | Error | 记录诊断、移除容器、保留目录与授权；不自动重启 |
 | Stopping | `stop()` → drop → 有界回收（3s）→ 标记 Stopped |
 
@@ -33,6 +33,7 @@ NotLoaded → Loading → Running → Stopping → Stopped
 ## 3. 健康检查与崩溃
 
 - 启动健康检查：首帧回调 + 1s 内无 `on_app_error`（沿用 Phase 3 PoC）。
+- **实现注记（2026-10-29，P1-c）**：NSH 0.3.0 的 `AppView` 没有公开首帧回调，健康门实际实现为 `run_package` 后 1s 内无 `on_app_error`；平台给出首帧信号后再收紧到「首帧 + 1s」。
 - `on_app_error`：记录 `{message, kind}`（脱敏，不含堆栈默认展示）；执行 `stop()`；实例进入 Error。
 - 同一插件 60s 内 Error ≥ 2 次：自动禁用并提示「插件反复崩溃，已停用」。
 - 加载失败（`Bundle::from_package`/`AppView::new`）：不创建容器，旧实例不变。
