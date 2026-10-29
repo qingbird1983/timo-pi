@@ -19,6 +19,7 @@ dist/
 .idea/
 .vscode/
 !.vscode/extensions.json
+.zcode/
 .DS_Store
 Thumbs.db
 desktop.ini
