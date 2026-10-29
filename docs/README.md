@@ -94,6 +94,7 @@ docs/
 | design/phase-4/prototype.html | 草稿（方向稿） | 插件管理器粗粒度原型：列表、详情、安装向导与挡位选择 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | adr/ADR-0016-plugin-marketplace.md | 定稿 | 插件市场形态与分发边界：静态索引 + 签名包，不做交易/评分后端 |
+| adr/ADR-0017-research-screenshot-assets.md | 定稿 | 调研参考截图入库 docs/research/assets/（单张 ≤2MB、总预算 20MB、孤儿图片不入库） |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/audit-debt.md | 定稿（2026-10-28 已完成） | 审查收债：代码—文档一致性与复杂度清偿台账（A 1 项 + B 9 项 + C 10 项 + D 9 项；全部清零，419 tests 全绿） |
 | roadmap/phase-0 ~ phase-4 | phase-3.5 完成（tag `phase-3.5.end`）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |

@@ -52,7 +52,7 @@ graph LR
 - 审批档位与权限模式（pi 内核零审批、策略靠扩展：security.md 明言"不在每次工具调用前请求批准"，安全边界靠容器/账户隔离；本项目桌面端保留审阅安全垫，但需补档位——单次/会话/永久允许 + 模式三档"每次询问/自动审批/完全访问"（完全访问即现接缝 `tool_review=None`，pi 等价）；待 Phase 3 完工后由桌面壳批次或 Phase 3.5 承接，审批策略蓝本：pi 示例 permission-gate/confirm-destructive/protected-paths；**所有者已给四档模式设计（2026-10-27，research/07 §8.3b + assets/direction-mode-menu.png）：计划模式/变更前确认（默认）/自动编辑/完全访问**——其中三档为既有 K2 接缝的壳层策略，计划模式属创新档（pi 明确不做）待 ADR-0011 解禁）
 - 会话树/分叉/navigate 的用户功能面（GUI 轨）
 - tool-search（deferred 工具按需加载）
-- A 轨 v2 成员逐个转正；B 轨 slot 扩展
+- A 轨 v2 成员逐个转正；B 轨 slot 扩展——具体构想（所有者 2026-10-28 提出、同日决定暂缓）：插件接管"中栏整页"的槽位（宿主管标题栏与返回键；同类实证：DSH 内置页与三方"侧栏新 Tab"，research/07 §8.3i）；连带构想：**AI 自写插件**（DSH 源码已查证：Creator 预设自带插件开发技能册 + 只读 API 检视工具 + install_bundle 审批安装，详见 research/07 §8.3i 源码查证节；我方底座 = Phase 4 devkit/slot/插件管理，**插件语言两轨均为 JS/TS**（QuickJS 沙箱解释执行——宿主才是 Rust，安装期只打包+签名、无机器码编译环节，AI 自写不受编译工具链拖累），缺口 = 开发指引技能与检视工具）——均未来单独迭代，立项须先写 ADR
 - pi 会话导入工具；插件 marketplace；遥测（opt-in）
 - ADR-0008 所列外围能力（chord/durable/env）——默认不做
 
