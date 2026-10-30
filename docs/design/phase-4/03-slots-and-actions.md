@@ -17,8 +17,21 @@
 
 - 每个 slot 实例独立挂载一个 NSH `AppView`；同一插件可声明多个 slot。
 - `panel` 最多同时显示 5 个（按 `order` 升序），超出拒绝并记 E751。
+- 单插件实例总数上限 4；超出时按优先级 `panel`（1）→ `composerTrigger`（1）→ `toolCard`（按声明顺序）→ `entryExtra`（按会话列表顺序）取舍，被舍弃的实例记 E751。
 - slot 容器由宿主绘制：尺寸、滚动、边框、标题栏归宿主；插件只画内容。
 - 禁用/卸载/撤销授权时，宿主先卸载对应 AppView，再移除容器。
+
+### 1.1 实例绑定与数据更新
+
+- **`toolCard`**：`slots[].tools` 必填（1~4 个工具名），每个工具一个实例；只显示当前会话中该工具最近一次调用。启动参数含该次调用的 `{toolName, status, input, output}`（当前会话尚无该工具调用时 `status` 为 `idle`，`input`/`output` 为空串），后续变化经 `slot.changed` 事件推送（04 §5）。
+- **`entryExtra`**：每个会话一个实例，输入 `{sessionId, title}`；标题变化经 `slot.changed`。实例数受单插件上限约束，超出按会话列表顺序舍弃。
+- **`composerTrigger`**：每个插件一个实例，渲染在输入区上方；输入快照经 `slot.changed` 推送，也可用 `composer.text` 查询（04 §2）。
+- **`composerControl`**：v1 仅声明，不创建实例。
+- **脱敏**：`toolCard` 的 `input`/`output` 先截断到 8 KiB（按字符边界），再替换常见凭据形态（`sk-*`、`gh?_*`、`AKIA*`、`Bearer *`、`key/secret/token/password = value`）；不含系统提示与密钥。宿主只把该实例自己槽位的数据交给插件。
+
+> 实现注记（2026-10-29，P1-d）：侧栏 `panel` 容器高度 168px，固定标题栏与边框；面板区最多占 360px，超出整段滚动，避免挤占会话列表。插件内容在容器给定边界内自行滚动。
+>
+> 工具卡挂在对应工具 trace 行下方（宿主裁剪，最高 132px）；`entryExtra` 渲染在会话条目下一行（最高 48px，不拦截行点击）；`composerTrigger` 渲染在输入框上方（最高 32px）。三者都只有健康门通过的实例才出现。
 
 ## 2. 主题 token 消毒
 

@@ -6,6 +6,91 @@
 
 ---
 
+## [0.1.119] - 2026-10-30
+
+### Phase 4 验收补齐：D1~D5 通过、D6 基本通过
+
+- **D1 热更干净证据**：面板在场时安装 v1.0.6（build 8，侧栏顶部新增「热更 v1.0.6」标记），面板立即显示新标记、插件页行显示 `v1.0.6`，宿主进程 PID 17920 与启动时间 11:00:41 未变——录到「无重启即时替换」。
+- **D4 看门狗 E742**：「静默」插件 v1.0.9 不回 `__pong`，面板 11:16:24 出现、11:16:31 前移除，诊断 `E742 unresponsive: no __pong from the plugin`，主应用可交互。**发现并登记**：NSH 0.3.0 对 JS 调用有 2s 预算，`for(;;){}` 会先被引擎中断（同样 E742），看门狗只能由「不回 `__pong`」触发（设计 05 §4/§8 已加注记）。
+- **D4 崩溃循环自动停用**：v1.0.10 与 v1.0.11 在 60s 窗口内各崩溃一次 → 提示「插件 session-search 反复崩溃，已自动停用」、`plugins.json` `enabled=false`，重启后仍为已禁用。
+- **D4 退出与卸载**：`WM_CLOSE` 后进程 65ms / 67ms 退出；运行中卸载后面板消失、插件目录删除、`plugins.json` 与 `permissions.json` 授权清空、线程 59 → 45、无残留桩进程。**登记残留**：`plugins/assets/<id>/<sha>/` 与 `nsh-trust.json` 的 `builds` 记录不随卸载清理，已入 roadmap backlog。
+- 文档同步：阶段报告、设计 05 实现注记、roadmap 看板、本 CHANGELOG、CONTEXT 与 handoff；新增 P-023（NSH 2s JS 调用预算先于看门狗）。
+- `phase-4.end` **未打**：待所有者确认收口（四问逐篇复查留到该轮）。
+
+---
+
+## [0.1.118] - 2026-10-30
+
+### Phase 4 收尾：D4 无障碍崩溃用本地补丁修复（ADR-0018）
+
+- **D4 诊断**：在 `target/` 下临时复制 NSH/gpui-fast 源码加打印（验证后删除、`[patch]` 已回退）。5 次崩溃的重复 id 全部命中 NSH 合成节点（key1/v18、v66、v72，key2/v42，均随数据/焦点移动）；读取 `accesskit_consumer` 源码确认判重的 `seen_child_ids` 只遍历当次 `TreeUpdate`，**重复在更新内部**（更正了此前「持久树残留」「重复由 GPUI 生成」的判断）。
+- **上游核查**：`nsh-platform-gpui` 最新 0.3.0（即当前锁定）；`gpui-fast` 0.1.12 的 a11y 代码与 0.1.10 一致，仍依赖 `accesskit ^0.24` / `accesskit_windows 0.34`；无升级即修复路径。
+- **补丁**：所有者拍板本地补丁。新增 `vendor/accesskit_consumer/`（0.38.0 原样副本 + 补丁，`PATCH.md` 记录出处/改动/维护步骤，保留 MIT 许可），根 `Cargo.toml` 用 `[patch.crates-io]` 指向并在 `workspace.exclude` 排除门禁。补丁点：`State::update` 先裁掉重复 child 引用（保留首个父节点）并 `log::warn!`，替代 panic；新增单测。
+- **复验（真机）**：面板输入框聚焦 + UIA 反复连接/断开 + 查询串逐字变化 + 最小化/还原。探针版构建记录到 `stripped 3 duplicate child reference(s) from a TreeUpdate`（同一更新旧版必 panic），补丁版进程存活、无 `panicked`；探针已移除。
+- 门禁：fmt、clippy `-D warnings`、workspace **526 tests**、`check-size` 全绿；vendor 自带测试单独跑 **206 passed**。报告、P-022、CONTEXT、roadmap 已同步；D4 其余子项（看门狗端到端、卸载残留）与 D1 热更干净证据仍待补，`phase-4.end` 继续暂缓。
+
+---
+
+## [0.1.117] - 2026-10-30
+
+### Phase 4 真机验收（D1~D6）：D4 稳定性未通过，暂不打 tag
+
+- **验收方式**：所有者不在场，由 AI 会话代理真机操作。桌面数据用临时目录（`%TEMP%\timo-accept-data`），签名用临时测试密钥，私钥只以路径传给 `nsh`，从未读取或打印；截图与日志只留本机临时目录，不入库，也未触碰所有者真实数据。
+- **D1 基本通过**：devkit 全链（new/check/keygen/certify/pack/verify）全通；安装 `session-search 1.0.5` build 7（read-only）后侧栏出现「搜索会话」面板，空查询 3 条、`parser` 1 条、`zzz` 无匹配、点击/回车打开会话；连续安装 v1.0.3→v1.0.4→v1.0.5 时已安装行版本即时变化、日志出现新实例启动，v1.0.4 修掉「永远载入中」（P-021）；build 2 降级包被拒（E712），账本保持 build 7。热更只取得版本递增 + 新实例启动的日志/截图，未录到一轮无崩溃干扰的即时替换过程。
+- **D2 通过**：内置侧栏与插件面板并排显示同一组会话、搜索结果一致；插件清单只用 `sessions.list`/`sessions.search`/`openSession`，无存储、fs、net、exec。
+- **D3 通过（真机 + 自动化）**：包尾追加 1 字节 →「签名校验失败: the signature does not verify」；未签名拒载；越挡按钮置灰；未声明/参数非法调用 E740/E741 并写入诊断卡；撤销后拒绝重装与启用（E711）。沙箱逃逸以能力面封闭 + 拒绝路径测试覆盖，未做 JS 层对抗性用例。
+- **D4 未通过**：插件面板在场且输入框聚焦时，一旦系统无障碍被激活（原生选文件夹对话框、UIA 客户端连接/断开），宿主在下一次重绘 panic：`TreeUpdate includes duplicate child`（`accesskit_consumer-0.38.0/src/tree.rs:225`），窗口卡死需强杀，共 5 次复现。定位为 NSH 0.3.0 焦点代理 + gpui-fast/accesskit 组合缺陷，Timo 侧无法不改依赖修掉；处置方案（上报上游 / 打补丁 / 临时规避）待所有者定夺。这意味着读屏用户当前不可用，修复前不能打 `phase-4.end`。
+- **D5 通过（本地）**：事件总线、工具元模型、嵌套执行、统一入口、API v1、NSH 隔离逐条核对；远端 CI 因未推送未运行。
+- **D6 基本通过**：市场页签、空索引态与刷新按钮真机可见；离线保留缓存、缓存损坏回退、收藏/屏蔽持久化有测试；卡片安装与本地安装共用 `verify_dir` 与挡位向导，因默认无索引源未真机走通。
+- **报告与沉淀**：新增 `docs/design/phase-4/report.md`；新增 P-021（NSH 组件体只执行一次，顶层 if/return 不随信号更新）与 P-022（NSH 无障碍焦点代理重复 child）。
+- 门禁读数：fmt、clippy `-D warnings`、workspace **526 tests**、`check-size` 全绿。收尾 `scripts/clean-build`：`target/` 18.7GiB → **13.0GiB**（释放 5.6GiB incremental；deps 11.4GiB）。
+
+---
+
+## [0.1.116] - 2026-10-29
+
+### Phase 4 P2：插件开发工具链与第一个自证插件（会话搜索）
+
+- **新增 `crates/timo-devkit`（bin）**：`new` 生成骨架、`check` 静态校验、`pack` 打包签名、`verify` 验签、`keygen` 生成密钥并打印公钥指纹；只编排官方 `nsh` CLI，不自研签名与打包器。私钥只透传路径，从不读取或打印。
+- **骨架约定改了入口位置**：`App.tsx` 放插件根目录（不是 `src/App.tsx`）。NSH 把入口所在目录当应用目录——`nsh build/check/dev` 只在入口同目录找 `App.tsx` 与 `tsconfig.json`，放 `src/` 会让类型检查与热更都要额外配置。骨架同时生成 `nsh.json`（`capabilities.host` = 清单 `queries` + `actions` + `theme.update`）与 `tsconfig.json`（继承 `.nsh/`），`.nsh/`、签名包、私钥一并进 `.gitignore`。
+- **`check`**：校验清单（E720/E721/E722）与 `nsh.json` 的一致性（id、版本、宿主函数授权，支持 `sessions.*` 前缀通配），再用离线的 `nsh build` 把 TSX 编译到临时目录；`--types` 才调用 `nsh check`（需联网下载 TypeScript）。
+- **`pack`**：check → 源码指纹（跳过 `.git/`、`node_modules/`、`.nsh/`、`target/`、清单与包文件；按路径排序后 `路径\0长度\0内容` 入哈希，与 A 轨同构）→ `nsh publish` → 复核包内 id/版本/build → 原子改名到 `--out`（默认 `plugin.nshpkg`）→ 把指纹与包名写回 `timo-plugin.json`，并另存一份 `manifest.json` 作安装对。build 缺省取 `git rev-list --count HEAD`，非 git 目录必须显式传入且必须大于已有包；失败不留半成品。
+- **自证插件 `examples/plugins/session-search`**：`read-only` 挡位、`panel` slot，只用 `sessions.list` / `sessions.search` / `openSession`。输入 200ms 防抖搜索，空查询显示最近 10 条，点击行或用回车打开首条，`×` 清空；`sessions.changed` 静默重跑；错误显示 E74x 与「重试」。不读正文、不跨工作区、无 fs/net/exec。
+- **键盘口径修正**（设计 07 实现注记）：NSH v1 没有方向键/Esc 事件，逐条移动改为点击、Esc 改为 `×`；相对时间在插件内格式化（宿主只给毫秒时间戳），完全一致需宿主 API 增加格式化查询，留给后续版本。
+- **冒烟证据**（临时目录、临时密钥，未入库）：new → check → keygen → certify → pack → verify 全通；篡改包被拒（退出码 2）；非 git 目录缺 `--build` 被拒；build 回退被拒；同源码重复打包指纹不变、包哈希变化。
+- **验收准备（同日）**：被拒的宿主调用不再只回给插件，同时写进插件详情诊断卡（E740/E741/E742，运行期把紧邻的同码同文案合并成一条并标 `xN`）；补上市场「离线拉取失败保留缓存」测试；自证插件用 devkit `check` 离线编译通过。
+- 门禁读数：workspace **526 tests 全绿**（新增 devkit 14 条 + 验收 2 条）；fmt、clippy `-D warnings`、`check-size` OK。`target/` 收尾运行 `scripts/clean-build`：21.4GiB → **14.0GiB**（释放 7.4GiB）。
+
+---
+
+## [0.1.115] - 2026-10-29
+
+### Phase 4 P1-d（后半）：插件也能出现在聊天与输入区，四种容器全部到位
+
+- **清单新增 `tools` 字段**：`toolCard` 必须声明 1~4 个工具名（去重、每个 ≤64 字符），其他槽位种类声明即拒绝（E720）。这是「哪张卡片看哪个工具」的唯一来源。
+- **多 kind 运行时**：面板、工具卡、输入区触发器、会话附加区共用同一套装载流程——验签、1s 健康门、看门狗、版本替换；实例以「插件+种类+绑定」为键，单插件最多 4 个，按 `panel → 输入触发器 → 工具卡（声明顺序）→ 会话附加区（会话顺序）` 取舍，超出记 E751 诊断。
+- **三种新容器**（宿主只画框，插件画内容）：工具卡挂在对应工具 trace 行下方（最高 132px）；会话附加区挂在侧栏会话条目下一行（最高 48px，不拦截点击）；输入区触发器挂在输入框上方（最高 32px）。都只在健康门通过后出现。
+- **数据只在变化时推送**：新增 `slot.changed` 事件，把该实例自己的数据变化（工具调用状态/结果、会话标题、输入文本）推给插件，按实例去重；插件也可用新增的 `composer.text` 查询当前输入快照（≤8 KiB，1s 超时）。
+- **脱敏**：工具卡拿到的参数与结果先按字符边界截到 8 KiB，再把 `sk-*`、`gh?_*`、`AKIA*`、`Bearer *`、`key/secret/token/password = value` 等凭据形态替换掉；拿不到系统提示与密钥。
+- **未做**：`composerControl` 仍只校验声明、不创建实例，等交互契约定稿。
+- 门禁读数：workspace **510 tests 全绿**（新增 15 条）；fmt、clippy `-D warnings`、`check-size` OK。`target/` 收尾 **21.0GiB**（deps 16.7GiB），本轮未清扫。
+- **构建工具补齐**（收尾后）：安装 `cargo-sweep` 0.8.0，并把本机已有的 `sccache` 0.19.0 接上（用户级 `RUSTC_WRAPPER=sccache`，缓存上限 20 GiB、默认落在本机用户缓存目录）；`scripts/clean-build` 从此可用，待下次阶段收尾执行。实测注意：incremental 编译不进 sccache 缓存（本地 crate 的 dev 构建默认增量），依赖编译可正常命中。
+
+---
+
+## [0.1.114] - 2026-10-29
+
+### Phase 4 P1-d（前半）：插件面板出现在侧栏，诊断有了自己的卡片
+
+- **侧栏 panel 容器**：运行期只把健康门通过的 `panel` 实例交给界面；侧栏新增停靠区，最多 5 个、按清单 order 排列，宿主画标题栏、边框与固定高度（168px，区域上限 360px 整段滚动），插件只画内容。禁用、出错或版本替换时容器立即移除，1s 内消失。
+- **诊断卡**：插件详情新增「诊断」卡，展示最近 50 条 E7xx/内核诊断；运行期仍按「首条 + 计数」去重，空态显示「暂无诊断」，不展示堆栈。
+- **界面刷新**：运行期 tick 现在报告实例增减与阶段变化，健康门通过后侧栏当帧出现面板；清单协调后主动重绘。
+- **有界回收核对**：NSH 0.3.0 的 `AppView::stop()` 在内部同步 `join` 引擎线程，没有可超时观察的句柄，设计 05 §7 的「3s 有界等待 / Leaked 标记」暂无法实现，已写实现注记；平台提供超时 API 后再补。
+- 设计缺口登记：`toolCard` 的脱敏口径与绑定字段、`entryExtra` 的会话范围、`composerTrigger` 的容器形态未定稿，留到 P1-d 后半先补文档再写码。
+- 门禁读数：workspace **495 tests 全绿**（新增诊断卡 UI 断言）；fmt、clippy `-D warnings`、`check-size` OK。本轮中途 `target/` 18.5GiB（deps 15.9GiB、incremental 1.0GiB），P1-d 收口时运行 `scripts/clean-build`。
+
+---
+
 ## [0.1.113] - 2026-10-29
 
 ### Phase 4 P1-c：插件真的能在主窗口里跑起来了（运行时与宿主 API v1）

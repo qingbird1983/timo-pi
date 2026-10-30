@@ -82,19 +82,21 @@ docs/
 | design/phase-3.5/10-provider-composer.md | 定稿 | P2 第二题：请求头/认证头/兼容性配置面，虚拟模型的目录/路由/状态三步 |
 | design/phase-3.5/11-codemode.md | 定稿 | P2 第三题：脚本沙箱、嵌套工具调用接缝、输出截断与资源限制（D72~D79） |
 | design/phase-3.5/report.md | 定稿（Phase 3.5 完成，tag `phase-3.5.end`） | Phase 3.5 进度报告：P0 批 1~5、P1 批 1~4、D6 四批、P2 模板/provider/codemode 实现，含真机读数、体量核对与阶段收尾 |
-| design/phase-4/00-overview.md | 草稿（待评审） | Phase 4 总览：两轨统一插件管理器、权限挡位、模块布局与批次 |
-| design/phase-4/01-plugin-manager.md | 草稿（待评审） | 统一管理器：模型、目录与状态、内核 API、页面、安装状态机、挡位映射 |
-| design/phase-4/02-manifest-and-trust.md | 草稿（待评审） | 清单 schema 2、NSH 签名包、信任根、热更/回退与错误码 |
-| design/phase-4/03-slots-and-actions.md | 草稿（待评审） | slot 白名单、主题 token 消毒、动作词汇表与越界诊断 |
-| design/phase-4/04-host-api-v1.md | 草稿（待评审） | TSX 宿主 API v1：查询、动作、存储、事件、错误与版本契约 |
-| design/phase-4/05-runtime-isolation.md | 草稿（待评审） | AppView 实例模型、健康检查、看门狗、卸载与残留处理 |
-| design/phase-4/06-devkit.md | 草稿（待评审） | devkit 命令、脚手架、打包一致性、分发与测试 |
-| design/phase-4/07-self-proof-plugin.md | 草稿（待评审） | 自证插件「会话搜索」：交互、清单、内核查询与验收 |
-| design/phase-4/08-marketplace.md | 草稿（待评审） | 插件市场：索引协议、分类与页签、缓存/离线、收藏/屏蔽、卡片安装 |
-| design/phase-4/prototype.html | 草稿（方向稿） | 插件管理器粗粒度原型：列表、详情、安装向导与挡位选择 |
+| design/phase-4/00-overview.md | 定稿 | Phase 4 总览：两轨统一插件管理器、权限挡位、模块布局与批次 |
+| design/phase-4/01-plugin-manager.md | 定稿 | 统一管理器：模型、目录与状态、内核 API、页面、安装状态机、挡位映射 |
+| design/phase-4/02-manifest-and-trust.md | 定稿 | 清单 schema 2、NSH 签名包、信任根、热更/回退与错误码 |
+| design/phase-4/03-slots-and-actions.md | 定稿 | slot 白名单、主题 token 消毒、动作词汇表与越界诊断 |
+| design/phase-4/04-host-api-v1.md | 定稿 | TSX 宿主 API v1：查询、动作、存储、事件、错误与版本契约 |
+| design/phase-4/05-runtime-isolation.md | 定稿 | AppView 实例模型、健康检查、看门狗、卸载与残留处理 |
+| design/phase-4/06-devkit.md | 定稿 | devkit 命令、脚手架、打包一致性、分发与测试 |
+| design/phase-4/07-self-proof-plugin.md | 定稿 | 自证插件「会话搜索」：交互、清单、内核查询与验收 |
+| design/phase-4/08-marketplace.md | 定稿 | 插件市场：索引协议、分类与页签、缓存/离线、收藏/屏蔽、卡片安装 |
+| design/phase-4/prototype.html | 定稿（方向稿） | 插件管理器粗粒度原型：列表、详情、安装向导与挡位选择 |
+| design/phase-4/report.md | 定稿（D4 崩溃已修复；余项待补） | Phase 4 进度报告：D1~D6 真机结果、无障碍崩溃根因与补丁复验、门禁读数 |
 | adr/ADR-0012-tool-review-seam.md | 定稿 | 工具执行前的显式审阅接缝 |
 | adr/ADR-0016-plugin-marketplace.md | 定稿 | 插件市场形态与分发边界：静态索引 + 签名包，不做交易/评分后端 |
 | adr/ADR-0017-research-screenshot-assets.md | 定稿 | 调研参考截图入库 docs/research/assets/（单张 ≤2MB、总预算 20MB、孤儿图片不入库） |
+| adr/ADR-0018-vendored-accesskit-consumer-patch.md | 定稿 | 本地修补 accesskit_consumer：重复 child 消毒取代 panic，修复 D4 无障碍崩溃 |
 | roadmap/00-roadmap.md | 定稿 | 总路线图与阶段依赖 |
 | roadmap/audit-debt.md | 定稿（2026-10-28 已完成） | 审查收债：代码—文档一致性与复杂度清偿台账（A 1 项 + B 9 项 + C 10 项 + D 9 项；全部清零，419 tests 全绿） |
 | roadmap/phase-0 ~ phase-4 | phase-3.5 完成（tag `phase-3.5.end`）；其余定稿（细节可在开工前修订） | 阶段范围、交付物、验收场景 |

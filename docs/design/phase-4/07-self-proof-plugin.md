@@ -37,6 +37,8 @@
 - `sessions.changed` 到达时，若有查询则静默重跑；结果列表保持滚动位置。
 - 不做：全文正文搜索、跨工作区筛选、会话删除/重命名（超出只读范围）。
 
+> 实现注记（2026-10-29）：NSH v1 没有方向键/Esc 事件（`View`/`Input` 只有 `onPress`/`onSubmit`），键盘只保留 **Enter 打开首条结果**；逐条移动改为点击行，Esc 清空改为输入框右侧的「×」。相对时间由插件本地格式化（宿主只返回 `updatedAt` 毫秒时间戳）；与内置会话行同一文案层级，但不共享函数——要完全一致需在宿主 API 增加格式化查询，留给后续版本。
+
 ## 3. 权限与清单
 
 ```json
@@ -47,7 +49,7 @@
   "name": "会话搜索",
   "version": "1.0.0",
   "nsh_id": "com.timo.session-search",
-  "entry": "src/App.tsx",
+  "entry": "App.tsx",
   "bundle": "plugin.nshpkg",
   "source_hash": "sha256:<64hex>",
   "bundler": "timo-devkit/0.1",

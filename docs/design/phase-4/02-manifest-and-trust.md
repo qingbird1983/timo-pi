@@ -63,12 +63,15 @@
 | `api` | `gui` 必填 | 宿主 API 主版本，当前 `1` |
 | `tier` | 是 | `read-only` / `workspace` / `trusted`，安装向导允许下调 |
 | `slots` | `gui` 必填 | 非空；元素 `kind` 必须命中 03 的白名单 |
+| `slots[].tools` | 否 | 仅 `toolCard` 可用且必填：卡片绑定的工具名（1~4 个、去重、每个 ≤64 字符）；其他 kind 出现即 E720 |
 | `queries` | 否 | 只读查询白名单；未列出的查询运行时拒绝 |
 | `actions` | 否 | 动作白名单；未列出的动作运行时拒绝 |
 | `tools` | 否 | `actions.runTool` 可调用的工具名；实际 = 声明 ∩ 挡位 ∩ 注册表 |
 | `capabilities` | 是 | 与 A 轨同结构；`tier` 是能力上限 |
 
 校验分三层：字段值域（E720）→ 挡位上限（E722）→ API 版本（E721）。`gui` 缺 `slots`、`api`、`nsh_id` 一律拒绝。
+
+> 实现注记（2026-10-29）：B 轨包内还有 NSH 自己的 `nsh.json`，其 `capabilities.host` 是**宿主函数名列表**（支持 `sessions.*` 这类尾缀通配），不是布尔开关。devkit 骨架按「清单 `queries` + `actions` + `theme.update` + `__pong`」生成该列表（`__pong` 是看门狗回执，见 05 §4）；Timo 清单仍是授权与展示的唯一来源，`nsh.json` 只决定 NSH 侧桥接是否放行。
 
 ## 4. 安装包校验顺序
 

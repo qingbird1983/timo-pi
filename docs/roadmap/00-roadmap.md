@@ -28,7 +28,7 @@ graph LR
 | Phase 3 | gpui-kit 桌面壳日常可用 + NSH 嵌入 PoC | 4~8 周 | ✅ 完成（2026-10-27，tag `phase-3.end`；报告 `docs/design/phase-3/report.md`） |
 | [Phase 3.5](phase-3.5-kernel-depth.md) | 内核深化：补齐 pi 灵魂件（项目上下文/提示词工程/skills/compaction/缓存/无头模式），交互逻辑对齐 | 3~6 周 | ✅ 完成（2026-10-28，tag `phase-3.5.end`）：P0/P1/D6/P2 全部落地并真机验收；第四题（项目信任门控）已撤回（ADR-0015）；报告 `docs/design/phase-3.5/report.md` |
 | [审查收债](audit-debt.md) | 清偿 2026-10-27 审查发现：A 组 1 项数据缺陷 + B 组 9 项代码缺口 + C 组 10 项文档滞后 + D 组 9 项复杂度清理 | 4~6 天 | ✅ 完成（2026-10-28）：A/B/C/D 全部清零，workspace 419 tests 全绿 |
-| [Phase 4](phase-4-gui-plugins.md) | GUI 原生插件系统闭环（B 轨） | 4~8 周 | 进行中（P0、P1-a~c 完成；P1-d 容器与诊断面待做） |
+| [Phase 4](phase-4-gui-plugins.md) | GUI 原生插件系统闭环（B 轨） | 4~8 周 | 验收完成（P0、P1-a~d、P2 完成；D1~D5 通过、D6 基本通过（无真实索引源）；D4 无障碍崩溃由本地补丁修复（ADR-0018）；`phase-4.end` 待所有者确认后打；报告 `docs/design/phase-4/report.md`） |
 
 \* 单人全职参考值，仅量级感知。Phase 2 与 Phase 3 可并行。
 
@@ -54,6 +54,7 @@ graph LR
 - tool-search（deferred 工具按需加载）
 - A 轨 v2 成员逐个转正；B 轨 slot 扩展——具体构想（所有者 2026-10-28 提出、同日决定暂缓）：插件接管"中栏整页"的槽位（宿主管标题栏与返回键；同类实证：DSH 内置页与三方"侧栏新 Tab"，research/07 §8.3i）；连带构想：**AI 自写插件**（DSH 源码已查证：Creator 预设自带插件开发技能册 + 只读 API 检视工具 + install_bundle 审批安装，详见 research/07 §8.3i 源码查证节；我方底座 = Phase 4 devkit/slot/插件管理，**插件语言两轨均为 JS/TS**（QuickJS 沙箱解释执行——宿主才是 Rust，安装期只打包+签名、无机器码编译环节，AI 自写不受编译工具链拖累），缺口 = 开发指引技能与检视工具）——均未来单独迭代，立项须先写 ADR
 - pi 会话导入工具；插件 marketplace；遥测（opt-in）
+- 卸载插件后清理 `plugins/assets/<nsh_id>/<sha>/` 内容寻址缓存与 `nsh-trust.json` 的 `builds` 记录（Phase 4 验收发现的残留，随插件治理批次处理）
 - ADR-0008 所列外围能力（chord/durable/env）——默认不做
 
 ## 4. 风险登记簿（跨阶段）

@@ -1,6 +1,6 @@
 # 设计 00：Phase 4 总览与跨模块决策
 
-- 状态：定稿（2026-10-28；所有者已批准，进入 P0 实现）
+- 状态：定稿（2026-10-28；所有者已批准，进入 P0 实现）；验收结果见 [report.md](report.md)（D4 未通过，tag 暂缓）
 - 关联：roadmap/phase-4；ADR-0002/0004/0010/0015/0016；architecture/04；design/phase-3/03
 - 行为蓝本：无（B 轨为本项目自有契约；ADR-0004）
 
@@ -41,9 +41,9 @@ Phase 4 同时管理两类插件，并提供**两个左栏入口**：插件市�
 3. **P1-a 已完成**：`plugins::nsh` 安装账本（回执驱动的落盘/更新/回滚 + 两层撤销 + 暂存清扫），纯内核不碰 NSH。
 4. **P1-b 已完成**：桌面 NSH 隔离层改造：`verify_package` → 回执 → `install_bundle` → 健康检查 → `accept_package`/回退；`nsh-poc` 实验页并入正式插件页（K9）。
 5. **P1-c 已完成**：详设 03（slot）+ 04（宿主 API v1）+ 05（运行时隔离）：`HostChannel`、查询/动作白名单、存储、看门狗、主题消毒。
-6. **P1-d**：slot 容器渲染与诊断面（侧栏 panel、工具卡、会话条目附加区）。
-7. P2 详设 06（devkit）+ 07（自证插件）：签名打包、会话搜索面板。
-8. 验收 D1~D6 → `report.md` → 看板/CHANGELOG → tag `phase-4.end`。
+6. **P1-d 已完成**：slot 容器渲染与诊断面——侧栏 `panel`、聊天 `toolCard`、会话 `entryExtra`、输入区 `composerTrigger` 四种容器与诊断卡（2026-10-29）；`composerControl` 仍只声明不实例化。
+7. **P2 已完成**：详设 06（devkit）+ 07（自证插件）——`crates/timo-devkit` 的 `new/check/pack/verify/keygen`，以及 `examples/plugins/session-search`（`read-only` 的会话搜索 panel，2026-10-29）。
+8. **验收已执行（2026-10-30）**：D1/D2/D3/D5/D6 通过或基本通过，D4 未通过（无障碍崩溃）；`report.md` 已落盘，tag `phase-4.end` 暂缓。
 
 > 每批门禁四连不变（fmt / clippy / workspace tests / check-size）；UI 批次另附真机截图与逐态核对。
 >

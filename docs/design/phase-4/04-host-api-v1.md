@@ -33,6 +33,7 @@ export default function App() {
 | `theme.get` | — | 当前主题 token（只读） | 1s |
 | `plugin.info` | — | `{id,version,tier,slots}` | 1s |
 | `storage.get` | `{key}` | `{value}` 或 `null` | 1s |
+| `composer.text` | — | `{text}`（当前输入快照，≤8 KiB） | 1s |
 
 - 返回一律深拷贝；不含绝对路径（`cwdLabel` 只是最后一级目录名）、系统提示、密钥、完整消息正文。
 - 未声明 → E740；挡位不足 → E722；参数 schema 失败 → E741；超时 → E742。
@@ -66,8 +67,10 @@ await host.call("actions.runTool", {
 |---|---|---|
 | `theme.changed` | `{appearance, tokens}` | 主应用切换明暗/主题 |
 | `sessions.changed` | `{ids}` | 会话新建/删除/重命名（节流 500ms） |
+| `slot.changed` | `{instanceId, data}` | 本实例的槽位数据变化：`toolCard` 的调用状态/结果、`entryExtra` 的标题、`composerTrigger` 的输入文本 |
 
-- v1 不推送 token 流、工具结果或消息正文；需要时由插件主动查询。
+- `slot.changed` 只发给产生它的实例，`data` 与该实例启动参数里的 `slot.data` 同形；宿主按 03 §1.1 脱敏后推送，不携带其他 slot、系统提示或密钥。
+- v1 不推送全局 token 流或消息正文；需要消息内容时由插件主动查询。
 - 事件回调在引擎线程执行，必须快速返回；阻塞会触发看门狗（05 §4）。
 
 ## 6. 权限与错误
@@ -75,6 +78,7 @@ await host.call("actions.runTool", {
 - 每次 call 在宿主侧做三重检查：`queries/actions` 声明、挡位上限、参数 schema。
 - 错误码：E740 未声明/未知调用；E741 参数非法；E742 超时或取消；E743 主题键越界（警告）；E744 存储超限；E722 挡位不足。
 - 错误不默认弹宿主对话框；插件负责在自己的 UI 里展示。连续 10 次相同错误只记一条诊断。
+- **实现注记（2026-10-29，验收）**：被拒的调用除按 `{code, message}` 回给插件外，同时写入插件详情的诊断卡（E740/E741/E742）；运行期把紧邻的同码同文案合并成一条并标 `xN`，因此连续拒绝不会刷屏。
 
 ## 7. 版本契约
 

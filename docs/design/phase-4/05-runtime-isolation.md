@@ -8,7 +8,7 @@
 
 - **一个 slot 实例 = 一个 `AppView`**（独立引擎线程）。同一插件声明 `panel` 与 `toolCard` 时各有一个实例。
 - 同一插件的多个实例不共享 JS 状态；共享数据只经宿主查询（04）读取。
-- 单插件实例上限 4 个（`panel` 最多 1、`toolCard` 每个工具一个、`entryExtra` 每会话一个）；超出 E751。
+- 单插件实例上限 4 个（`panel` 最多 1、`composerTrigger` 最多 1、`toolCard` 每个绑定工具一个、`entryExtra` 每会话一个）；超出按 03 §1 的优先级取舍并记 E751。
 - 每个实例有独立 `HostChannel`；宿主在 channel 上注册该插件的查询/动作 handler，卸载时移除。
 
 ## 2. 生命周期
@@ -40,11 +40,19 @@ NotLoaded → Loading → Running → Stopping → Stopped
 
 ## 4. 看门狗（死循环与无响应）
 
-- SDK 在每个实例注册 `__ping` 事件：收到后立即 `host.post("__pong", {t})`。
+- 插件入口注册 `__ping` 事件：收到后立即 `host.post("__pong", {t})`（`timo-devkit new` 的模板自带）。
 - 宿主每 2s 发一次 `__ping`，等待 1s；连续 2 次无 pong → `stop()` → Error。
 - `stop()` 后 3s 内实例下线；若引擎线程仍未退出，标记 `Leaked` 并继续（UI 不等待），下次加载新实例。
+- **实现注记（2026-10-29，D1 验收）**：nsh 0.3.0 的 `host` 没有内置 `__ping` 回应，SDK 不会自动注册；
+  插件需在入口显式 `host.on("__ping", …)` 并 `host.post("__pong", {t})`，且 `__pong` 要列进 `nsh.json`
+  的 `capabilities.host`（否则 NSH 桥接拒绝，报 `'__pong' is not granted`）。示例插件与 `timo-devkit new`
+  的模板已带这两处；缺少它的插件会被看门狗按无响应停用（E742）。
 - 看门狗只针对插件主线程；工具调用等宿主侧等待单独超时（04 §3）。
 - 插件在 `host.on` 回调里长时间同步计算也会被判定无响应——这是预期，SDK 文档要求回调快速返回。
+- **实现注记（2026-10-30，D4 验收）**：NSH 0.3.0 对一次「调用进 JS」有 **2s 预算**，`for(;;){}` 会先被引擎中断
+  （`the script was interrupted: a call into JS exceeded its budget of 2000 ms`，同样记 E742），轮不到看门狗。
+  因此 §8 的「`while(true){}`」用例实际由引擎中断兜底；看门狗路径只能用「从不回 `__pong`」的插件验证
+  （真机：v1.0.9 静默插件，`E742 unresponsive: no __pong from the plugin`，容器 ~7s 内移除）。
 
 ## 5. 资源与限制
 
@@ -67,13 +75,19 @@ stop() → drop(AppView) → 有界等待引擎线程 3s → 删目录 → 删 s
 ```
 
 - 3s 内线程未退出：目录仍删除，线程标记 Leaked 并记录（进程退出时回收）。
+
+> 实现注记（2026-10-29，P1-d）：NSH 0.3.0 的 `AppView::stop()` 在内部 drop 引擎时同步 `join` 引擎线程（先 `host.shutdown` 中断 JS），宿主拿不到可超时观察的线程句柄，因此「3s 有界等待 / Leaked 标记」暂无法实现；当前同步等待线程退出。平台提供可分离句柄或超时 API 后再补。
 - 卸载后检查：无该插件 id 的实例、channel handler、容器、存储文件。
 - 安装/更新暂存目录失败时清理 `.staging`/`.trash`；启动时清扫超过 24h 的暂存。
+- **实现注记（2026-10-30，D4 验收）**：卸载会删插件目录、`plugins.json` 条目与 `permissions.json` 授权，
+  但**不清** `plugins/assets/<nsh_id>/<sha>/`（按版本的内容寻址解包缓存）与 `nsh-trust.json` 的 `builds`
+  记录；`sweep_staging` 只覆盖 `.staging`/`.trash`。真机读数：卸载后线程 59 → 45、无残留桩进程，
+  上述两处残留已登记 backlog（不影响功能与安全）。
 
 ## 8. 验收断言
 
 - 插件启动即抛错：1s 内回退，主应用可用；诊断含错误消息（无堆栈）。
-- `while(true){}`：3 次看门狗（≤5s）内容器移除，插件进入 Error，主应用交互正常。
+- `while(true){}`：3 次看门狗（≤5s）内容器移除，插件进入 Error，主应用交互正常。（实测由 NSH 2s JS 调用预算先中断，见 §4 注记；看门狗以「不回 `__pong`」用例验证。）
 - 连续两次崩溃：插件自动禁用，重启后仍为禁用。
 - 卸载正在运行的插件：目录/授权/状态清空，实例消失；30s 内进程无该插件线程。
 - 更新失败：旧实例继续显示，诊断给出 E730/E711，授权不变。

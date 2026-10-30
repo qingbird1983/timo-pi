@@ -19,20 +19,26 @@
 - 失败时不给半成品：先写临时文件，`nsh publish` 成功后 rename 到 `--out`。
 - `check` 不联网、不执行插件代码；只做静态校验与编译。
 
+> 实现注记（2026-10-29）：编译校验用 `nsh build`（离线，TSX → QuickJS 字节码，输出到临时目录后删除）；`nsh check` 需要从 npm 下载 TypeScript 7，默认不调用，`--types` 显式开启。源码指纹算法：递归收集插件目录，跳过 `.git/`、`node_modules/`、`.nsh/`、`target/` 与 `timo-plugin.json`、`manifest.json`、`*.nshpkg`、`*.map`；按相对路径排序后依次哈希 `路径\0长度(LE u64)\0内容`（与 A 轨 `compute_source_hash` 同构）。`pack` 的 `--out` 默认 `<dir>/<manifest.bundle>`；成功后把同一份清单另存为 `<out 所在目录>/manifest.json`，与包构成安装对。
+
 ## 2. 插件骨架
 
 ```text
 my-plugin/
   timo-plugin.json        # manifest（schema 2）
-  src/App.tsx             # 默认导出根组件
-  src/sdk.ts              # 生成时固定版本的类型副本
-  package.json            # 仅开发期（rolldown/tsc）
+  nsh.json                # NSH 应用元数据与宿主函数授权
+  App.tsx                 # 默认导出根组件（入口）
+  tsconfig.json           # extends .nsh/tsconfig.json
   README.md
 ```
 
 - `new` 默认生成 `panel` 示例与 `read-only` 挡位；`--slot toolCard` 可换。
 - SDK 类型随 devkit 版本生成，`check` 时与宿主能力表比对；不一致直接失败（防止插件按旧 API 发布）。
 - 不提交 `node_modules`、私钥、签名包到插件源码库（`.gitignore` 由脚手架生成）。
+
+> 实现注记（2026-10-29）：骨架实际生成 `nsh.json` 与 `tsconfig.json`——NSH CLI 编译/打包需要它们，`nsh.json` 的 `capabilities.host` 由清单的 `queries` + `actions` + `theme.update` 生成（设计 02 实现注记）。设计早期的 `package.json` 不再生成：NSH 自带打包器，不需要 Node 侧清单。`.nsh/`（NSH 生成）与签名包、私钥一并进 `.gitignore`。
+>
+> 实现注记（2026-10-29，入口位置）：入口从 `src/App.tsx` 改到插件根 `App.tsx`。NSH 把「入口所在目录」当作应用目录：`nsh build/check/dev/publish <目录>` 只认该目录下的 `App.tsx`，`nsh check <entry>` 只在入口同目录找 `tsconfig.json`。入口放 `src/` 会让 `check --types` 与 `nsh dev` 都需要额外的 `src/tsconfig.json`，且 `.nsh/` 会生成在 `src/` 下；放到根目录后与 `nsh init` 的布局一致，`.nsh/`、`nsh.json`、`tsconfig.json` 全部落在同一层。
 
 ## 3. 打包与清单一致性
 
