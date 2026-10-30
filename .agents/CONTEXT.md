@@ -6,7 +6,7 @@
 
 - **Phase 1 ✅**（tag `phase-1.end`）；**Phase 2 ✅**（tag `phase-2.end`）；**Phase 3 ✅**（tag `phase-3.end`）。
 - **Phase 3.5 ✅**（tag `phase-3.5.end`）；**审查收债 ✅**（台账 `docs/roadmap/audit-debt.md`）。
-- **Phase 4（GUI 插件系统）**：设计 00~08 定稿；P0、P1-a~d、P2 ✅。**验收完成（2026-10-30）：D1~D5 通过、D6 基本通过（无真实索引源）**；D4 无障碍崩溃已由 ADR-0018 本地补丁消除，看门狗/崩溃自动停用/退出/卸载均取得真机读数。报告 `docs/design/phase-4/report.md`。**`phase-4.end` 未打**（待所有者确认收口）。
+- **Phase 4（GUI 插件系统）**：设计 00~08 定稿；P0、P1-a~d、P2 ✅。**验收完成（2026-10-30）：D1~D5 通过、D6 基本通过（无真实索引源）**；D4 无障碍崩溃已由 ADR-0018 本地补丁消除，看门狗/崩溃自动停用/退出/卸载均取得真机读数。**已打 `phase-4.end`（2026-10-30）**，远端 CI 绿（run 40998533016 / 40998795719）。报告 `docs/design/phase-4/report.md`。
 - 验收由 AI 会话代理真机完成（所有者不在场）：临时数据目录 `%TEMP%\timo-accept-data`、临时签名密钥；真实数据未触碰，截图/日志只在本机临时目录。
 - 看板：`docs/roadmap/00-roadmap.md` §1；远端 `github.com/qingbird1983/timo-pi`（私有），Phase 4 改动未提交/推送。
 
@@ -20,11 +20,10 @@
 
 ## 下一步（按优先级）
 
-1. **打 `phase-4.end`**（所有者已确认收口，2026-10-30）；standards/09 四问复查已完成并写入报告。
-2. **推送后核远端 CI**（Windows runner）；CI 绿即收口完成。
-3. **上游 issue**：向 NSH/gpui-fast 报无障碍重复 child；上游修复后按 `PATCH.md` 移除补丁。
-4. **桌面壳视觉精修**（所有者定调：Phase 4 收口后启动）：research/07 → 设计稿 → 批次实现。
-5. docs 实测篇数与整合评审待办（删除面需所有者确认）。
+1. **上游 issue**：向 NSH/gpui-fast 报无障碍重复 child；上游修复后按 `PATCH.md` 移除补丁。
+2. **桌面壳视觉精修**（所有者定调：Phase 4 收口后启动）：research/07 → 设计稿 → 批次实现。
+3. docs 实测篇数与整合评审待办（删除面需所有者确认）。
+4. 卸载残留（assets 缓存 + trust `builds`）随插件治理批次处理。
 
 > 施工顺序唯一来源：当前阶段设计文档；设计错误先改文档再写码。
 

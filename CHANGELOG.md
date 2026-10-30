@@ -14,6 +14,7 @@
 - **发现并修正**：standards/01 的仓库布局没跟上 Phase 4——补入 `crates/timo-devkit`、`examples/` 与 `vendor/`（后者仅限 ADR 登记的修补副本，引用 ADR-0018）。只是同步既有事实，准入规则未变。
 - 其余篇目如实记「无发现」；测试篇登记「NSH 渲染/热更/无障碍为真机人工验收」的既有缺口。
 - 体量：docs 95 篇（软 120）、`.agents` 34 个文件（上限 40）、`target/` 14.0GiB（软 15）。
+- 收口：打并推送 annotated tag `phase-4.end`（`8a2a29e`）；两次推送的远端 CI 均绿（run 40998533016 / 40998795719）；roadmap 与 CONTEXT 的 tag 状态已同步。
 
 ---
 
