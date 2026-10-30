@@ -20,8 +20,8 @@
 
 ## 下一步（按优先级）
 
-1. **所有者确认收口** → 打 `phase-4.end`，并做 standards/09 四问逐篇复查（当前轮到收口轮）。
-2. **提交并推送** Phase 4 实现与文档（含 `vendor/accesskit_consumer/`），推后核远端 CI（Windows runner）。
+1. **打 `phase-4.end`**（所有者已确认收口，2026-10-30）；standards/09 四问复查已完成并写入报告。
+2. **推送后核远端 CI**（Windows runner）；CI 绿即收口完成。
 3. **上游 issue**：向 NSH/gpui-fast 报无障碍重复 child；上游修复后按 `PATCH.md` 移除补丁。
 4. **桌面壳视觉精修**（所有者定调：Phase 4 收口后启动）：research/07 → 设计稿 → 批次实现。
 5. docs 实测篇数与整合评审待办（删除面需所有者确认）。

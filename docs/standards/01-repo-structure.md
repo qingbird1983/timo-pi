@@ -10,13 +10,15 @@
 .agents/               AI 开发知识库与交接中枢（规范见其 README；预算受 standards/08 约束）
 .agents/skills/       vendored 上游技能（gpui-kit 等）+ 项目自创沉淀（S-NNN；来源/预算规则见其 README）
 docs/                 全部文档（唯一事实来源；结构见 docs/README.md）
-crates/               Rust 内核库（Phase 1 建立）
+crates/               Rust 内核库与工具（Phase 1 建立；Phase 4 增 timo-devkit）
   timo-ai / timo-agent / timo-tools / timo-session / timo-mcp
-  timo-ext / timo-config / timo-kernel
+  timo-ext / timo-config / timo-kernel / timo-devkit
 apps/                 可执行薄壳（Phase 1: timo-cli；Phase 3: timo-desktop）
 packages/             （预留）JS/TS 资产：扩展兼容 shim 类型、B 轨 TSX 宿主 API 声明
+examples/             示例与自证插件源码（B 轨 TSX 插件，如 session-search）
 fixtures/             测试夹具（协议录制、会话格式历史样例）
 scripts/              构建/检查脚本（CI 用）
+vendor/               第三方代码的本地修补副本（仅限经 ADR 登记的补丁，如 accesskit_consumer；见 ADR-0018）
 ```
 
 - cargo workspace 根清单在仓库根；`fixtures/`、`scripts/` 可在 Phase 1 随需要建立，但**命名与位置以本规范为准**。
