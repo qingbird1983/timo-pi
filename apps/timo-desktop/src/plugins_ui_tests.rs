@@ -9,7 +9,8 @@ use gpui_kit::test::TestWindowExt as _;
 use gpui_kit::{AppContext as _, Bounds, TestAppContext, WindowBounds, WindowOptions, px, size};
 use timo_kernel::plugins::market::{MarketState, parse_index};
 use timo_kernel::plugins::{
-    Declared, PermissionTier, PluginEntry, PluginKind, PluginOrigin, PluginSource, PluginState,
+    Declared, PermissionTier, PluginDiagnostic, PluginEntry, PluginKind, PluginOrigin,
+    PluginSource, PluginState,
 };
 
 fn entry() -> PluginEntry {
@@ -26,7 +27,10 @@ fn entry() -> PluginEntry {
         source: PluginSource::LocalFile,
         source_hash: String::new(),
         configurable: false,
-        diagnostics: vec![],
+        diagnostics: vec![PluginDiagnostic {
+            code: "E742".into(),
+            message: "unresponsive: no __pong from the plugin".into(),
+        }],
         path: PathBuf::from("plugins/session-search"),
     }
 }
@@ -144,6 +148,7 @@ fn market_and_installed_entries_render_their_actions(cx: &mut TestAppContext) {
         window.render_frame(cx);
         for id in [
             "plugin-tier-session-search-read-only",
+            "plugin-diagnostics-session-search",
             "plugin-revoke-session-search",
             "plugin-uninstall-session-search",
         ] {

@@ -1,0 +1,30 @@
+{
+  "schema": 2,
+  "id": "session-search",
+  "kind": "gui",
+  "name": "会话搜索",
+  "version": "1.0.0",
+  "nsh_id": "com.timo.session-search",
+  "entry": "App.tsx",
+  "bundle": "plugin.nshpkg",
+  "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "bundler": "timo-devkit/0.1",
+  "api": 1,
+  "tier": "read-only",
+  "slots": [
+    {
+      "kind": "panel",
+      "title": "搜索会话",
+      "icon": "search",
+      "order": 40
+    }
+  ],
+  "queries": ["sessions.list", "sessions.search"],
+  "actions": ["openSession"],
+  "tools": [],
+  "capabilities": {
+    "exec": false,
+    "net": { "domains": [] },
+    "fs": { "read": [], "write": [], "delete": [] }
+  }
+}

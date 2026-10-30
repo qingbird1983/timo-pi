@@ -38,6 +38,7 @@ pub(super) struct WorkerContext {
     pub(super) work_dir: PathBuf,
     pub(super) read_scopes: Vec<String>,
     pub(super) theme: Arc<Mutex<Value>>,
+    pub(super) composer: Arc<Mutex<String>>,
     pub(super) ui: UnboundedSender<HostUiEvent>,
     pub(super) kernel: UnboundedSender<PluginRequest>,
     pub(super) cancel: CancellationToken,
@@ -82,27 +83,27 @@ async fn handle_job(job: HostJob, context: &WorkerContext) {
                 }),
             Err(error) => Err(error),
         };
-        answer(reply, result);
+        answer(context, reply, result);
         return;
     }
     let action = match kernel_host::parse_action(&who, &name, &data) {
         Ok(action) => action,
         Err(error) => {
-            answer(reply, Err(error));
+            answer(context, reply, Err(error));
             return;
         }
     };
     if !matches!(action, kernel_host::Action::RunTool { .. })
         && let Err(error) = kernel_host::authorize(&who, &action, None)
     {
-        answer(reply, Err(error));
+        answer(context, reply, Err(error));
         return;
     }
     match action {
         kernel_host::Action::RunTool { name, arguments } => {
             run_tool(reply, context, name, arguments).await;
         }
-        action => answer(reply, run_action(action, context)),
+        action => answer(context, reply, run_action(action, context)),
     }
 }
 
@@ -138,7 +139,23 @@ async fn run_query(query: kernel_host::Query, context: &WorkerContext) -> Result
             .storage
             .get(&key)
             .map(|value| value.map_or(Value::Null, |value| json!({ "value": value }))),
+        Query::ComposerText => Ok(json!({ "text": composer_text(context) })),
     }
+}
+
+/// 输入框快照，按字符边界截到 8 KiB（设计 04 §2）。
+fn composer_text(context: &WorkerContext) -> String {
+    let text = context
+        .composer
+        .lock()
+        .map(|text| text.clone())
+        .unwrap_or_default();
+    if text.chars().count() <= kernel_host::COMPOSER_TEXT_CHARS {
+        return text;
+    }
+    text.chars()
+        .take(kernel_host::COMPOSER_TEXT_CHARS)
+        .collect()
 }
 
 async fn models(context: &WorkerContext) -> Result<Value, HostError> {
@@ -211,14 +228,14 @@ async fn run_tool(
         reply: answer,
     };
     if context.kernel.send(PluginRequest::Tool(call)).is_err() {
-        reject(reply, "E742", "kernel is not available");
+        refuse(context, reply, "E742", "kernel is not available");
         return;
     }
     match tokio::time::timeout(TOOL_TIMEOUT, result).await {
         Ok(Ok(Ok(value))) => resolve(reply, value),
-        Ok(Ok(Err(error))) => reject(reply, error.code(), error.message()),
-        Ok(Err(_)) => reject(reply, "E742", "runTool cancelled"),
-        Err(_) => reject(reply, "E742", "runTool timed out"),
+        Ok(Ok(Err(error))) => refuse(context, reply, error.code(), error.message()),
+        Ok(Err(_)) => refuse(context, reply, "E742", "runTool cancelled"),
+        Err(_) => refuse(context, reply, "E742", "runTool timed out"),
     }
 }
 
@@ -249,10 +266,10 @@ fn emit(context: &WorkerContext, event: HostUiEvent) {
     let _ = context.ui.send(event);
 }
 
-fn answer(reply: Option<HostReply>, result: Result<Value, HostError>) {
+fn answer(context: &WorkerContext, reply: Option<HostReply>, result: Result<Value, HostError>) {
     match result {
         Ok(value) => resolve(reply, value),
-        Err(error) => reject(reply, error.code(), error.message()),
+        Err(error) => refuse(context, reply, error.code(), error.message()),
     }
 }
 
@@ -262,7 +279,16 @@ fn resolve(reply: Option<HostReply>, value: Value) {
     }
 }
 
-fn reject(reply: Option<HostReply>, code: &str, message: &str) {
+/// 被拒的调用回给插件，同时进插件详情的诊断卡（设计 04 §6，去重由运行期负责）。
+fn refuse(context: &WorkerContext, reply: Option<HostReply>, code: &str, message: &str) {
+    emit(
+        context,
+        HostUiEvent::Diagnostic {
+            plugin: context.plugin_id.clone(),
+            code: code.to_string(),
+            message: message.to_string(),
+        },
+    );
     if let Some(reply) = reply {
         reply.reject(format!("{code}: {message}"));
     }
@@ -277,11 +303,8 @@ mod tests {
     use super::*;
     use tokio::sync::mpsc::unbounded_channel;
 
-    /// 主题补丁越界键只产生 E743 诊断，合法 token 进 Theme 事件。
-    #[test]
-    fn theme_warnings_are_reported_and_tokens_sanitized() {
-        let (ui, mut events) = unbounded_channel();
-        let context = WorkerContext {
+    fn context(ui: UnboundedSender<HostUiEvent>) -> WorkerContext {
+        WorkerContext {
             plugin_id: "demo".into(),
             version: "1.0.0".into(),
             tier: PermissionTier::ReadOnly,
@@ -294,10 +317,18 @@ mod tests {
             work_dir: std::env::temp_dir(),
             read_scopes: vec![],
             theme: Arc::new(Mutex::new(Value::Null)),
+            composer: Arc::new(Mutex::new(String::new())),
             ui,
             kernel: unbounded_channel().0,
             cancel: CancellationToken::new(),
-        };
+        }
+    }
+
+    /// 主题补丁越界键只产生 E743 诊断，合法 token 进 Theme 事件。
+    #[test]
+    fn theme_warnings_are_reported_and_tokens_sanitized() {
+        let (ui, mut events) = unbounded_channel();
+        let context = context(ui);
         apply_theme(
             &json!({ "background": "#101010", "display": "none" }),
             &context,
@@ -323,5 +354,44 @@ mod tests {
             }
         }
         assert!(saw_theme && saw_warning);
+    }
+
+    /// 被拒的调用同时进诊断卡，而不只是回给插件（设计 04 §6）。
+    #[test]
+    fn refused_calls_are_recorded_as_diagnostics() {
+        let (ui, mut events) = unbounded_channel();
+        let context = context(ui);
+        answer(
+            &context,
+            None,
+            Err(HostError::new("E740", "unknown query `sessions.search`")),
+        );
+        match events.try_recv() {
+            Ok(HostUiEvent::Diagnostic {
+                plugin,
+                code,
+                message,
+            }) => {
+                assert_eq!(plugin, "demo");
+                assert_eq!(code, "E740");
+                assert!(message.contains("sessions.search"));
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    /// `composer.text` 只回快照，超长按字符边界截断。
+    #[test]
+    fn composer_text_is_truncated_at_a_char_boundary() {
+        let (ui, _events) = unbounded_channel();
+        let context = context(ui);
+        let long = "汉".repeat(kernel_host::COMPOSER_TEXT_CHARS + 10);
+        if let Ok(mut text) = context.composer.lock() {
+            *text = long;
+        }
+        assert_eq!(
+            composer_text(&context).chars().count(),
+            kernel_host::COMPOSER_TEXT_CHARS
+        );
     }
 }

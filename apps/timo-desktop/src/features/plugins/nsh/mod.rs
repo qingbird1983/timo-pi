@@ -7,10 +7,14 @@ pub(crate) mod host_api;
 mod host_worker;
 pub(crate) mod install;
 mod page;
+mod panel;
 pub(crate) mod runtime;
 mod runtime_app;
 pub(crate) mod runtime_theme;
 mod runtime_watch;
+mod slot_views;
+
+pub(crate) use slot_views::ToolCardViews;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

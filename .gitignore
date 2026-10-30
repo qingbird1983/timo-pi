@@ -1,5 +1,8 @@
 # ===== Rust（Phase 1 起生效）=====
 /target/
+# 修补副本独立构建产物（ADR-0018）
+/vendor/accesskit_consumer/target/
+/vendor/accesskit_consumer/Cargo.lock
 **/*.rs.bk
 Cargo.lock.bak
 

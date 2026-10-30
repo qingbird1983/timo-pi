@@ -214,3 +214,38 @@ fn reset_clears_rows_and_state() {
     assert!(!chat.running);
     assert!(chat.last_error.is_none());
 }
+
+#[test]
+fn latest_tool_calls_keeps_the_most_recent_per_tool() {
+    let mut chat = ChatState::default();
+    chat.apply(&KernelEvent::AgentStarted);
+    chat.apply(&KernelEvent::TurnStarted);
+    chat.apply(&KernelEvent::ToolCallRequested {
+        call: Arc::new(tool_call("c1", "read", serde_json::json!({ "path": "a" }))),
+    });
+    chat.apply(&KernelEvent::ToolCallFinished {
+        tool_call_id: "c1".into(),
+        tool_name: "read".into(),
+        result: Arc::new(tool_result("c1", "first", false)),
+        duration_ms: Some(3),
+    });
+    chat.apply(&KernelEvent::ToolCallRequested {
+        call: Arc::new(tool_call(
+            "c2",
+            "grep",
+            serde_json::json!({ "pattern": "x" }),
+        )),
+    });
+    chat.apply(&KernelEvent::ToolCallRequested {
+        call: Arc::new(tool_call("c3", "read", serde_json::json!({ "path": "b" }))),
+    });
+
+    let calls = chat.latest_tool_calls();
+    assert_eq!(calls.len(), 2);
+    let read = calls.iter().find(|call| call.name == "read").unwrap();
+    assert_eq!(read.status, "queued");
+    assert!(read.input.contains("\"path\":\"b\""), "{}", read.input);
+    let grep = calls.iter().find(|call| call.name == "grep").unwrap();
+    assert_eq!(grep.status, "queued");
+    assert!(grep.output.is_empty());
+}

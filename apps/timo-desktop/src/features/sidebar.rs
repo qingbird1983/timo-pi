@@ -64,6 +64,7 @@ impl DesktopApp {
                         cx,
                     )),
             )
+            .child(self.plugin_panel_section(cx))
             .child(
                 v_flex()
                     .id("session-list")
@@ -86,6 +87,9 @@ impl DesktopApp {
                         let mut rows = Vec::with_capacity(self.sessions.len());
                         for session in &self.sessions {
                             rows.push(self.session_row(session, cx));
+                            if let Some(extra) = self.plugin_entry_extra(&session.id) {
+                                rows.push(extra);
+                            }
                         }
                         rows
                     }),

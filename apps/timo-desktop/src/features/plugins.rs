@@ -1,5 +1,6 @@
 //! 插件页面：左栏两个入口、已安装管理与市场（设计 01 §5、08 §3）。
 
+mod diagnostics;
 mod install_wizard;
 mod installed;
 mod market;

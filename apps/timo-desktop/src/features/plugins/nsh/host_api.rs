@@ -113,6 +113,7 @@ pub(crate) struct HostApi {
     actions: Vec<String>,
     tools: Vec<String>,
     theme: Arc<Mutex<Value>>,
+    composer: Arc<Mutex<String>>,
     pongs: Arc<AtomicU64>,
     jobs: UnboundedSender<HostJob>,
 }
@@ -126,6 +127,7 @@ impl HostApi {
         let storage = PluginStorage::new(&config.storage_root, &config.plugin_id)
             .map_err(|error| error.to_string())?;
         let theme = Arc::new(Mutex::new(config.theme.clone()));
+        let composer = Arc::new(Mutex::new(String::new()));
         let pongs = Arc::new(AtomicU64::new(0));
         let (jobs, receiver) = unbounded_channel();
         let worker_ctx = WorkerContext {
@@ -141,6 +143,7 @@ impl HostApi {
             work_dir: config.work_dir,
             read_scopes: config.read_scopes,
             theme: theme.clone(),
+            composer: composer.clone(),
             ui: config.ui,
             kernel: config.kernel,
             cancel: config.cancel,
@@ -157,6 +160,7 @@ impl HostApi {
             actions: config.actions,
             tools: config.tools,
             theme,
+            composer,
             pongs,
             jobs,
         })
@@ -220,6 +224,15 @@ impl HostApi {
     pub(crate) fn set_theme(&self, theme: Value) {
         if let Ok(mut slot) = self.theme.lock() {
             *slot = theme;
+        }
+    }
+
+    /// 更新输入框快照（`composer.text` 与 `composerTrigger` 数据源）。
+    pub(crate) fn set_composer_text(&self, text: &str) {
+        if let Ok(mut slot) = self.composer.lock()
+            && slot.as_str() != text
+        {
+            *slot = text.to_string();
         }
     }
 

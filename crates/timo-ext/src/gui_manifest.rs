@@ -28,6 +28,9 @@ pub const SLOT_KINDS: [&str; 6] = [
     "theme",
 ];
 
+/// 单个 `toolCard` 可绑定的工具数上限（每个工具一个实例）。
+pub const TOOL_CARD_BINDINGS: usize = 4;
+
 /// 插件形态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -73,6 +76,8 @@ pub struct SlotDecl {
     pub icon: Option<String>,
     /// 同类型内的排序（升序）。
     pub order: Option<i32>,
+    /// 绑定的工具名（仅 `toolCard`：1~4 个，每个工具一个实例；设计 03 §1.1）。
+    pub tools: Vec<String>,
 }
 
 /// B 轨清单全文（schema 2）。
@@ -268,6 +273,7 @@ impl GuiManifest {
                     return Err(invalid(format!("slot {label} exceeds 64 chars")));
                 }
             }
+            check_slot_tools(slot).map_err(invalid)?;
         }
         for (label, values) in [
             ("queries", &self.queries),
@@ -324,6 +330,38 @@ impl GuiManifest {
     pub fn bundle_path(&self, root: &Path) -> PathBuf {
         root.join(&self.bundle)
     }
+}
+
+/// `toolCard` 必须绑定 1~[`TOOL_CARD_BINDINGS`] 个工具并去重；其他种类不得声明 `tools`。
+fn check_slot_tools(slot: &SlotDecl) -> Result<(), String> {
+    if slot.kind != "toolCard" {
+        if !slot.tools.is_empty() {
+            return Err(format!("slot kind `{}` must not declare tools", slot.kind));
+        }
+        return Ok(());
+    }
+    if slot.tools.is_empty() {
+        return Err("toolCard must bind 1..=4 tools".to_string());
+    }
+    if slot.tools.len() > TOOL_CARD_BINDINGS {
+        return Err(format!(
+            "toolCard binds {} tools (max {TOOL_CARD_BINDINGS})",
+            slot.tools.len()
+        ));
+    }
+    for tool in &slot.tools {
+        if tool.trim().is_empty() {
+            return Err("toolCard tool names must not be empty".to_string());
+        }
+        if tool.chars().count() > 64 {
+            return Err(format!("toolCard tool name exceeds 64 chars: `{tool}`"));
+        }
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    if let Some(duplicate) = slot.tools.iter().find(|tool| !seen.insert(tool.as_str())) {
+        return Err(format!("toolCard binds `{duplicate}` twice"));
+    }
+    Ok(())
 }
 
 /// NSH app id：`com.timo.session-search` 形态，仅字母数字与 `. _ -`。

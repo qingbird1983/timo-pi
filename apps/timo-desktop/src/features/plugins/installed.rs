@@ -13,6 +13,8 @@ use timo_kernel::plugins::{PermissionTier, PluginEntry, PluginKind, PluginState}
 use crate::app::DesktopApp;
 use crate::bridge::BridgeCommand;
 
+use super::diagnostics::diagnostics_card;
+
 impl DesktopApp {
     pub(crate) fn installed_page(&self, cx: &mut Context<Self>) -> AnyElement {
         let actions = vec![
@@ -280,16 +282,6 @@ impl DesktopApp {
                     .into_any_element(),
             );
         }
-        let mut diagnostics = Vec::new();
-        for diagnostic in &entry.diagnostics {
-            diagnostics.push(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().danger)
-                    .child(format!("{}: {}", diagnostic.code, diagnostic.message))
-                    .into_any_element(),
-            );
-        }
         v_flex()
             .mx_6()
             .mb_2()
@@ -322,7 +314,7 @@ impl DesktopApp {
                     )
                     .children(tiers),
             )
-            .children(diagnostics)
+            .child(diagnostics_card(entry, cx))
             .child(
                 h_flex()
                     .gap_2()

@@ -1,17 +1,21 @@
-//! 会话广播、主题补丁与崩溃计数（设计 05 §3、§5）。
+//! 会话广播、槽位数据推送、主题补丁与崩溃计数（设计 03 §1.1、05 §3、§5）。
 
+use std::collections::BTreeSet;
 use std::time::Instant;
 
 use gpui_kit::Context;
-use serde_json::json;
+use serde_json::{Value, json};
 use timo_kernel::plugins::host::NotifyLevel;
 
 use crate::app::DesktopApp;
 use crate::bridge::BridgeCommand;
+use crate::features::chat::ToolCallSnapshot;
 
 use super::super::host_api::HostUiEvent;
 use super::super::runtime_theme;
-use super::{CRASH_WINDOW, PluginRuntime, RuntimeEffect};
+use super::data;
+use super::desired::SlotKind;
+use super::{CRASH_WINDOW, PluginRuntime, RuntimeEffect, SESSION_THROTTLE};
 
 impl PluginRuntime {
     /// 取出宿主线程产生的 UI 副作用，并把主题补丁应用到实例。
@@ -62,6 +66,111 @@ impl PluginRuntime {
             }
         }
         effects
+    }
+
+    /// 侧栏会话 `(id, 标题)`：新增/删除广播 `sessions.changed`，标题变化推 `slot.changed`。
+    pub(crate) fn sync_sessions(&mut self, rows: Vec<(String, String)>) {
+        let ids: BTreeSet<String> = rows.iter().map(|(id, _)| id.clone()).collect();
+        if let Some(previous) = self.known_sessions.replace(ids.clone()) {
+            let mut changed: BTreeSet<String> = ids.difference(&previous).cloned().collect();
+            changed.extend(previous.difference(&ids).cloned());
+            if !changed.is_empty() {
+                match &mut self.sessions {
+                    Some((_, pending)) => pending.extend(changed),
+                    None => self.sessions = Some((Instant::now() + SESSION_THROTTLE, changed)),
+                }
+            }
+        }
+        let retitled: Vec<String> = rows
+            .iter()
+            .filter(|(id, title)| {
+                self.session_rows
+                    .iter()
+                    .any(|(old_id, old_title)| old_id == id && old_title != title)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        // 会话集合或顺序变化都要重建 entryExtra 实例。
+        if self.session_rows != rows {
+            self.dirty = true;
+        }
+        self.session_rows = rows;
+        for id in retitled {
+            self.publish(SlotKind::EntryExtra, Some(&id));
+        }
+    }
+
+    /// 当前会话的工具调用与输入文本快照；变化时给对应实例推 `slot.changed`。
+    pub(crate) fn sync_chat(
+        &mut self,
+        session: Option<&str>,
+        calls: Vec<ToolCallSnapshot>,
+        composer: &str,
+    ) {
+        if self.session_id.as_deref() != session || self.calls != calls {
+            self.session_id = session.map(str::to_string);
+            self.calls = calls;
+            for tool in self.tool_bindings() {
+                self.publish(SlotKind::ToolCard, Some(&tool));
+            }
+        }
+        if self.composer_text != composer {
+            self.composer_text = composer.to_string();
+            for slot in &self.slots {
+                slot.host.set_composer_text(composer);
+            }
+            self.publish(SlotKind::ComposerTrigger, None);
+        }
+    }
+
+    /// 某个实例的槽位数据（启动参数与 `slot.changed` 同形）。
+    pub(super) fn slot_data(&self, kind: SlotKind, binding: Option<&str>) -> Value {
+        match kind {
+            SlotKind::Panel => data::panel_data(),
+            SlotKind::ToolCard => {
+                let tool = binding.unwrap_or_default();
+                let call = self.calls.iter().find(|call| call.name == tool);
+                data::tool_card_data(tool, call)
+            }
+            SlotKind::ComposerTrigger => data::composer_data(&self.composer_text),
+            SlotKind::EntryExtra => {
+                let id = binding.unwrap_or_default();
+                let title = self
+                    .session_rows
+                    .iter()
+                    .find(|(session, _)| session == id)
+                    .map(|(_, title)| title.as_str())
+                    .unwrap_or_default();
+                data::entry_extra_data(id, title)
+            }
+        }
+    }
+
+    fn tool_bindings(&self) -> BTreeSet<String> {
+        self.slots
+            .iter()
+            .filter(|slot| slot.kind == SlotKind::ToolCard)
+            .filter_map(|slot| slot.binding.clone())
+            .collect()
+    }
+
+    /// 推送一次槽位数据；只发给该 kind+binding 的实例，内容未变则跳过。
+    fn publish(&mut self, kind: SlotKind, binding: Option<&str>) {
+        let data = self.slot_data(kind, binding);
+        for slot in self
+            .slots
+            .iter_mut()
+            .filter(|slot| slot.kind == kind && slot.binding.as_deref() == binding)
+        {
+            if slot.sent == data {
+                continue;
+            }
+            slot.sent = data.clone();
+            let _ = slot.channel.send(
+                "slot.changed",
+                json!({ "instanceId": slot.instance_id, "data": data }),
+            );
+        }
     }
 
     pub(super) fn apply_patch(&mut self, plugin: &str, cx: &mut Context<DesktopApp>) {

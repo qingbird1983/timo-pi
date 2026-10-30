@@ -1,13 +1,16 @@
-//! B 轨 slot 运行时：装载、健康门、看门狗与主题同步（设计 05 §1~§4）。
+//! B 轨 slot 运行时：装载、健康门、看门狗与数据推送（设计 05 §1~§4）。
 //!
-//! 每个 `panel` 实例一个 `AppView`。装载先验签、再进 1s 健康门，无错才
-//! `accept_package`；运行期错误与看门狗失败都移除实例并记诊断。
-//! 容器绘制留给 P1-d，本模块只管理实例与宿主副作用。
+//! 每个 slot 实例一个 `AppView`。装载先验签、再进 1s 健康门，无错才
+//! `accept_package`；运行期错误与看门狗失败都移除实例并记诊断。容器只读取
+//! 健康通过的实例（`visible_*`）。
 //!
-//! 装载/排列在 [`load`]，会话广播与崩溃计数在 [`events`]。
+//! 期望集在 [`desired`]，装载/排列在 [`load`]，会话广播与槽位数据在 [`events`]。
 
+mod data;
+mod desired;
 mod events;
 mod load;
+mod tick;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
@@ -18,7 +21,7 @@ use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{App, Context, Entity, Window};
 use nsh_engine::HostChannel;
 use nsh_platform_gpui::package::TrustStore;
-use nsh_platform_gpui::{AppView, LoadedPackage, accept_package};
+use nsh_platform_gpui::{AppView, LoadedPackage};
 use serde_json::Value;
 use timo_kernel::plugins::{PluginDiagnostic, PluginEntry, PluginState};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
@@ -26,14 +29,13 @@ use tokio_util::sync::CancellationToken;
 
 use crate::app::DesktopApp;
 use crate::bridge::{BridgeCommand, PluginRequest};
+use crate::features::chat::ToolCallSnapshot;
 
 use super::host_api::{HostApi, HostUiEvent};
 use super::runtime_theme;
-use super::runtime_watch::{Beat, Watchdog};
-use load::desired_panels;
+use super::runtime_watch::Watchdog;
+use desired::{INSTANCE_LIMIT, PANEL_LIMIT, SlotKind, desired_slots};
 
-/// 同时显示的 panel 上限（设计 03 §1）。
-const PANEL_LIMIT: usize = 5;
 /// `sessions.changed` 节流（设计 04 §5）。
 const SESSION_THROTTLE: Duration = Duration::from_millis(500);
 /// 自动禁用的崩溃窗口（设计 05 §3）。
@@ -57,22 +59,13 @@ pub(crate) enum RuntimeEffect {
         /// 是否直接提交。
         submit: bool,
     },
-    /// 打开插件详情（面板容器到 P1-d 才渲染）。
+    /// 打开插件详情。
     OpenPanel {
         /// 插件 id。
         plugin: String,
     },
     /// 写剪贴板。
     Clipboard(String),
-}
-
-/// 一个期望出现的 panel（排序后取前 [`PANEL_LIMIT`] 个）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DesiredPanel {
-    id: String,
-    version: String,
-    title: String,
-    order: i32,
 }
 
 /// 实例阶段（设计 05 §2）。
@@ -86,10 +79,31 @@ enum Phase {
     Running,
 }
 
+/// 宿主容器要显示的一个实例（只含健康通过的实例）。
+pub(crate) struct VisibleSlot {
+    /// 插件 id。
+    pub(crate) plugin: String,
+    /// 工具名（`toolCard`）或会话 id（`entryExtra`）。
+    pub(crate) binding: Option<String>,
+    /// 容器标题。
+    pub(crate) title: String,
+    /// 同类内排序（`panel` 用）。
+    pub(crate) order: i32,
+    /// 插件绘制内容。
+    pub(crate) view: Entity<AppView>,
+}
+
 /// 一个 slot 实例及其宿主面。
-struct PanelSlot {
+struct SlotInstance {
+    key: String,
     plugin: String,
     version: String,
+    kind: SlotKind,
+    binding: Option<String>,
+    /// 传给插件的实例 id（`slot.instanceId`）。
+    instance_id: String,
+    title: String,
+    order: i32,
     view: Entity<AppView>,
     channel: HostChannel,
     host: HostApi,
@@ -98,6 +112,17 @@ struct PanelSlot {
     phase: Phase,
     watchdog: Watchdog,
     cancel: CancellationToken,
+    /// 最近一次推给插件的槽位数据（去重）。
+    sent: Value,
+}
+
+/// 传给插件的实例 id：`panel`/`trigger` 用类别名，其余用绑定值。
+fn instance_id(kind: SlotKind, binding: Option<&str>) -> String {
+    binding.map(str::to_string).unwrap_or_else(|| match kind {
+        SlotKind::Panel => "panel".to_string(),
+        SlotKind::ComposerTrigger => "trigger".to_string(),
+        SlotKind::ToolCard | SlotKind::EntryExtra => kind.as_str().to_string(),
+    })
 }
 
 /// 一条按插件归并的诊断。
@@ -107,7 +132,7 @@ struct Diagnostic {
     count: u32,
 }
 
-/// 全部 panel 实例与宿主状态的持有者。
+/// 全部 slot 实例与宿主状态的持有者。
 pub(crate) struct PluginRuntime {
     data_dir: PathBuf,
     work_dir: PathBuf,
@@ -120,7 +145,7 @@ pub(crate) struct PluginRuntime {
     trust_error: Option<String>,
     entries: Vec<PluginEntry>,
     dirty: bool,
-    slots: Vec<PanelSlot>,
+    slots: Vec<SlotInstance>,
     failed: BTreeMap<String, String>,
     overflow: BTreeSet<String>,
     diagnostics: BTreeMap<String, VecDeque<Diagnostic>>,
@@ -132,6 +157,14 @@ pub(crate) struct PluginRuntime {
     dark: bool,
     sessions: Option<(Instant, BTreeSet<String>)>,
     known_sessions: Option<BTreeSet<String>>,
+    /// 侧栏会话 `(id, 标题)`，按显示顺序。
+    session_rows: Vec<(String, String)>,
+    /// 当前会话 id（`toolCard` 只看当前会话）。
+    session_id: Option<String>,
+    /// 当前会话每个工具最近一次调用。
+    calls: Vec<ToolCallSnapshot>,
+    /// 输入框文本快照。
+    composer_text: String,
     pending: Vec<RuntimeEffect>,
 }
 
@@ -176,6 +209,10 @@ impl PluginRuntime {
             dark,
             sessions: None,
             known_sessions: None,
+            session_rows: vec![],
+            session_id: None,
+            calls: vec![],
+            composer_text: String::new(),
             pending: vec![],
         })
     }
@@ -201,48 +238,37 @@ impl PluginRuntime {
         self.decorated()
     }
 
-    /// 标记会话 id 变化；节流后广播 `sessions.changed`。
-    pub(crate) fn mark_sessions(&mut self, ids: Vec<String>) {
-        let next: BTreeSet<String> = ids.into_iter().collect();
-        let Some(previous) = self.known_sessions.replace(next.clone()) else {
-            return;
-        };
-        let mut changed: BTreeSet<String> = next.difference(&previous).cloned().collect();
-        changed.extend(previous.difference(&next).cloned());
-        if changed.is_empty() {
-            return;
-        }
-        match &mut self.sessions {
-            Some((_, pending)) => pending.extend(changed),
-            None => self.sessions = Some((Instant::now() + SESSION_THROTTLE, changed)),
-        }
-    }
-
     /// 本轮渲染是否需要先协调实例。
     pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }
 
-    /// 清单变化后按需装载/卸载实例。
+    /// 清单/会话变化后按需装载/卸载实例。
     pub(crate) fn reconcile_if_dirty(&mut self, window: &mut Window, cx: &mut Context<DesktopApp>) {
         if !self.dirty {
             return;
         }
         self.dirty = false;
-        let (desired, overflow) = desired_panels(&self.entries);
+        let (desired, overflow) = desired_slots(&self.entries, &self.session_rows);
         self.reconcile_slots(&desired, cx);
-        let fresh: Vec<String> = overflow.difference(&self.overflow).cloned().collect();
-        for id in fresh {
-            self.note(
-                &id,
-                "E751",
-                format!("more than {PANEL_LIMIT} panels; this panel is not displayed"),
-            );
+        for item in &overflow {
+            if self.overflow.contains(&item.key) {
+                continue;
+            }
+            let reason = if item.panel_cap {
+                format!("more than {PANEL_LIMIT} panels; this panel is not displayed")
+            } else {
+                format!(
+                    "more than {INSTANCE_LIMIT} slots; this {} instance is not displayed",
+                    item.kind.as_str()
+                )
+            };
+            self.note(&item.plugin, "E751", reason);
         }
-        self.overflow = overflow;
+        self.overflow = overflow.into_iter().map(|item| item.key).collect();
         let now = Instant::now();
-        for wanted in desired {
-            self.ensure_slot(&wanted, now, window, cx);
+        for wanted in &desired {
+            self.ensure_slot(wanted, now, window, cx);
         }
     }
 
@@ -268,123 +294,45 @@ impl PluginRuntime {
         }
     }
 
-    /// 健康门、错误与看门狗。
-    pub(crate) fn tick(&mut self, now: Instant, cx: &mut Context<DesktopApp>) {
-        self.flush_sessions(now);
+    /// 侧栏要显示的 panel：按 `order`/标题/插件 id 排序。
+    pub(crate) fn visible_panels(&self) -> Vec<VisibleSlot> {
+        let mut slots = self.visible(SlotKind::Panel);
+        slots.sort_by(|left, right| {
+            left.order
+                .cmp(&right.order)
+                .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+                .then_with(|| left.plugin.cmp(&right.plugin))
+        });
+        slots
+    }
 
-        let failures: Vec<(usize, String)> = self
-            .slots
+    /// 聊天内工具卡：工具名 → 实例。
+    pub(crate) fn visible_tool_cards(&self) -> Vec<VisibleSlot> {
+        self.visible(SlotKind::ToolCard)
+    }
+
+    /// 会话条目附加区：会话 id → 实例。
+    pub(crate) fn visible_entry_extras(&self) -> Vec<VisibleSlot> {
+        self.visible(SlotKind::EntryExtra)
+    }
+
+    /// 输入区上方触发器（每插件至多一个实例）。
+    pub(crate) fn visible_composer_trigger(&self) -> Option<VisibleSlot> {
+        self.visible(SlotKind::ComposerTrigger).into_iter().next()
+    }
+
+    fn visible(&self, kind: SlotKind) -> Vec<VisibleSlot> {
+        self.slots
             .iter()
-            .enumerate()
-            .filter_map(|(index, slot)| {
-                let message = slot.error.lock().ok().and_then(|mut error| error.take())?;
-                Some((index, message))
+            .filter(|slot| slot.kind == kind && matches!(slot.phase, Phase::Running))
+            .map(|slot| VisibleSlot {
+                plugin: slot.plugin.clone(),
+                binding: slot.binding.clone(),
+                title: slot.title.clone(),
+                order: slot.order,
+                view: slot.view.clone(),
             })
-            .collect();
-        for (index, message) in failures.into_iter().rev() {
-            let mut slot = self.slots.remove(index);
-            let plugin = slot.plugin.clone();
-            let version = slot.version.clone();
-            let pending = matches!(slot.phase, Phase::Pending { .. });
-            stop_slot(&mut slot, cx);
-            self.note(
-                &plugin,
-                "E742",
-                if pending {
-                    format!("startup failed: {message}")
-                } else {
-                    message
-                },
-            );
-            self.failed.insert(plugin.clone(), version);
-            if !pending {
-                self.record_crash(&plugin, now);
-            }
-        }
-
-        let due: Vec<(usize, String, String)> = self
-            .slots
-            .iter()
-            .enumerate()
-            .filter(
-                |(_, slot)| matches!(slot.phase, Phase::Pending { ready_at } if ready_at <= now),
-            )
-            .map(|(index, slot)| (index, slot.plugin.clone(), slot.version.clone()))
-            .collect();
-        let mut accepted: Vec<(String, String)> = vec![];
-        let mut rejected: Vec<(String, String, String)> = vec![];
-        for (index, plugin, version) in due {
-            let outcome = match self.trust.as_mut() {
-                Some(trust) => accept_package(trust, &self.slots[index].loaded),
-                None => Err(self.trust_error.clone().unwrap_or_default()),
-            };
-            match outcome {
-                Ok(()) => accepted.push((plugin, version)),
-                Err(error) => rejected.push((plugin, version, error)),
-            }
-        }
-        for (plugin, version) in &accepted {
-            if let Some(slot) = self
-                .slots
-                .iter_mut()
-                .find(|slot| &slot.plugin == plugin && &slot.version == version)
-            {
-                slot.phase = Phase::Running;
-                slot.watchdog = Watchdog::new(now);
-            }
-        }
-        for (plugin, version, error) in rejected {
-            if let Some(index) = self
-                .slots
-                .iter()
-                .position(|slot| slot.plugin == plugin && slot.version == version)
-            {
-                let mut slot = self.slots.remove(index);
-                stop_slot(&mut slot, cx);
-            }
-            self.failed.insert(plugin.clone(), version);
-            self.note(&plugin, "E711", format!("accept failed: {error}"));
-        }
-        // 新版本健康后与旧实例交换：同一插件其它版本的 Running 实例下线。
-        let stale: Vec<usize> = self
-            .slots
-            .iter()
-            .enumerate()
-            .filter(|(_, slot)| {
-                matches!(slot.phase, Phase::Running)
-                    && accepted
-                        .iter()
-                        .any(|(plugin, version)| plugin == &slot.plugin && version != &slot.version)
-            })
-            .map(|(index, _)| index)
-            .collect();
-        for index in stale.into_iter().rev() {
-            let mut old = self.slots.remove(index);
-            stop_slot(&mut old, cx);
-        }
-
-        let mut stops: Vec<(usize, String)> = vec![];
-        for (index, slot) in self.slots.iter_mut().enumerate() {
-            if !matches!(slot.phase, Phase::Running) {
-                continue;
-            }
-            match slot.watchdog.tick(now, slot.host.pong_count()) {
-                Beat::Ping(seq) => slot.host.ping(&slot.channel, seq),
-                Beat::Stop => {
-                    stops.push((index, "unresponsive: no __pong from the plugin".to_string()));
-                }
-                Beat::Idle | Beat::Waiting => {}
-            }
-        }
-        for (index, message) in stops.into_iter().rev() {
-            let mut slot = self.slots.remove(index);
-            let plugin = slot.plugin.clone();
-            let version = slot.version.clone();
-            stop_slot(&mut slot, cx);
-            self.note(&plugin, "E742", message);
-            self.failed.insert(plugin.clone(), version);
-            self.record_crash(&plugin, now);
-        }
+            .collect()
     }
 
     /// 把运行期诊断合并回界面条目；有变化返回 true。
@@ -422,6 +370,22 @@ impl PluginRuntime {
         self.sessions = None;
     }
 
+    /// 是否需要对会话数据做一次快照比对（没有相关插件时跳过）。
+    pub(crate) fn wants_chat_sync(&self) -> bool {
+        self.entries.iter().any(|entry| {
+            entry.declared.slots.iter().any(|slot| {
+                matches!(
+                    slot.kind.as_str(),
+                    "toolCard" | "composerTrigger" | "entryExtra"
+                )
+            }) || entry
+                .declared
+                .queries
+                .iter()
+                .any(|query| query == "composer.text")
+        })
+    }
+
     fn decorated(&self) -> Vec<PluginEntry> {
         let mut entries = self.entries.clone();
         let _ = self.apply_diagnostics(&mut entries);
@@ -449,7 +413,7 @@ impl PluginRuntime {
     }
 }
 
-fn stop_slot(slot: &mut PanelSlot, cx: &mut App) {
+fn stop_slot(slot: &mut SlotInstance, cx: &mut App) {
     slot.cancel.cancel();
     slot.view.read(cx).stop();
 }

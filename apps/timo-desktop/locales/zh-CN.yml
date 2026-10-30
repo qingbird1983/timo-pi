@@ -217,6 +217,8 @@ plugins:
   no_caps: 未申请额外能力
   path: "目录：%{path}"
   tier_hint: 挡位只能收紧；放宽需重新安装。
+  diagnostics: 诊断
+  diagnostics_empty: 暂无诊断。
   revoke: 撤销授权
   uninstall: 卸载
   uninstall_title: "卸载「%{name}」？"

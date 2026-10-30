@@ -5,6 +5,8 @@
 
 ## 目录
 
+- `plugins/session-search/`：B 轨自证插件（`read-only` 的会话搜索 panel，设计
+  `../docs/design/phase-4/07-self-proof-plugin.md`），用 `timo-devkit` 校验与打包。
 - `extensions/subagent/source/index.ts`：subagent 扩展本体（TypeScript 源；装机时由
   `timo ext add` 经 rolldown 打成 `bundle.cjs`）。
 - `agents/*.md`：代理定义，四份故意把写法铺开——`tools` 一个写逗号串、一个写数组、

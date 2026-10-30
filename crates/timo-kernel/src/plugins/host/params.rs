@@ -38,6 +38,7 @@ pub(super) fn query(name: &str, params: &Value) -> Result<Query, HostError> {
             }
             Ok(Query::StorageGet { key })
         }
+        "composer.text" => Ok(Query::ComposerText),
         other => Err(HostError::new("E740", format!("unknown query `{other}`"))),
     }
 }

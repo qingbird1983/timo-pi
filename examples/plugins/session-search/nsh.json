@@ -1,0 +1,11 @@
+{
+  "name": "会话搜索",
+  "id": "com.timo.session-search",
+  "version": "1.0.0",
+  "build": 1,
+  "capabilities": {
+    "host": ["sessions.list", "sessions.search", "openSession", "theme.update", "__pong"],
+    "network": { "hosts": [] },
+    "webview": { "hosts": [] }
+  }
+}

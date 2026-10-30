@@ -10,9 +10,12 @@ members = [
     "crates/timo-ext",
     "crates/timo-agent",
     "crates/timo-kernel",
+    "crates/timo-devkit",
     "apps/timo-cli",
     "apps/timo-desktop",
 ]
+# 第三方修补副本（ADR-0018）：不参与 fmt/clippy/test 门禁
+exclude = ["vendor/accesskit_consumer"]
 
 [workspace.package]
 version = "0.1.0"
@@ -66,3 +69,7 @@ rolldown = "1.2.15"
 rquickjs = { version = "0.14", features = ["full-async"] }
 
 # 依赖版本以根 Cargo.lock 实锁为准（standards/04 §1）；准入理由见 docs/standards/04 附录 A。
+
+# ADR-0018：修复 D4 无障碍崩溃的本地补丁（重复 child 消毒），上游修复后移除。
+[patch.crates-io]
+accesskit_consumer = { path = "vendor/accesskit_consumer" }

@@ -4,8 +4,9 @@
 
 use serde_json::json;
 use timo_kernel::plugins::market::{
-    MarketQuery, MarketSort, MarketState, MarketTab, filter, index_url, load_cached, load_state,
-    parse_index, set_index_url, toggle_blocked, toggle_favorite, validate_index_url, write_cache,
+    MarketQuery, MarketSort, MarketState, MarketTab, RefreshOutcome, filter, index_url,
+    load_cached, load_state, parse_index, refresh, set_index_url, toggle_blocked, toggle_favorite,
+    validate_index_url, write_cache,
 };
 
 fn plugin(id: &str, name: &str, categories: &[&str]) -> serde_json::Value {
@@ -168,6 +169,21 @@ fn cache_roundtrip_and_corruption() {
     )
     .unwrap();
     assert_eq!(load_cached(dir.path()).unwrap_err().code(), "E750");
+}
+
+/// 拉取失败（离线）不覆盖上一份索引缓存。
+#[tokio::test]
+async fn offline_refresh_keeps_the_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let text = index(vec![plugin("session-search", "搜索", &["会话与消息"])]);
+    let load = parse_index(&text).unwrap();
+    write_cache(dir.path(), &load.index).unwrap();
+
+    let outcome = refresh(dir.path(), "https://127.0.0.1:1/market.json")
+        .await
+        .unwrap();
+    assert!(matches!(outcome, RefreshOutcome::Offline(_)));
+    assert_eq!(load_cached(dir.path()).unwrap().unwrap().index, load.index);
 }
 
 #[test]

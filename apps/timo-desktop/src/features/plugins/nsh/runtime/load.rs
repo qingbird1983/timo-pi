@@ -1,8 +1,8 @@
-//! 实例装载、排列与调度：把可用 panel 变成 `AppView` 实例（设计 05 §1~§3）。
+//! 实例装载与排列：把期望集变成 `AppView` 实例（设计 05 §1~§3）。
 //!
 //! 清单变化只置脏；真正装载在渲染帧之后执行，避免在 `render` 栈里创建实体。
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -10,9 +10,8 @@ use gpui_kit::{AppContext as _, Context, Window};
 use nsh_engine::HostChannel;
 use nsh_platform_gpui::package::TrustStore;
 use nsh_platform_gpui::{AppOptions, AppView, Appearance, verify_package};
-use serde_json::json;
+use timo_kernel::plugins::GuiManifest;
 use timo_kernel::plugins::nsh::{assets_root, dev_dir, plugin_dir, trust_dir};
-use timo_kernel::plugins::{GuiManifest, PluginEntry, PluginKind, PluginOrigin, PluginState};
 use timo_kernel::{PermissionStore, permissions_path};
 use tokio_util::sync::CancellationToken;
 
@@ -22,78 +21,86 @@ use super::super::host_api::{HostApi, HostConfig};
 use super::super::runtime_theme;
 use super::super::runtime_watch::Watchdog;
 use super::super::{HEALTH_DELAY, open_trust};
-use super::{DesiredPanel, PANEL_LIMIT, PanelSlot, Phase, PluginRuntime, stop_slot};
+use super::desired::DesiredSlot;
+use super::{Phase, PluginRuntime, SlotInstance, stop_slot};
 
 impl PluginRuntime {
     pub(super) fn reconcile_slots(
         &mut self,
-        desired: &[DesiredPanel],
+        desired: &[DesiredSlot],
         cx: &mut Context<DesktopApp>,
     ) {
+        let wanted: BTreeMap<String, &DesiredSlot> =
+            desired.iter().map(|slot| (slot.key(), slot)).collect();
+        let live: BTreeSet<&str> = desired.iter().map(|slot| slot.plugin.as_str()).collect();
         let mut keep = Vec::new();
         for mut slot in std::mem::take(&mut self.slots) {
-            let wanted = desired.iter().find(|panel| panel.id == slot.plugin);
-            let superseded = wanted.is_some_and(|panel| panel.version != slot.version)
-                && matches!(slot.phase, Phase::Pending { .. });
-            if wanted.is_none() || superseded {
+            let Some(target) = wanted.get(slot.key.as_str()) else {
                 stop_slot(&mut slot, cx);
-                if wanted.is_none() {
-                    self.patches.remove(&slot.plugin);
-                }
+                continue;
+            };
+            let superseded =
+                target.version != slot.version && matches!(slot.phase, Phase::Pending { .. });
+            if superseded {
+                stop_slot(&mut slot, cx);
             } else {
                 keep.push(slot);
             }
         }
         self.slots = keep;
+        self.patches
+            .retain(|plugin, _| live.contains(plugin.as_str()));
     }
 
     pub(super) fn ensure_slot(
         &mut self,
-        wanted: &DesiredPanel,
+        wanted: &DesiredSlot,
         now: Instant,
         window: &mut Window,
         cx: &mut Context<DesktopApp>,
     ) {
-        let matching =
-            |slot: &PanelSlot| slot.plugin == wanted.id && slot.version == wanted.version;
-        if self.slots.iter().any(&matching) {
+        let key = wanted.key();
+        if self
+            .slots
+            .iter()
+            .any(|slot| slot.key == key && slot.version == wanted.version)
+        {
             return;
         }
         if self
             .failed
-            .get(&wanted.id)
+            .get(&wanted.plugin)
             .is_some_and(|version| version == &wanted.version)
         {
             return;
         }
         match self.load_slot(wanted, now, window, cx) {
             Ok(slot) => {
-                self.failed.remove(&wanted.id);
+                self.failed.remove(&wanted.plugin);
                 self.slots.push(slot);
             }
             Err(message) => {
                 self.failed
-                    .insert(wanted.id.clone(), wanted.version.clone());
-                self.note(&wanted.id, "E742", message);
+                    .insert(wanted.plugin.clone(), wanted.version.clone());
+                self.note(&wanted.plugin, "E742", message);
             }
         }
     }
 
     fn load_slot(
         &mut self,
-        wanted: &DesiredPanel,
+        wanted: &DesiredSlot,
         now: Instant,
         window: &mut Window,
         cx: &mut Context<DesktopApp>,
-    ) -> Result<PanelSlot, String> {
-        let (entry_id, entry_version, entry_path, tier, source_hash, queries, actions, tools) = {
+    ) -> Result<SlotInstance, String> {
+        let (entry_version, entry_path, tier, source_hash, queries, actions, tools) = {
             let entry = self
                 .entries
                 .iter()
-                .find(|entry| entry.id == wanted.id)
+                .find(|entry| entry.id == wanted.plugin)
                 .ok_or_else(|| "the plugin is no longer listed".to_string())?;
             (
-                entry.id.clone(),
                 entry.version.clone(),
                 entry.path.clone(),
                 entry.tier,
@@ -107,10 +114,10 @@ impl PluginRuntime {
         let manifest = GuiManifest::load(&manifest_path)
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "manifest.json is missing".to_string())?;
-        if manifest.id != entry_id || manifest.version != wanted.version {
+        if manifest.id != wanted.plugin || manifest.version != wanted.version {
             return Err(format!(
                 "manifest is {}/{} but the ledger says {}/{}",
-                manifest.id, manifest.version, entry_id, wanted.version
+                manifest.id, manifest.version, wanted.plugin, wanted.version
             ));
         }
         let nsh_id = manifest
@@ -130,14 +137,14 @@ impl PluginRuntime {
                 loaded.app.id, loaded.app.version
             ));
         }
-        let read_scopes = self.read_scopes(&entry_id, &source_hash);
+        let read_scopes = self.read_scopes(&wanted.plugin, &source_hash);
         let channel = HostChannel::new();
         let cancel = CancellationToken::new();
-        let patch = self.patches.get(&entry_id).cloned();
+        let patch = self.patches.get(&wanted.plugin).cloned();
         let snapshot = runtime_theme::snapshot(self.dark, &self.theme_tokens, patch.as_ref());
         let css = runtime_theme::css_vars(&self.theme_tokens, patch.as_ref());
         let host = HostApi::start(HostConfig {
-            plugin_id: entry_id.clone(),
+            plugin_id: wanted.plugin.clone(),
             version: entry_version.clone(),
             tier,
             queries,
@@ -158,15 +165,18 @@ impl PluginRuntime {
             cancel: cancel.clone(),
         })?;
         host.register(&channel);
+        let instance_id = super::instance_id(wanted.kind, wanted.binding.as_deref());
+        let data = self.slot_data(wanted.kind, wanted.binding.as_deref());
+        host.set_composer_text(&self.composer_text);
         channel.set_params(host.params(
-            "panel",
-            "panel",
-            json!({ "panelId": "panel", "width": 248 }),
+            wanted.kind.as_str(),
+            &instance_id,
+            data.clone(),
             &crate::i18n::current(),
         ));
         let error: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
         let sink = error.clone();
-        let app_dir = plugin_dir(&data_dir, &entry_id).join("nsh");
+        let app_dir = plugin_dir(&data_dir, &wanted.plugin).join("nsh");
         let options = AppOptions {
             app_id: nsh_id,
             title: wanted.title.clone(),
@@ -186,9 +196,15 @@ impl PluginRuntime {
             view.set_appearance(appearance(self.dark), cx);
             let _ = view.set_theme_json(&css, cx);
         });
-        Ok(PanelSlot {
-            plugin: entry_id,
+        Ok(SlotInstance {
+            key: wanted.key(),
+            plugin: wanted.plugin.clone(),
             version: entry_version,
+            kind: wanted.kind,
+            binding: wanted.binding.clone(),
+            title: wanted.title.clone(),
+            order: wanted.order,
+            instance_id,
             view,
             channel,
             host,
@@ -199,6 +215,7 @@ impl PluginRuntime {
             },
             watchdog: Watchdog::new(now),
             cancel,
+            sent: data,
         })
     }
 
@@ -232,121 +249,5 @@ fn appearance(dark: bool) -> Appearance {
         Appearance::Dark
     } else {
         Appearance::Light
-    }
-}
-
-/// 可显示的 panel：B 轨、已启用、无错误、声明了 `panel`；按 order/标题/id 排序取前 5。
-pub(super) fn desired_panels(entries: &[PluginEntry]) -> (Vec<DesiredPanel>, BTreeSet<String>) {
-    let mut panels = vec![];
-    for entry in entries {
-        if entry.kind != PluginKind::Gui
-            || entry.origin != PluginOrigin::Installed
-            || !entry.enabled
-            || entry.state == PluginState::Error
-            || entry.version.is_empty()
-        {
-            continue;
-        }
-        let Some(slot) = entry
-            .declared
-            .slots
-            .iter()
-            .find(|slot| slot.kind == "panel")
-        else {
-            continue;
-        };
-        panels.push(DesiredPanel {
-            id: entry.id.clone(),
-            version: entry.version.clone(),
-            title: slot.title.clone().unwrap_or_else(|| entry.name.clone()),
-            order: slot.order.unwrap_or(0),
-        });
-    }
-    panels.sort_by(|left, right| {
-        left.order
-            .cmp(&right.order)
-            .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
-            .then_with(|| left.id.cmp(&right.id))
-    });
-    let overflow = panels
-        .iter()
-        .skip(PANEL_LIMIT)
-        .map(|panel| panel.id.clone())
-        .collect();
-    panels.truncate(PANEL_LIMIT);
-    (panels, overflow)
-}
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-    use timo_kernel::plugins::{Declared, PermissionTier, PluginSource};
-
-    fn entry(id: &str, tier: PermissionTier, order: i32, enabled: bool) -> PluginEntry {
-        let declared = Declared {
-            slots: vec![timo_kernel::plugins::SlotDecl {
-                kind: "panel".into(),
-                title: Some(id.to_uppercase()),
-                order: Some(order),
-                icon: None,
-            }],
-            ..Declared::default()
-        };
-        PluginEntry {
-            id: id.into(),
-            kind: PluginKind::Gui,
-            origin: PluginOrigin::Installed,
-            name: id.into(),
-            version: "1.0.0".into(),
-            enabled,
-            tier,
-            declared,
-            state: if enabled {
-                PluginState::Enabled
-            } else {
-                PluginState::Disabled
-            },
-            source: PluginSource::LocalFile,
-            source_hash: format!("sha256:{}", "0".repeat(64)),
-            configurable: false,
-            diagnostics: vec![],
-            path: PathBuf::new(),
-        }
-    }
-
-    #[test]
-    fn panels_are_ordered_and_capped() {
-        let entries: Vec<PluginEntry> = (0..7)
-            .map(|index| {
-                entry(
-                    &format!("plugin-{index}"),
-                    PermissionTier::ReadOnly,
-                    index,
-                    true,
-                )
-            })
-            .collect();
-        let (desired, overflow) = desired_panels(&entries);
-        assert_eq!(desired.len(), PANEL_LIMIT);
-        assert_eq!(desired[0].id, "plugin-0");
-        assert_eq!(overflow.len(), 2);
-        assert!(overflow.contains("plugin-5") && overflow.contains("plugin-6"));
-    }
-
-    #[test]
-    fn disabled_and_broken_plugins_are_skipped() {
-        let mut broken = entry("broken", PermissionTier::ReadOnly, 0, true);
-        broken.state = PluginState::Error;
-        let entries = vec![
-            entry("disabled", PermissionTier::ReadOnly, 1, false),
-            broken,
-            entry("ok", PermissionTier::ReadOnly, 2, true),
-        ];
-        let (desired, overflow) = desired_panels(&entries);
-        assert!(overflow.is_empty());
-        assert_eq!(desired.len(), 1);
-        assert_eq!(desired[0].id, "ok");
     }
 }

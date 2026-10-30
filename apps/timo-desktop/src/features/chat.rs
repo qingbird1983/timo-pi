@@ -4,41 +4,9 @@
 
 use timo_kernel::{AssistantMessage, AssistantStreamEvent, Content, KernelEvent, Message, Usage};
 
-/// 工具 trace 行状态（设计 01 §6）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TraceStatus {
-    /// 已请求、尚未开始。
-    Queued,
-    /// 等待用户审阅。
-    Review,
-    /// 执行中。
-    Running,
-    /// 成功完成。
-    Done,
-    /// 审阅被拒绝（无副作用）。
-    Blocked,
-    /// 失败（工具结果 is_error）。
-    Failed,
-    /// 恢复会话时缺少配对结果。
-    Interrupted,
-}
-
-/// 一次工具调用在 trace 中的一行。
-#[derive(Debug, Clone)]
-pub struct TraceEntry {
-    /// 调用 id。
-    pub call_id: String,
-    /// 工具名（技术标识，不翻译）。
-    pub name: String,
-    /// 关键参数摘要。
-    pub summary: String,
-    /// 状态。
-    pub status: TraceStatus,
-    /// 结果正文（折叠展示）。
-    pub output: Option<String>,
-    /// 执行时长。
-    pub duration_ms: Option<u64>,
-}
+#[path = "chat_trace.rs"]
+mod trace;
+pub use trace::{ToolCallSnapshot, TraceEntry, TraceStatus};
 
 /// assistant 消息行：正文、思考、trace 与错误。
 #[derive(Debug, Clone)]
@@ -128,6 +96,7 @@ impl ChatState {
                                     call_id: id.clone(),
                                     name: name.clone(),
                                     summary: summarize(name, arguments),
+                                    input: args_json(arguments),
                                     status: TraceStatus::Interrupted,
                                     output: None,
                                     duration_ms: None,
@@ -241,6 +210,7 @@ impl ChatState {
                             call_id: id.clone(),
                             name: name.clone(),
                             summary: summarize(name, arguments),
+                            input: args_json(arguments),
                             status: TraceStatus::Queued,
                             output: None,
                             duration_ms: None,
@@ -264,11 +234,13 @@ impl ChatState {
                     Some(entry) => {
                         entry.status = TraceStatus::Running;
                         entry.summary = summary;
+                        entry.input = args_json(args);
                     }
                     None => row.trace.push(TraceEntry {
                         call_id: tool_call_id.clone(),
                         name: tool_name.clone(),
                         summary,
+                        input: args_json(args),
                         status: TraceStatus::Running,
                         output: None,
                         duration_ms: None,
@@ -472,6 +444,12 @@ pub(super) fn text_of(content: &[Content]) -> String {
         .join("\n")
 }
 
+/// 参数 JSON 文本；`toolCard` 只用这一份，先按 8 KiB 字符边界截断。
+fn args_json(args: &serde_json::Value) -> String {
+    let text = serde_json::to_string(args).unwrap_or_default();
+    clip(&text, 8 * 1024)
+}
+
 pub(super) fn thinking_of(content: &[Content]) -> String {
     content
         .iter()
@@ -491,4 +469,4 @@ pub(super) fn clip(text: &str, max_chars: usize) -> String {
     out
 }
 
-pub use crate::features::chat_rows::render_row;
+pub use crate::features::chat_rows::{ToolCards, render_row};

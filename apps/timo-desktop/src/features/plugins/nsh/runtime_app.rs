@@ -1,7 +1,7 @@
 //! 运行期与主窗口的接缝：启动 tick、渲染帧协调与宿主副作用落地（设计 05）。
 //!
-//! `AppView` 实例的绘制容器留给 P1-d；这里只保证实例装载、健康门、看门狗
-//! 与宿主动作（会话/提示词/剪贴板/通知）在主窗口里有确定的去处。
+//! `AppView` 的侧栏容器在 `features::plugins::nsh::panel`；这里保证实例装载、
+//! 健康门、看门狗与宿主动作（会话/提示词/剪贴板/通知）在主窗口里有确定的去处。
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -56,19 +56,42 @@ impl DesktopApp {
     /// 会话列表变化时给插件广播 `sessions.changed`（节流在内核侧）。
     pub(crate) fn sync_sessions(&mut self, sessions: Vec<SessionInfo>) {
         if let Some(runtime) = self.plugin_runtime.as_mut() {
-            runtime.mark_sessions(sessions.iter().map(|session| session.id.clone()).collect());
+            let rows = sessions
+                .iter()
+                .map(|session| (session.id.clone(), session_title(session)))
+                .collect();
+            runtime.sync_sessions(rows);
         }
         self.sessions = sessions;
     }
 
-    /// 渲染帧之前协调实例（`cx.new` 不能在 `render` 栈里直接跑）。
+    /// 渲染帧之前同步会话快照并协调实例（`cx.new` 不能在 `render` 栈里直接跑）。
     pub(crate) fn runtime_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = self.runtime_prompt.take() {
             self.input
                 .update(cx, |input, cx| input.set_value(text, window, cx));
         }
+        let wants_chat = self
+            .plugin_runtime
+            .as_ref()
+            .is_some_and(PluginRuntime::wants_chat_sync);
+        if wants_chat {
+            let session = self.session_id.clone();
+            let calls = self.chat.read(cx).latest_tool_calls();
+            let composer = self.input.read(cx).value().to_string();
+            if let Some(runtime) = self.plugin_runtime.as_mut() {
+                runtime.sync_chat(session.as_deref(), calls, &composer);
+            }
+        }
+        let dirty = self
+            .plugin_runtime
+            .as_ref()
+            .is_some_and(PluginRuntime::is_dirty);
         if let Some(runtime) = self.plugin_runtime.as_mut() {
             runtime.reconcile_if_dirty(window, cx);
+        }
+        if dirty {
+            cx.notify();
         }
     }
 
@@ -79,11 +102,12 @@ impl DesktopApp {
             let Some(runtime) = self.plugin_runtime.as_mut() else {
                 return;
             };
-            runtime.tick(now, cx);
+            let mut changed = runtime.tick(now, cx);
             runtime.sync_theme(self.dark, cx);
             let effects = runtime.drain_events(cx);
-            let diagnostics = runtime.apply_diagnostics(&mut self.plugins);
-            (effects, diagnostics || runtime.is_dirty())
+            changed |= runtime.apply_diagnostics(&mut self.plugins);
+            changed |= runtime.is_dirty();
+            (effects, changed)
         };
         let acted = !effects.is_empty();
         for effect in effects {
@@ -121,5 +145,14 @@ impl DesktopApp {
                 cx.write_to_clipboard(ClipboardItem::new_string(text))
             }
         }
+    }
+}
+
+/// 会话显示名（与侧栏一致）：首条消息，空会话用占位文案。
+fn session_title(session: &SessionInfo) -> String {
+    if session.first_message.trim().is_empty() {
+        t!("chat.empty_session").to_string()
+    } else {
+        session.first_message.clone()
     }
 }

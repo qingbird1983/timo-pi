@@ -177,3 +177,48 @@ fn nsh_id_rules() {
     assert!(!timo_ext::is_valid_nsh_id(".timo"));
     assert!(!timo_ext::is_valid_nsh_id("com timo"));
 }
+
+#[test]
+fn tool_card_binds_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = sample();
+    value["slots"] = json!([
+        { "kind": "toolCard", "title": "搜索结果", "tools": ["grep", "read"] }
+    ]);
+    let manifest = GuiManifest::load(&write(dir.path(), &value))
+        .unwrap()
+        .unwrap();
+    assert_eq!(manifest.slots[0].tools, ["grep", "read"]);
+}
+
+#[test]
+fn tool_card_tool_bindings_are_validated() {
+    let dir = tempfile::tempdir().unwrap();
+    let cases = [
+        (json!([]), "must bind"),
+        (json!(["a", "b", "c", "d", "e"]), "max 4"),
+        (json!(["a", "a"]), "twice"),
+        (json!([" "]), "must not be empty"),
+        (json!(["x".repeat(65)]), "exceeds 64"),
+    ];
+    for (tools, expected) in cases {
+        let mut value = sample();
+        value["slots"] = json!([{ "kind": "toolCard", "tools": tools }]);
+        let error = GuiManifest::load(&write(dir.path(), &value)).unwrap_err();
+        assert_eq!(error.code(), "E720", "{tools}: {error}");
+        assert!(error.to_string().contains(expected), "{tools}: {error}");
+    }
+}
+
+#[test]
+fn only_tool_card_may_declare_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = sample();
+    value["slots"] = json!([{ "kind": "panel", "tools": ["grep"] }]);
+    let error = GuiManifest::load(&write(dir.path(), &value)).unwrap_err();
+    assert_eq!(error.code(), "E720");
+    assert!(
+        error.to_string().contains("must not declare tools"),
+        "{error}"
+    );
+}

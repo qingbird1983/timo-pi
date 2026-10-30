@@ -217,6 +217,8 @@ plugins:
   no_caps: No extra capabilities
   path: "Path: %{path}"
   tier_hint: Tiers can only be tightened; widening requires a reinstall.
+  diagnostics: Diagnostics
+  diagnostics_empty: No diagnostics.
   revoke: Revoke grant
   uninstall: Uninstall
   uninstall_title: "Uninstall \"%{name}\"?"

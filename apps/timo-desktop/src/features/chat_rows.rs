@@ -7,8 +7,19 @@ use gpui_kit::*;
 
 use super::chat::{AssistantRow, ChatState, RowKind, TraceEntry, TraceStatus};
 
+/// 工具卡来源：由插件运行期提供；聊天行只按工具名取用。
+pub trait ToolCards {
+    /// 该工具最近一次调用的插件卡片；没有健康实例时返回 `None`。
+    fn card(&self, tool: &str, cx: &App) -> Option<AnyElement>;
+}
+
 /// 渲染一行（`MessageScroller` 的回调）。
-pub fn render_row(index: usize, chat: &Entity<ChatState>, cx: &mut App) -> AnyElement {
+pub fn render_row(
+    index: usize,
+    chat: &Entity<ChatState>,
+    cards: &dyn ToolCards,
+    cx: &mut App,
+) -> AnyElement {
     let state = chat.read(cx);
     let Some(row) = state.rows.get(index) else {
         return div().into_any_element();
@@ -29,7 +40,7 @@ pub fn render_row(index: usize, chat: &Entity<ChatState>, cx: &mut App) -> AnyEl
             )
             .into_any_element(),
         RowKind::Assistant(assistant) => {
-            assistant_row(&row.key, assistant, chat, cx).into_any_element()
+            assistant_row(&row.key, assistant, chat, cards, cx).into_any_element()
         }
     }
 }
@@ -38,6 +49,7 @@ fn assistant_row(
     key: &str,
     assistant: &AssistantRow,
     chat: &Entity<ChatState>,
+    cards: &dyn ToolCards,
     cx: &App,
 ) -> impl IntoElement {
     let has_text = !assistant.text.trim().is_empty();
@@ -73,7 +85,7 @@ fn assistant_row(
             )
         })
         .when(!assistant.trace.is_empty(), |this| {
-            this.child(trace_block(key, assistant, chat, cx))
+            this.child(trace_block(key, assistant, chat, cards, cx))
         })
         .when_some(assistant.error.clone(), |this, error| {
             this.child(div().text_xs().text_color(cx.theme().danger).child(error))
@@ -84,6 +96,7 @@ fn trace_block(
     key: &str,
     assistant: &AssistantRow,
     chat: &Entity<ChatState>,
+    cards: &dyn ToolCards,
     cx: &App,
 ) -> impl IntoElement {
     let expanded = assistant.trace_open;
@@ -122,16 +135,17 @@ fn trace_block(
         )
         .when(expanded, |this| {
             this.child(
-                v_flex()
-                    .px_2()
-                    .pb_2()
-                    .gap_1()
-                    .children(assistant.trace.iter().map(|entry| trace_entry(entry, cx))),
+                v_flex().px_2().pb_2().gap_1().children(
+                    assistant
+                        .trace
+                        .iter()
+                        .map(|entry| trace_entry(entry, cards, cx)),
+                ),
             )
         })
 }
 
-fn trace_entry(entry: &TraceEntry, cx: &App) -> impl IntoElement {
+fn trace_entry(entry: &TraceEntry, cards: &dyn ToolCards, cx: &App) -> impl IntoElement {
     let (icon, color, status) = match entry.status {
         TraceStatus::Queued => (
             IconName::Loader,
@@ -209,6 +223,9 @@ fn trace_entry(entry: &TraceEntry, cx: &App) -> impl IntoElement {
                     .text_color(cx.theme().muted_foreground)
                     .child(text),
             )
+        })
+        .when_some(cards.card(&entry.name, cx), |this, card| {
+            this.child(div().pl_5().child(card))
         })
 }
 

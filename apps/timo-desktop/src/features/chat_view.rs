@@ -11,6 +11,7 @@ use gpui_kit::*;
 
 use crate::app::DesktopApp;
 use crate::features::chat;
+use crate::features::plugins::nsh::ToolCardViews;
 
 impl DesktopApp {
     pub(crate) fn chat_area(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -22,9 +23,10 @@ impl DesktopApp {
             .child(if self.chat.read(cx).rows.is_empty() {
                 self.welcome(cx).into_any_element()
             } else {
+                let cards = ToolCardViews::collect(self.plugin_runtime.as_ref());
                 let scroll = MessageScroller::new("chat-thread", self.scroller.clone(), {
                     let chat = self.chat.clone();
-                    move |index, _window, cx| chat::render_row(index, &chat, cx)
+                    move |index, _window, cx| chat::render_row(index, &chat, &cards, cx)
                 })
                 .px_6()
                 .py_4()
@@ -144,6 +146,7 @@ impl DesktopApp {
             .model
             .clone()
             .unwrap_or_else(|| t!("status.disconnected").to_string());
+        let trigger = self.plugin_composer_trigger();
         v_flex()
             .flex_shrink_0()
             .px_4()
@@ -152,6 +155,7 @@ impl DesktopApp {
             .gap_2()
             .border_t_1()
             .border_color(cx.theme().border)
+            .when_some(trigger, |this, trigger| this.child(trigger))
             .child(
                 div()
                     .rounded_lg()
